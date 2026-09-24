@@ -1,61 +1,61 @@
 @import "tailwindcss";
 
 :root, [data-theme="dark"] {
-  --bg-app: #08020f;
-  --bg-surface: #11061f;
-  --bg-surface-elevated: #1a0930;
-  --bg-surface-hover: #260e45;
-  --bg-subtle: #05010a;
-  --bg-input: #0d041a;
+  --bg-app: #0d1117;
+  --bg-surface: #161b22;
+  --bg-surface-elevated: #21262d;
+  --bg-surface-hover: #30363d;
+  --bg-subtle: #010409;
+  --bg-input: #0d1117;
 
-  --border-subtle: rgba(168, 85, 247, 0.18);
-  --border-strong: rgba(192, 132, 252, 0.32);
+  --border-subtle: #30363d;
+  --border-strong: rgba(240, 246, 252, 0.15);
   --border-focus: #9333ea;
 
-  --text-primary: #f5f3ff;
-  --text-secondary: #d8b4fe;
-  --text-muted: #a855f7;
-  --text-dim: #7e52a0;
+  --text-primary: #f0f6fc;
+  --text-secondary: #8b949e;
+  --text-muted: #8b949e;
+  --text-dim: #6e7681;
 
-  --glass-bg: rgba(17, 6, 31, 0.95);
-  --glass-border: rgba(168, 85, 247, 0.22);
-  --glass-card-bg: rgba(26, 9, 48, 0.75);
-  --glass-card-hover: rgba(38, 14, 69, 0.9);
-  --glass-card-border: rgba(168, 85, 247, 0.25);
-  --modal-overlay: rgba(4, 1, 8, 0.88);
+  --glass-bg: rgba(22, 27, 34, 0.96);
+  --glass-border: #30363d;
+  --glass-card-bg: rgba(22, 27, 34, 0.85);
+  --glass-card-hover: #21262d;
+  --glass-card-border: #30363d;
+  --modal-overlay: rgba(1, 4, 9, 0.82);
 
-  --scrollbar-track: #08020f;
-  --scrollbar-thumb: #3b0764;
+  --scrollbar-track: #0d1117;
+  --scrollbar-thumb: #30363d;
 
   --color-scheme: dark;
 }
 
 [data-theme="light"] {
-  --bg-app: #fcfaff;
+  --bg-app: #f8fafc;
   --bg-surface: #ffffff;
-  --bg-surface-elevated: #f5efff;
-  --bg-surface-hover: #ede1fc;
-  --bg-subtle: #faf5ff;
+  --bg-surface-elevated: #f1f5f9;
+  --bg-surface-hover: #e2e8f0;
+  --bg-subtle: #f8fafc;
   --bg-input: #ffffff;
 
-  --border-subtle: #e9d5ff;
-  --border-strong: #c084fc;
-  --border-focus: #7c3aed;
+  --border-subtle: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --border-focus: #9333ea;
 
-  --text-primary: #18052e;
-  --text-secondary: #4c1d95;
-  --text-muted: #6d28d9;
-  --text-dim: #8b5cf6;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-dim: #94a3b8;
 
   --glass-bg: rgba(255, 255, 255, 0.96);
-  --glass-border: rgba(124, 58, 237, 0.14);
+  --glass-border: rgba(0, 0, 0, 0.08);
   --glass-card-bg: rgba(255, 255, 255, 0.9);
-  --glass-card-hover: rgba(245, 239, 255, 0.98);
-  --glass-card-border: rgba(124, 58, 237, 0.16);
-  --modal-overlay: rgba(24, 5, 46, 0.5);
+  --glass-card-hover: rgba(241, 245, 249, 0.98);
+  --glass-card-border: rgba(0, 0, 0, 0.08);
+  --modal-overlay: rgba(15, 23, 42, 0.45);
 
-  --scrollbar-track: rgba(245, 239, 255, 0.8);
-  --scrollbar-thumb: rgba(192, 132, 252, 0.6);
+  --scrollbar-track: rgba(241, 245, 249, 0.8);
+  --scrollbar-thumb: rgba(148, 163, 184, 0.5);
 
   --color-scheme: light;
 }
@@ -170,7 +170,7 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(168, 85, 247, 0.7);
+  background: #484f58;
 }
 
 /* Glassmorphism Panels & Shadows */
@@ -179,7 +179,7 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 16px 32px rgba(4, 1, 8, 0.55);
+  box-shadow: 0 16px 32px rgba(1, 4, 9, 0.55);
 }
 
 .glass-card {
@@ -191,7 +191,7 @@
 .glass-card:hover {
   background-color: var(--glass-card-hover);
   border-color: var(--border-strong);
-  box-shadow: 0 4px 12px rgba(4, 1, 8, 0.35);
+  box-shadow: 0 4px 12px rgba(1, 4, 9, 0.35);
 }
 
 .input-dark, .input-themed {

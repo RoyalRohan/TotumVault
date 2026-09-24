@@ -33,7 +33,7 @@ export const Header: React.FC = () => {
             title="Open Navigation Menu"
             aria-label="Open Navigation Menu"
           >
-            <Menu className="w-5 h-5 text-purple-400" />
+            <Menu className="w-5 h-5 text-theme-text" />
           </button>
 
           {/* Center: Brand Logo & Title (Proportional & Mathematically Centered) */}

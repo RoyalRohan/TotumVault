@@ -17,7 +17,7 @@ export const Toast: React.FC = () => {
     success: 'border-emerald-500/30 bg-emerald-50 text-emerald-900 dark:bg-[#161b22] dark:border-[#3fb950]/40 dark:text-[#f0f6fc] shadow-lg',
     error: 'border-rose-500/30 bg-rose-50 text-rose-900 dark:bg-[#161b22] dark:border-[#f85149]/40 dark:text-[#f0f6fc] shadow-lg',
     warning: 'border-amber-500/30 bg-amber-50 text-amber-900 dark:bg-[#161b22] dark:border-[#d29922]/40 dark:text-[#f0f6fc] shadow-lg',
-    info: 'border-purple-500/30 bg-purple-50 text-purple-900 dark:bg-[#150a24] dark:border-purple-500/40 dark:text-[#f3e8ff] shadow-lg',
+    info: 'border-purple-500/30 bg-purple-50 text-purple-900 dark:bg-[#161b22] dark:border-purple-500/40 dark:text-[#f0f6fc] shadow-lg',
   };
 
   const type = toast.type || 'info';
