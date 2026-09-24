@@ -1,0 +1,30 @@
+TotumVault Source-Available License Version 1.0 — 2026
+Copyright (c) 2026 Rohan Ghimire / TotumVault Contributors
+IMPORTANT
+TotumVault is source-available software. This license is intentionally not an OSI-approved Open Source license. The source code is published so that users and contributors can inspect, study, review, and improve the project, while official distribution remains controlled by the project owner.
+    1. Permission to View and Study
+You may access, read, inspect, and study the TotumVault source code for personal, educational, security-review, and research purposes.
+    1. Personal Development and Modification
+You may modify the source code for personal, private, or internal use.
+You may build and run modified versions privately, provided that you do not distribute or publish those modified builds.
+    1. Official Releases
+Users may download, install, copy, and use official TotumVault releases that are published by the TotumVault project or by Rohan Ghimire through the project's official distribution channels, including the official GitHub repository and its Releases page.
+    1. Distribution Restrictions
+Unless you have prior written permission from Rohan Ghimire, you may not:
+    • publish, mirror, or redistribute modified TotumVault binaries;
+    • publish unofficial TotumVault installers or release packages;
+    • distribute a modified version of TotumVault to third parties;
+    • sell, license, sublicense, or commercially distribute TotumVault or a modified version derived from it;
+    • present an unofficial or modified build as an official TotumVault release;
+    • use the TotumVault name, logo, or official branding for a redistributed or modified product.
+    1. Contributions
+Contributions submitted through the TotumVault repository may be reviewed, modified, merged, and included in official TotumVault releases. By submitting a contribution, you confirm that you have the necessary rights to submit it and that you are comfortable with it being incorporated into the project under the project's applicable licensing terms.
+    1. Third-Party Components
+This license applies only to code and other materials owned by the TotumVault project. Third-party dependencies, libraries, fonts, icons, and other assets remain subject to their own licenses and notices. Nothing in this license changes those obligations.
+    1. Trademarks and Branding
+The name "TotumVault", the TotumVault logo, and associated project branding are not granted for use under this license. Permission to use the source code does not create permission to represent a modified or redistributed product as TotumVault.
+    1. No Warranty
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+    1. Interpretation
+This license is intended to preserve public source visibility and community review while keeping official binary distribution and project branding under the control of the TotumVault project owner.
+For permissions not expressly granted above, all rights are reserved.

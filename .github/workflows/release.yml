@@ -1,0 +1,186 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers the build when you push a tag like v0.1.0
+
+permissions:
+  contents: write
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest' # Builds macOS .dmg (Universal: Apple Silicon & Intel)
+            args: '--target universal-apple-darwin'
+          - platform: 'ubuntu-22.04' # Builds Linux .deb, .rpm, and .AppImage
+            args: ''
+          - platform: 'windows-latest' # Builds Windows .exe installer
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install macOS Rust targets
+        if: matrix.platform == 'macos-latest'
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev rpm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build and Publish Release Binaries
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'TotumVault ${{ github.ref_name }}'
+          releaseBody: 'Production distribution packages for TotumVault Password Manager (Windows, macOS, Ubuntu/Debian, Fedora/RPM, Arch Linux, and Android).'
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  build-android:
+    needs: publish-tauri
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android NDK
+        run: |
+          ANDROID_NDK_VERSION="26.1.10909125"
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "ndk;$ANDROID_NDK_VERSION"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/$ANDROID_NDK_VERSION" >> $GITHUB_ENV
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android, armv7-linux-androideabi
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Initialize Android Target
+        run: npx tauri android init --ci
+
+      - name: Configure Android Permissions and Features
+        run: node scripts/patch-android-manifest.js
+
+      - name: Configure Official Android App Icon
+        run: |
+          mkdir -p src-tauri/gen/android/app/src/main/res
+          cp -rf src-tauri/icons/android/* src-tauri/gen/android/app/src/main/res/
+          npx tauri icon src/assets/logo.png
+
+      - name: Build & Package Android APKs
+        run: |
+          keytool -genkey -v -keystore release.keystore -alias totumvault -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=TotumVault, OU=Security, O=TotumVault, L=City, S=State, C=US"
+          BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
+          mkdir -p release-apks
+
+          package_apk() {
+            local dest_name="$1"
+            local found_apk=$(find src-tauri/gen/android/app/build/outputs/apk -type f -name "*.apk" | head -n 1)
+            if [ -n "$found_apk" ]; then
+              echo "Signing $found_apk as $dest_name..."
+              $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore --ks-pass pass:android --key-pass pass:android "$found_apk"
+              $BUILD_TOOLS_DIR/apksigner verify "$found_apk"
+              cp -f "$found_apk" "release-apks/$dest_name"
+              echo "Successfully packaged release-apks/$dest_name"
+              rm -rf src-tauri/gen/android/app/build/outputs/apk/*
+            else
+              echo "Warning: No APK found for $dest_name"
+            fi
+          }
+
+          echo "=== 1. Building Android ARM64 (64-bit) ==="
+          npx tauri android build --apk --target aarch64 --ci
+          package_apk "totumvault-${{ github.ref_name }}-android-aarch64.apk"
+
+          echo "=== 2. Building Android ARMv7 (32-bit) ==="
+          npx tauri android build --apk --target armv7 --ci
+          package_apk "totumvault-${{ github.ref_name }}-android-armv7.apk"
+
+          echo "=== 3. Building Android Universal (32-bit & 64-bit) ==="
+          npx tauri android build --apk --target aarch64 --target armv7 --ci
+          package_apk "totumvault-${{ github.ref_name }}-android-universal.apk"
+
+          echo "=== Summary of generated APKs ==="
+          ls -lh release-apks/
+
+      - name: Upload Android APKs to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" release-apks/*.apk --clobber
+
+  package-arch:
+    needs: publish-tauri
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Download Debian package from Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p deb-package
+          gh release download "${{ github.ref_name }}" -p "*.deb" -D deb-package --clobber
+
+      - name: Build Arch Linux package (.pkg.tar.zst)
+        run: |
+          mkdir -p arch-pkg
+          docker run --rm -v "$(pwd):/workspace" -w /workspace archlinux:latest bash /workspace/scripts/build-arch-package.sh "${{ github.ref_name }}"
+
+      - name: Upload Arch Package to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.ref_name }}" arch-pkg/*.pkg.tar.zst --clobber
+
+

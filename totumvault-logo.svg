@@ -1,0 +1,252 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Metallic Purple / Amethyst Gradients from Totumlogo.png -->
+    <linearGradient id="tv-top-bevel" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="18%" stop-color="#f3e8ff" />
+      <stop offset="42%" stop-color="#c084fc" />
+      <stop offset="70%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#5b21b6" />
+    </linearGradient>
+
+    <linearGradient id="tv-shell-top" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#9333ea" />
+      <stop offset="30%" stop-color="#7e22ce" />
+      <stop offset="65%" stop-color="#581c87" />
+      <stop offset="100%" stop-color="#2e1065" />
+    </linearGradient>
+
+    <linearGradient id="tv-shell-top-left-shadow" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#5b21b6" />
+      <stop offset="50%" stop-color="#3b0764" />
+      <stop offset="100%" stop-color="#18052e" />
+    </linearGradient>
+
+    <linearGradient id="tv-t-gradient" x1="0%" y1="0%" x2="85%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" />
+      <stop offset="30%" stop-color="#7c3aed" />
+      <stop offset="65%" stop-color="#5b21b6" />
+      <stop offset="100%" stop-color="#3b0764" />
+    </linearGradient>
+
+    <linearGradient id="tv-t-stem-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3b0764" />
+      <stop offset="35%" stop-color="#6d28d9" />
+      <stop offset="70%" stop-color="#4c1d95" />
+      <stop offset="100%" stop-color="#240742" />
+    </linearGradient>
+
+    <linearGradient id="tv-door-face-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#150524" />
+      <stop offset="50%" stop-color="#260a42" />
+      <stop offset="100%" stop-color="#38115c" />
+    </linearGradient>
+
+    <linearGradient id="tv-door-edge-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="25%" stop-color="#e9d5ff" />
+      <stop offset="60%" stop-color="#a855f7" />
+      <stop offset="100%" stop-color="#4c1d95" />
+    </linearGradient>
+
+    <linearGradient id="tv-ribbon-curl" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c084fc" />
+      <stop offset="25%" stop-color="#9333ea" />
+      <stop offset="65%" stop-color="#6b21a8" />
+      <stop offset="100%" stop-color="#2e1065" />
+    </linearGradient>
+
+    <!-- Glowing Keyhole Core -->
+    <radialGradient id="tv-keyhole-glow" cx="50%" cy="42%" r="58%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="25%" stop-color="#fae8ff" />
+      <stop offset="65%" stop-color="#d8b4fe" />
+      <stop offset="100%" stop-color="#9333ea" />
+    </radialGradient>
+
+    <!-- 3D Shadow Filter -->
+    <filter id="tv-shadow" x="-12%" y="-12%" width="124%" height="128%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#080112" flood-opacity="0.65" />
+    </filter>
+
+    <filter id="tv-glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <g id="totumvault-emblem" filter="url(#tv-shadow)">
+    <!-- 1. Hexagonal Outer Shell - Upper Arch Segment -->
+    <path d="M 256,20 
+             C 264,20 272,24 278,28 
+             L 450,128 
+             C 458,133 462,141 462,151 
+             L 462,238 
+             L 420,238 
+             L 420,164 
+             L 256,70 
+             L 92,164 
+             L 92,238 
+             L 50,238 
+             L 50,151 
+             C 50,141 54,133 62,128 
+             L 234,28 
+             C 240,24 248,20 256,20 Z" 
+          fill="url(#tv-shell-top)" />
+
+    <!-- Upper Left Shell Shaded Face -->
+    <path d="M 256,20 
+             L 234,28 
+             L 62,128 
+             C 54,133 50,141 50,151 
+             L 50,238 
+             L 92,238 
+             L 92,164 
+             L 256,70 Z" 
+          fill="url(#tv-shell-top-left-shadow)" />
+    
+    <!-- Outer Shell Bevel Top Highlight -->
+    <path d="M 256,20 
+             L 450,128 
+             C 458,133 462,141 462,151 
+             L 450,142 
+             L 256,32 
+             L 62,142 
+             L 50,151 
+             C 50,141 54,133 62,128 
+             L 234,28 
+             C 240,24 248,20 256,20 Z" 
+          fill="url(#tv-top-bevel)" />
+
+    <!-- Inner Cavity Roof Rib (Arch framing top of T) -->
+    <polygon points="256,96 384,170 370,180 256,114 142,180 128,170" fill="#1e0836" />
+    <polygon points="256,96 384,170 382,173 256,100 130,173 128,170" fill="#a855f7" opacity="0.6" />
+
+    <!-- 2. Hexagonal Outer Shell - Lower Segment -->
+    <!-- Lower Left Shell Face -->
+    <path d="M 50,256 
+             L 92,256 
+             L 92,342 
+             L 256,436 
+             L 256,478 
+             C 248,478 240,474 234,470 
+             L 62,371 
+             C 54,366 50,358 50,348 Z" 
+          fill="#240742" />
+
+    <!-- Lower Right Shell Face -->
+    <path d="M 462,256 
+             L 420,256 
+             L 420,342 
+             L 256,436 
+             L 256,478 
+             C 264,478 272,474 278,470 
+             L 450,371 
+             C 458,366 462,358 462,348 Z" 
+          fill="#120320" />
+
+    <!-- Lower Facet Sweeping Ribbon (Under T Stem) -->
+    <path d="M 198,420 
+             C 208,438 228,452 256,464 
+             L 344,420 
+             L 376,436 
+             L 276,482 
+             C 264,488 248,488 236,482 
+             L 194,458 
+             C 186,446 188,430 198,420 Z" 
+          fill="url(#tv-ribbon-curl)" />
+
+    <!-- Ribbon Highlight Lip -->
+    <path d="M 198,420 
+             C 208,438 228,452 256,464 
+             L 344,420 
+             L 340,416 
+             L 256,459 
+             C 228,447 210,433 198,420 Z" 
+          fill="#f3e8ff" opacity="0.75" />
+
+    <!-- Left Framing Upright Pillar -->
+    <polygon points="124,196 146,196 146,400 124,384" fill="#2e1065" />
+    <polygon points="142,196 146,196 146,400 142,396" fill="#c084fc" opacity="0.8" />
+
+    <!-- Vault Door Back Frame (Depth behind door) -->
+    <polygon points="288,204 374,240 374,380 288,342" fill="#0c0217" />
+
+    <!-- 3. The Monolithic Capital 'T' (Centerpiece) -->
+    <!-- T Crossbar Base & Main Face -->
+    <path d="M 104,146 
+             L 384,146 
+             C 392,146 398,152 398,160 
+             L 398,194 
+             L 296,194 
+             C 288,202 288,212 288,224 
+             L 288,432 
+             L 204,432 
+             L 204,194 
+             L 104,194 
+             L 104,146 Z" 
+          fill="url(#tv-t-gradient)" />
+
+    <!-- T Top Surface Bevel & Metallic Sheen -->
+    <path d="M 104,146 
+             L 384,146 
+             C 392,146 398,152 398,160 
+             L 386,152 
+             L 116,152 
+             L 104,146 Z" 
+          fill="url(#tv-top-bevel)" opacity="0.95" />
+
+    <!-- T Left Chamfer Wing -->
+    <polygon points="104,146 136,194 104,194" fill="#1e0836" />
+
+    <!-- T Right Chamfer Wing -->
+    <polygon points="398,160 398,194 376,194" fill="#2e1065" />
+
+    <!-- T Vertical Stem Face -->
+    <polygon points="204,194 288,194 288,432 204,432" fill="url(#tv-t-stem-grad)" />
+    
+    <!-- T Stem Left Highlight Rim -->
+    <polygon points="204,194 212,194 212,432 204,432" fill="#c084fc" opacity="0.9" />
+
+    <!-- T Stem Right Shadow (Recess behind vault door) -->
+    <polygon points="280,194 288,194 288,432 280,432" fill="#0d0217" />
+
+    <!-- 4. Open Vault Door (Swinging outward in 3D perspective) -->
+    <!-- Door Extrusion / Thickness (Outer Shadow & Bevel Edge) -->
+    <polygon points="288,208 368,238 368,374 288,334" fill="#0b0214" />
+    <polygon points="354,232 368,238 368,374 354,368" fill="#270b47" />
+    <polygon points="288,208 306,214 368,238 354,232" fill="url(#tv-door-edge-grad)" />
+
+    <!-- Main Vault Door Face Plate -->
+    <polygon points="288,214 354,238 354,366 288,338" fill="url(#tv-door-face-grad)" stroke="#1c0633" stroke-width="1.5" />
+    
+    <!-- Recessed Door Panel / Inset Frame -->
+    <polygon points="294,224 348,244 348,358 294,334" fill="#120320" stroke="#7c3aed" stroke-width="1.2" opacity="0.9" />
+    
+    <!-- Inner Door Specular Ridge -->
+    <polygon points="296,228 344,246 344,248 296,230" fill="#c084fc" opacity="0.8" />
+
+    <!-- 5. Luminous Lilac Keyhole (The glowing vault lock) -->
+    <!-- Outer Soft Glow Field -->
+    <ellipse cx="322" cy="282" rx="16" ry="18" fill="#c084fc" opacity="0.45" filter="url(#tv-glow)" />
+    
+    <!-- Keyhole Cutout (Circle Head + Flared Base) -->
+    <path d="M 322,267 
+             C 327.5,267 332,271.5 332,277 
+             C 332,280.6 330.2,283.8 327.3,285.5 
+             L 330.5,301 
+             C 330.8,302.5 329.6,304 328,304 
+             L 316,304 
+             C 314.4,304 313.2,302.5 313.5,301 
+             L 316.7,285.5 
+             C 313.8,283.8 312,280.6 312,277 
+             C 312,271.5 316.5,267 322,267 Z" 
+          fill="url(#tv-keyhole-glow)" 
+          stroke="#ffffff" 
+          stroke-width="1.2" />
+
+    <!-- 6. Vault Door Hinges / Security Bolts -->
+    <circle cx="288" cy="232" r="3.5" fill="#d8b4fe" />
+    <circle cx="288" cy="320" r="3.5" fill="#d8b4fe" />
+  </g>
+</svg>
