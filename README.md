@@ -88,7 +88,7 @@ sudo dnf install ./totumvault-<version>-1.x86_64.rpm
 For example:
 
 ```bash
-sudo dnf install ./totumvault-1.2.0-1.x86_64.rpm
+sudo dnf install ./totumvault-1.3.1-1.x86_64.rpm
 ```
 
 ### Ubuntu / Debian-based Linux
@@ -103,7 +103,7 @@ sudo apt install ./totumvault-<version>-amd64.deb
 For example:
 
 ```bash
-sudo apt install ./totumvault-1.2.0-amd64.deb
+sudo apt install ./totumvault-1.3.1-amd64.deb
 ```
 
 ### Arch Linux

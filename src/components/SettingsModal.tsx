@@ -583,7 +583,7 @@ export const SettingsModal: React.FC = () => {
                 </label>
               </div>
               <span className="text-[11px] font-mono text-slate-600 dark:text-theme-text-muted font-semibold bg-slate-100 dark:bg-theme-surface px-2 py-0.5 rounded border border-slate-200 dark:border-theme-border">
-                Current: v{updateInfo?.currentVersion || '1.2.0'}
+                Current: v{updateInfo?.currentVersion || '1.3.1'}
               </span>
             </div>
 
@@ -701,7 +701,7 @@ export const SettingsModal: React.FC = () => {
               <img src={logoImg} alt="TotumVault" className="w-4 h-4 rounded object-cover" />
               <span className="font-medium text-theme-text">TotumVault</span>
             </div>
-            <span className="font-mono text-theme-text-muted">v1.2.0 • Offline Security Vault</span>
+            <span className="font-mono text-theme-text-muted">v{updateInfo?.currentVersion || '1.3.1'} • Offline Security Vault</span>
           </div>
         </div>
       </div>
