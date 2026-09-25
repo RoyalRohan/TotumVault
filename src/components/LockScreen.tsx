@@ -12,7 +12,6 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
   const {
     status,
     unlockVault,
-    isBiometricSupported,
     isBiometricEnabled,
     isBiometricLockedOut,
     biometricFailedAttempts,
