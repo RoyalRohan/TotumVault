@@ -94,7 +94,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
         <div>
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-            <Globe className="w-3.5 h-3.5 text-purple-400" />
+            <Globe className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />
             <span>Website URL</span>
           </label>
           <input
@@ -108,7 +108,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       </div>
 
       {/* Account Credentials */}
-      <FormSection title="Account Credentials" icon={<User className="w-3.5 h-3.5 text-purple-400" />}>
+      <FormSection title="Account Credentials" icon={<User className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5">
@@ -147,7 +147,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       </FormSection>
 
       {/* Two-Factor Authentication */}
-      <FormSection title="Two-Factor Authentication" icon={<Clock className="w-3.5 h-3.5 text-teal-500" />}>
+      <FormSection title="Two-Factor Authentication" icon={<Clock className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <SecretInput
           label="TOTP / 2FA Secret Key"
           value={totpSecret}

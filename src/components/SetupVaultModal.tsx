@@ -64,12 +64,12 @@ export const SetupVaultModal: React.FC<SetupVaultModalProps> = ({ isOpen, onClos
         </div>
 
         {/* Security Alert Warning */}
-        <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-200/90 text-xs mb-5 space-y-1">
-          <div className="flex items-center gap-1.5 font-semibold text-amber-500">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
+        <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/20 text-xs mb-5 space-y-1.5 shadow-2xs">
+          <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-400">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
             <span>Important Offline Notice</span>
           </div>
-          <p className="leading-relaxed text-xs text-amber-700 dark:text-amber-200/80">
+          <p className="leading-relaxed text-xs text-amber-950 dark:text-amber-200/90 font-medium">
             TotumVault is 100% offline. There is no cloud recovery or password reset. If you lose your master password, your vault cannot be recovered.
           </p>
         </div>
@@ -77,12 +77,12 @@ export const SetupVaultModal: React.FC<SetupVaultModalProps> = ({ isOpen, onClos
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs font-bold text-theme-text-muted block uppercase tracking-wider">
+              <label className="text-xs font-bold text-slate-800 dark:text-theme-text-muted block uppercase tracking-wider">
                 Choose Master Password <span className="text-rose-500">*</span>
               </label>
               {capsLockOn && (
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-500 animate-scale-up">
-                  <AlertTriangle className="w-3.5 h-3.5" />
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-400 animate-scale-up">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                   <span>Caps Lock ON</span>
                 </div>
               )}
@@ -101,7 +101,7 @@ export const SetupVaultModal: React.FC<SetupVaultModalProps> = ({ isOpen, onClos
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text p-1.5 cursor-pointer"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:text-theme-text-muted dark:hover:text-theme-text p-1.5 cursor-pointer"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -112,16 +112,16 @@ export const SetupVaultModal: React.FC<SetupVaultModalProps> = ({ isOpen, onClos
               <div className="mt-2.5 p-3 rounded-xl bg-theme-surface border border-theme-border space-y-2 animate-scale-up">
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
-                    <span className="text-theme-text-muted font-medium">Complexity:</span>
+                    <span className="text-slate-700 dark:text-theme-text-muted font-medium">Complexity:</span>
                     <span className={`px-2 py-0.5 rounded font-bold text-white text-xs ${strength.color}`}>
                       {strength.label}
                     </span>
                   </div>
-                  <span className="font-mono text-xs text-theme-text-muted font-medium">
+                  <span className="font-mono text-xs text-slate-600 dark:text-theme-text-muted font-medium">
                     {entropy.bits} bits • {entropy.crackTimeDisplay}
                   </span>
                 </div>
-                <div className="h-1.5 w-full bg-slate-200 dark:bg-[#21262d] rounded-full overflow-hidden flex gap-1">
+                <div className="h-1.5 w-full bg-slate-200 dark:bg-[#252a33] rounded-full overflow-hidden flex gap-1">
                   {[0, 1, 2, 3].map((idx) => (
                     <div
                       key={idx}
@@ -136,7 +136,7 @@ export const SetupVaultModal: React.FC<SetupVaultModalProps> = ({ isOpen, onClos
           </div>
 
           <div>
-            <label className="text-xs font-bold text-theme-text-muted mb-1.5 block uppercase tracking-wider">
+            <label className="text-xs font-bold text-slate-800 dark:text-theme-text-muted mb-1.5 block uppercase tracking-wider">
               Confirm Master Password <span className="text-rose-500">*</span>
             </label>
             <input

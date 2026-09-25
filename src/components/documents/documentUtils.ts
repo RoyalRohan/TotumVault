@@ -29,9 +29,9 @@ export const DOCUMENT_CATEGORIES: DocumentCategoryConfig[] = [
     label: 'Bill',
     description: 'Utility, phone, electricity & living bills',
     color: 'amber',
-    bgColor: 'bg-amber-500/10',
-    textColor: 'text-amber-500',
-    borderColor: 'border-amber-500/25',
+    bgColor: 'bg-amber-50 dark:bg-amber-500/10',
+    textColor: 'text-amber-800 dark:text-amber-400',
+    borderColor: 'border-amber-200 dark:border-amber-500/25',
     icon: FileText,
   },
   {
@@ -39,9 +39,9 @@ export const DOCUMENT_CATEGORIES: DocumentCategoryConfig[] = [
     label: 'Receipt',
     description: 'Store, shopping & expense receipts',
     color: 'emerald',
-    bgColor: 'bg-emerald-500/10',
-    textColor: 'text-emerald-500',
-    borderColor: 'border-emerald-500/25',
+    bgColor: 'bg-emerald-50 dark:bg-emerald-500/10',
+    textColor: 'text-emerald-800 dark:text-emerald-400',
+    borderColor: 'border-emerald-200 dark:border-emerald-500/25',
     icon: Receipt,
   },
   {
@@ -49,9 +49,9 @@ export const DOCUMENT_CATEGORIES: DocumentCategoryConfig[] = [
     label: 'ID & Passport',
     description: "Driver's license, passport, national ID card",
     color: 'violet',
-    bgColor: 'bg-violet-500/10',
-    textColor: 'text-violet-400',
-    borderColor: 'border-violet-500/25',
+    bgColor: 'bg-violet-50 dark:bg-violet-500/10',
+    textColor: 'text-violet-800 dark:text-violet-400',
+    borderColor: 'border-violet-200 dark:border-violet-500/25',
     icon: CreditCard,
   },
   {
@@ -59,9 +59,9 @@ export const DOCUMENT_CATEGORIES: DocumentCategoryConfig[] = [
     label: 'Certificate',
     description: 'Degrees, diplomas & official certificates',
     color: 'purple',
-    bgColor: 'bg-purple-500/10',
-    textColor: 'text-purple-500',
-    borderColor: 'border-purple-500/25',
+    bgColor: 'bg-purple-50 dark:bg-purple-500/10',
+    textColor: 'text-purple-800 dark:text-purple-400',
+    borderColor: 'border-purple-200 dark:border-purple-500/25',
     icon: Award,
   },
   {
@@ -69,9 +69,9 @@ export const DOCUMENT_CATEGORIES: DocumentCategoryConfig[] = [
     label: 'Insurance',
     description: 'Health, vehicle, home & life insurance',
     color: 'cyan',
-    bgColor: 'bg-cyan-500/10',
-    textColor: 'text-cyan-500',
-    borderColor: 'border-cyan-500/25',
+    bgColor: 'bg-cyan-50 dark:bg-cyan-500/10',
+    textColor: 'text-cyan-800 dark:text-cyan-400',
+    borderColor: 'border-cyan-200 dark:border-cyan-500/25',
     icon: Shield,
   },
   {
@@ -79,9 +79,9 @@ export const DOCUMENT_CATEGORIES: DocumentCategoryConfig[] = [
     label: 'Contract',
     description: 'Leases, employment agreements & legal contracts',
     color: 'indigo',
-    bgColor: 'bg-indigo-500/10',
-    textColor: 'text-indigo-500',
-    borderColor: 'border-indigo-500/25',
+    bgColor: 'bg-indigo-50 dark:bg-indigo-500/10',
+    textColor: 'text-indigo-800 dark:text-indigo-400',
+    borderColor: 'border-indigo-200 dark:border-indigo-500/25',
     icon: FileCheck,
   },
   {
@@ -89,9 +89,9 @@ export const DOCUMENT_CATEGORIES: DocumentCategoryConfig[] = [
     label: 'Warranty',
     description: 'Appliance, gadget & vehicle warranties',
     color: 'orange',
-    bgColor: 'bg-orange-500/10',
-    textColor: 'text-orange-500',
-    borderColor: 'border-orange-500/25',
+    bgColor: 'bg-orange-50 dark:bg-orange-500/10',
+    textColor: 'text-orange-800 dark:text-orange-400',
+    borderColor: 'border-orange-200 dark:border-orange-500/25',
     icon: ShieldCheck,
   },
   {
@@ -99,9 +99,9 @@ export const DOCUMENT_CATEGORIES: DocumentCategoryConfig[] = [
     label: 'Invoice',
     description: 'Tax invoices, business billing & statements',
     color: 'teal',
-    bgColor: 'bg-teal-500/10',
-    textColor: 'text-teal-500',
-    borderColor: 'border-teal-500/25',
+    bgColor: 'bg-teal-50 dark:bg-teal-500/10',
+    textColor: 'text-teal-800 dark:text-teal-400',
+    borderColor: 'border-teal-200 dark:border-teal-500/25',
     icon: FileSpreadsheet,
   },
   {
@@ -109,9 +109,9 @@ export const DOCUMENT_CATEGORIES: DocumentCategoryConfig[] = [
     label: 'Other',
     description: 'Miscellaneous personal records and notes',
     color: 'zinc',
-    bgColor: 'bg-zinc-500/10',
-    textColor: 'text-zinc-400',
-    borderColor: 'border-zinc-500/25',
+    bgColor: 'bg-slate-100 dark:bg-zinc-500/10',
+    textColor: 'text-slate-800 dark:text-zinc-400',
+    borderColor: 'border-slate-200 dark:border-zinc-500/25',
     icon: Folder,
   },
 ];
@@ -312,6 +312,42 @@ export function detectDocumentCorners(img: HTMLImageElement): QuadCorners {
 }
 
 /**
+ * Helper to solve 3-point affine transformation matrix mapping (x, y) -> (u, v)
+ * Returns [a, b, c, d, e, f] suitable for ctx.setTransform(a, b, c, d, e, f)
+ */
+function getAffineTransform(
+  x0: number, y0: number, x1: number, y1: number, x2: number, y2: number,
+  u0: number, v0: number, u1: number, v1: number, u2: number, v2: number
+): [number, number, number, number, number, number] | null {
+  // Determinant of source matrix [[x0, x1, x2], [y0, y1, y2], [1, 1, 1]]
+  const det = x0 * (y1 - y2) - x1 * (y0 - y2) + x2 * (y0 - y1);
+  if (Math.abs(det) < 1e-6) return null;
+
+  const inv00 = (y1 - y2) / det;
+  const inv01 = (x2 - x1) / det;
+  const inv02 = (x1 * y2 - x2 * y1) / det;
+
+  const inv10 = (y2 - y0) / det;
+  const inv11 = (x0 - x2) / det;
+  const inv12 = (x2 * y0 - x0 * y2) / det;
+
+  const inv20 = (y0 - y1) / det;
+  const inv21 = (x1 - x0) / det;
+  const inv22 = (x0 * y1 - x1 * y0) / det;
+
+  // Multiply destination matrix [[u0, u1, u2], [v0, v1, v2], [1, 1, 1]] by inverse
+  const a = u0 * inv00 + u1 * inv10 + u2 * inv20;
+  const c = u0 * inv01 + u1 * inv11 + u2 * inv21;
+  const e = u0 * inv02 + u1 * inv12 + u2 * inv22;
+
+  const b = v0 * inv00 + v1 * inv10 + v2 * inv20;
+  const d = v0 * inv01 + v1 * inv11 + v2 * inv21;
+  const f = v0 * inv02 + v1 * inv12 + v2 * inv22;
+
+  return [a, b, c, d, e, f];
+}
+
+/**
  * Crops and straightens an image using the specified 4 corner quad coordinates.
  * Renders into an output canvas and returns full quality JPEG or PNG data URL.
  */
@@ -324,11 +360,31 @@ export function cropQuadToImage(
   const origW = img.naturalWidth || img.width;
   const origH = img.naturalHeight || img.height;
 
-  // Calculate destination rectangle size based on average edge lengths
-  const pTL = { x: corners.tl.x * origW, y: corners.tl.y * origH };
-  const pTR = { x: corners.tr.x * origW, y: corners.tr.y * origH };
-  const pBR = { x: corners.br.x * origW, y: corners.br.y * origH };
-  const pBL = { x: corners.bl.x * origW, y: corners.bl.y * origH };
+  // Account for 90 or 270 degree rotation
+  const isRotated90or270 = ((rotation % 180) + 180) % 180 === 90;
+  const fullRotW = isRotated90or270 ? origH : origW;
+  const fullRotH = isRotated90or270 ? origW : origH;
+
+  // First render the full-resolution source image onto an oriented canvas
+  const rotCanvas = document.createElement('canvas');
+  rotCanvas.width = fullRotW;
+  rotCanvas.height = fullRotH;
+  const rCtx = rotCanvas.getContext('2d');
+  if (!rCtx) {
+    return { dataUrl: img.src, width: origW, height: origH, mimeType: 'image/jpeg' };
+  }
+
+  rCtx.save();
+  rCtx.translate(fullRotW / 2, fullRotH / 2);
+  rCtx.rotate((rotation * Math.PI) / 180);
+  rCtx.drawImage(img, -origW / 2, -origH / 2, origW, origH);
+  rCtx.restore();
+
+  // Corner coordinates on the full-resolution rotated canvas
+  const pTL = { x: corners.tl.x * fullRotW, y: corners.tl.y * fullRotH };
+  const pTR = { x: corners.tr.x * fullRotW, y: corners.tr.y * fullRotH };
+  const pBR = { x: corners.br.x * fullRotW, y: corners.br.y * fullRotH };
+  const pBL = { x: corners.bl.x * fullRotW, y: corners.bl.y * fullRotH };
 
   const topDist = Math.hypot(pTR.x - pTL.x, pTR.y - pTL.y);
   const botDist = Math.hypot(pBR.x - pBL.x, pBR.y - pBL.y);
@@ -338,58 +394,72 @@ export function cropQuadToImage(
   const targetW = Math.max(100, Math.round(Math.max(topDist, botDist)));
   const targetH = Math.max(100, Math.round(Math.max(leftDist, rightDist)));
 
-  const canvas = document.createElement('canvas');
-  // Account for 90 or 270 degree rotation
-  const isRotated90or270 = (rotation % 180 + 180) % 180 === 90;
-  canvas.width = isRotated90or270 ? targetH : targetW;
-  canvas.height = isRotated90or270 ? targetW : targetH;
-
-  const ctx = canvas.getContext('2d');
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = targetW;
+  outCanvas.height = targetH;
+  const ctx = outCanvas.getContext('2d');
   if (!ctx) {
-    return { dataUrl: img.src, width: origW, height: origH, mimeType: 'image/jpeg' };
+    return { dataUrl: rotCanvas.toDataURL('image/jpeg', 0.9), width: fullRotW, height: fullRotH, mimeType: 'image/jpeg' };
   }
 
-  // Handle rotation first
-  ctx.save();
-  if (rotation !== 0) {
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.rotate((rotation * Math.PI) / 180);
-    ctx.translate(-targetW / 2, -targetH / 2);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+
+  // Triangle 1: Top-Left (pTL, pTR, pBL) -> (0, 0), (targetW, 0), (0, targetH)
+  const t1 = getAffineTransform(
+    pTL.x, pTL.y, pTR.x, pTR.y, pBL.x, pBL.y,
+    0, 0, targetW, 0, 0, targetH
+  );
+
+  // Triangle 2: Bottom-Right (pTR, pBR, pBL) -> (targetW, 0), (targetW, targetH), (0, targetH)
+  const t2 = getAffineTransform(
+    pTR.x, pTR.y, pBR.x, pBR.y, pBL.x, pBL.y,
+    targetW, 0, targetW, targetH, 0, targetH
+  );
+
+  if (t1 && t2) {
+    // Render Triangle 1
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(targetW, 0);
+    ctx.lineTo(0, targetH);
+    ctx.closePath();
+    ctx.clip();
+    ctx.setTransform(t1[0], t1[1], t1[2], t1[3], t1[4], t1[5]);
+    ctx.drawImage(rotCanvas, 0, 0);
+    ctx.restore();
+
+    // Render Triangle 2
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(targetW, 0);
+    ctx.lineTo(targetW, targetH);
+    ctx.lineTo(0, targetH);
+    ctx.closePath();
+    ctx.clip();
+    ctx.setTransform(t2[0], t2[1], t2[2], t2[3], t2[4], t2[5]);
+    ctx.drawImage(rotCanvas, 0, 0);
+    ctx.restore();
+  } else {
+    // Fallback if degenerate
+    const minX = Math.max(0, Math.min(pTL.x, pBL.x));
+    const minY = Math.max(0, Math.min(pTL.y, pTR.y));
+    const srcW = Math.min(fullRotW - minX, Math.max(pTR.x, pBR.x) - minX);
+    const srcH = Math.min(fullRotH - minY, Math.max(pBL.y, pBR.y) - minY);
+    ctx.drawImage(rotCanvas, minX, minY, srcW, srcH, 0, 0, targetW, targetH);
   }
-
-  // Draw quadrilateral clip
-  // Split quad into 2 triangles and render texture map or clip polygon
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(targetW, 0);
-  ctx.lineTo(targetW, targetH);
-  ctx.lineTo(0, targetH);
-  ctx.closePath();
-  ctx.clip();
-
-  // Draw source mapped to quad
-  // Simple affine approximation using polygon clipping
-  const minX = Math.min(pTL.x, pBL.x);
-  const minY = Math.min(pTL.y, pTR.y);
-  const srcW = Math.max(pTR.x, pBR.x) - minX;
-  const srcH = Math.max(pBL.y, pBR.y) - minY;
-
-  ctx.drawImage(img, minX, minY, srcW, srcH, 0, 0, targetW, targetH);
-  ctx.restore();
-  ctx.restore();
 
   // Optional contrast and sharpening enhancement for document readability
   if (enhanceContrast) {
     try {
-      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const imgData = ctx.getImageData(0, 0, outCanvas.width, outCanvas.height);
       const d = imgData.data;
       // High contrast curve
       for (let i = 0; i < d.length; i += 4) {
-        // slight contrast stretch
         for (let c = 0; c < 3; c++) {
           const val = d[i + c];
-          const norm = (val - 128) * 1.15 + 128;
+          const norm = (val - 128) * 1.18 + 128;
           d[i + c] = Math.max(0, Math.min(255, norm));
         }
       }
@@ -400,12 +470,12 @@ export function cropQuadToImage(
   }
 
   const mimeType = 'image/jpeg';
-  const dataUrl = canvas.toDataURL(mimeType, 0.88);
+  const dataUrl = outCanvas.toDataURL(mimeType, 0.92);
 
   return {
     dataUrl,
-    width: canvas.width,
-    height: canvas.height,
+    width: outCanvas.width,
+    height: outCanvas.height,
     mimeType,
   };
 }

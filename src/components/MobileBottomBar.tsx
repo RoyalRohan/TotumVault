@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, FolderLock, Star, Clock, Shield, Menu } from 'lucide-react';
+import { Layers, FolderLock, Star, Clock, Shield } from 'lucide-react';
 import { useVault } from '../context/VaultContext';
 
 export const MobileBottomBar: React.FC = () => {
@@ -7,7 +7,6 @@ export const MobileBottomBar: React.FC = () => {
     activeCategory,
     setActiveCategory,
     setSelectedEntryId,
-    setIsMobileNavOpen,
     fetchHealthReport,
     healthReport,
   } = useVault();
@@ -29,11 +28,11 @@ export const MobileBottomBar: React.FC = () => {
         }}
         className={`flex flex-col items-center justify-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer min-h-[48px] ${
           activeCategory === 'all'
-            ? 'text-purple-400 font-semibold'
-            : 'text-theme-text-muted hover:text-theme-text'
+            ? 'text-purple-700 dark:text-purple-300 font-bold'
+            : 'text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text font-medium'
         }`}
       >
-        <Layers className="w-4.5 h-4.5" />
+        <Layers className="w-4.5 h-4.5 stroke-[1.75]" />
         <span className="text-xs tracking-tight">Vault</span>
       </button>
 
@@ -45,15 +44,15 @@ export const MobileBottomBar: React.FC = () => {
         }}
         className={`flex flex-col items-center justify-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer min-h-[48px] ${
           activeCategory === 'documents'
-            ? 'text-cyan-500 font-semibold'
-            : 'text-theme-text-muted hover:text-theme-text'
+            ? 'text-purple-700 dark:text-purple-300 font-bold'
+            : 'text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text font-medium'
         }`}
       >
-        <FolderLock className="w-4.5 h-4.5" />
+        <FolderLock className="w-4.5 h-4.5 stroke-[1.75]" />
         <span className="text-xs tracking-tight">Docs</span>
       </button>
 
-      {/* 2. Favorites */}
+      {/* 3. Favorites */}
       <button
         onClick={() => {
           setActiveCategory('favorites');
@@ -61,15 +60,15 @@ export const MobileBottomBar: React.FC = () => {
         }}
         className={`flex flex-col items-center justify-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer min-h-[48px] ${
           activeCategory === 'favorites'
-            ? 'text-amber-500 font-semibold'
-            : 'text-theme-text-muted hover:text-theme-text'
+            ? 'text-purple-700 dark:text-purple-300 font-bold'
+            : 'text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text font-medium'
         }`}
       >
-        <Star className={`w-4.5 h-4.5 ${activeCategory === 'favorites' ? 'fill-amber-500/30' : ''}`} />
+        <Star className={`w-4.5 h-4.5 stroke-[1.75] ${activeCategory === 'favorites' ? 'fill-purple-500/20' : ''}`} />
         <span className="text-xs tracking-tight">Favorites</span>
       </button>
 
-      {/* 3. 2FA Authenticator */}
+      {/* 4. 2FA Authenticator */}
       <button
         onClick={() => {
           setActiveCategory('totp');
@@ -77,15 +76,15 @@ export const MobileBottomBar: React.FC = () => {
         }}
         className={`flex flex-col items-center justify-center gap-1 py-1.5 px-3 rounded-xl transition-all cursor-pointer min-h-[48px] ${
           activeCategory === 'totp'
-            ? 'text-teal-600 dark:text-teal-400 font-semibold'
-            : 'text-theme-text-muted hover:text-theme-text'
+            ? 'text-purple-700 dark:text-purple-300 font-bold'
+            : 'text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text font-medium'
         }`}
       >
-        <Clock className="w-4.5 h-4.5" />
+        <Clock className="w-4.5 h-4.5 stroke-[1.75]" />
         <span className="text-xs tracking-tight">2FA</span>
       </button>
 
-      {/* 4. Security Health Audit */}
+      {/* 5. Security Health Audit */}
       <button
         onClick={() => {
           setActiveCategory('health');
@@ -94,26 +93,17 @@ export const MobileBottomBar: React.FC = () => {
         }}
         className={`flex flex-col items-center justify-center gap-1 py-1.5 px-3 rounded-xl transition-all relative cursor-pointer min-h-[48px] ${
           activeCategory === 'health'
-            ? 'text-sky-600 dark:text-sky-400 font-semibold'
-            : 'text-theme-text-muted hover:text-theme-text'
+            ? 'text-purple-700 dark:text-purple-300 font-bold'
+            : 'text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text font-medium'
         }`}
       >
         <div className="relative">
-          <Shield className="w-4.5 h-4.5" />
+          <Shield className="w-4.5 h-4.5 stroke-[1.75]" />
           {totalVulnerabilities > 0 && (
-            <span className="absolute -top-1 -right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-theme-surface" />
+            <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
           )}
         </div>
-        <span className="text-xs tracking-tight">Audit</span>
-      </button>
-
-      {/* 5. More / Categories Drawer */}
-      <button
-        onClick={() => setIsMobileNavOpen(true)}
-        className="flex flex-col items-center justify-center gap-1 py-1.5 px-3 rounded-xl text-theme-text-muted hover:text-theme-text transition-all cursor-pointer min-h-[48px]"
-      >
-        <Menu className="w-4.5 h-4.5" />
-        <span className="text-xs tracking-tight">More</span>
+        <span className="text-xs tracking-tight">Health</span>
       </button>
     </nav>
   );

@@ -30,19 +30,19 @@ export const EntryFormShell: React.FC<EntryFormShellProps> = ({
   const getCategoryIcon = (cat: CategoryType) => {
     switch (cat) {
       case 'secure_notes':
-        return <FileText className="w-5 h-5 text-emerald-500" />;
+        return <FileText className="w-5 h-5 stroke-[1.75]" />;
       case 'totp':
-        return <Clock className="w-5 h-5 text-teal-500" />;
+        return <Clock className="w-5 h-5 stroke-[1.75]" />;
       case 'cards':
-        return <CreditCard className="w-5 h-5 text-indigo-500" />;
+        return <CreditCard className="w-5 h-5 stroke-[1.75]" />;
       case 'licenses':
-        return <Scroll className="w-5 h-5 text-amber-600 dark:text-amber-500" />;
+        return <Scroll className="w-5 h-5 stroke-[1.75]" />;
       case 'servers':
-        return <Server className="w-5 h-5 text-purple-500" />;
+        return <Server className="w-5 h-5 stroke-[1.75]" />;
       case 'api_credentials':
-        return <Terminal className="w-5 h-5 text-rose-500" />;
+        return <Terminal className="w-5 h-5 stroke-[1.75]" />;
       default:
-        return <Key className="w-5 h-5 text-purple-400" />;
+        return <Key className="w-5 h-5 stroke-[1.75]" />;
     }
   };
 
@@ -52,7 +52,7 @@ export const EntryFormShell: React.FC<EntryFormShellProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-theme-border bg-theme-surface/50 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-theme-elevated border border-theme-border flex items-center justify-center shadow-sm shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-sm shrink-0">
               {getCategoryIcon(category)}
             </div>
             <div>

@@ -109,7 +109,7 @@ export const ApiCredentialForm: React.FC<ApiCredentialFormProps> = ({
       {/* Base Endpoint */}
       <div>
         <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-          <Globe className="w-3.5 h-3.5 text-purple-400" />
+          <Globe className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />
           <span>Base Endpoint URL</span>
         </label>
         <input
@@ -122,7 +122,7 @@ export const ApiCredentialForm: React.FC<ApiCredentialFormProps> = ({
       </div>
 
       {/* API Key & Token Group */}
-      <FormSection title="API Keys & Tokens" icon={<Key className="w-3.5 h-3.5 text-rose-400" />}>
+      <FormSection title="API Keys & Tokens" icon={<Key className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <SecretInput
           label="API Key / Public Token"
           value={apiKey}
@@ -141,7 +141,7 @@ export const ApiCredentialForm: React.FC<ApiCredentialFormProps> = ({
       </FormSection>
 
       {/* OAuth / Client Credentials */}
-      <FormSection title="OAuth 2.0 / Client Credentials (Optional)" icon={<Shield className="w-3.5 h-3.5 text-rose-500" />}>
+      <FormSection title="OAuth 2.0 / Client Credentials (Optional)" icon={<Shield className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <SecretInput
             label="Client ID"

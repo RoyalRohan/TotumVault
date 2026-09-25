@@ -59,7 +59,7 @@ export const CustomFieldsEditor: React.FC<CustomFieldsEditorProps> = ({
             onClick={() => handleAdd('sensitive')}
             className="text-xs text-theme-text-muted hover:text-theme-text flex items-center gap-1 font-medium px-2 py-1 rounded-lg hover:bg-theme-elevated transition-colors cursor-pointer"
           >
-            <Shield className="w-3.5 h-3.5 text-purple-400" />
+            <Shield className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />
             <span>Hidden</span>
           </button>
         </div>
@@ -109,9 +109,9 @@ export const CustomFieldsEditor: React.FC<CustomFieldsEditorProps> = ({
                   title={isSensitive ? 'Convert to regular text' : 'Convert to hidden/masked secret'}
                 >
                   {isSensitive ? (
-                    <Shield className="w-3.5 h-3.5 text-purple-400" />
+                    <Shield className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />
                   ) : (
-                    <FileText className="w-3.5 h-3.5" />
+                    <FileText className="w-3.5 h-3.5 stroke-[1.75]" />
                   )}
                 </button>
 
@@ -121,7 +121,7 @@ export const CustomFieldsEditor: React.FC<CustomFieldsEditorProps> = ({
                   className="p-1.5 rounded-lg text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-500/15 transition-colors cursor-pointer shrink-0"
                   title="Remove field"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <Trash2 className="w-3.5 h-3.5 stroke-[1.75]" />
                 </button>
               </div>
             );

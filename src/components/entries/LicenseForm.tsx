@@ -104,7 +104,7 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
       </div>
 
       {/* License Key Hero Field */}
-      <FormSection title="Activation Details" icon={<Key className="w-3.5 h-3.5 text-amber-500" />}>
+      <FormSection title="Activation Details" icon={<Key className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <SecretInput
           label="License Key / Serial Number"
           value={licenseKey}
@@ -154,7 +154,7 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
 
         <div>
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
-            <Globe className="w-3.5 h-3.5 text-purple-400" />
+            <Globe className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />
             <span>Vendor Website / Download URL</span>
           </label>
           <input

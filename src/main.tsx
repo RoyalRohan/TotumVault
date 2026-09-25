@@ -1,12 +1,34 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+
+// 1. Inter
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
+
+// 2. Geist Sans
+import "@fontsource/geist-sans/400.css";
+import "@fontsource/geist-sans/500.css";
+import "@fontsource/geist-sans/600.css";
+import "@fontsource/geist-sans/700.css";
+
+// 3. IBM Plex Sans
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/600.css";
+import "@fontsource/ibm-plex-sans/700.css";
+
+// 4. JetBrains Mono
 import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/600.css";
+
+// 5. Fira Code
+import "@fontsource/fira-code/400.css";
+import "@fontsource/fira-code/500.css";
+import "@fontsource/fira-code/600.css";
+
 import App from "./App";
 import "./index.css";
 
@@ -27,7 +49,7 @@ if (import.meta.env.PROD) {
     // Disable F12, Ctrl+Shift+I, Cmd+Option+I (Inspect Element / DevTools)
     if (
       e.key === 'F12' ||
-      ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'I') ||
+      ((e.ctrlKey || e.metaKey) && e.key === 'I') ||
       ((e.ctrlKey || e.metaKey) && e.altKey && e.key === 'i')
     ) {
       e.preventDefault();

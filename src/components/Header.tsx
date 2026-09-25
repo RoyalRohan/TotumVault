@@ -52,9 +52,9 @@ export const Header: React.FC = () => {
               onClick={() => setIsGeneratorOpen(true)}
               title="Password Generator"
               aria-label="Password Generator"
-              className="w-10 h-10 rounded-xl bg-theme-surface hover:bg-theme-hover border border-theme-border text-theme-text-muted hover:text-purple-400 transition-all cursor-pointer shadow-sm flex items-center justify-center active:scale-95 group"
+              className="w-10 h-10 rounded-xl bg-theme-surface hover:bg-theme-hover border border-theme-border text-theme-text-muted hover:text-purple-600 dark:hover:text-purple-400 transition-all cursor-pointer shadow-sm flex items-center justify-center active:scale-95 group"
             >
-              <Sparkles className="w-4.5 h-4.5 text-purple-400 group-hover:rotate-12 transition-transform" />
+              <Sparkles className="w-4.5 h-4.5 text-purple-600 dark:text-purple-400 group-hover:rotate-12 transition-transform" />
             </button>
 
             <button
@@ -141,7 +141,7 @@ export const Header: React.FC = () => {
             title={`Generate Password (${isMac ? '⌘G' : 'Ctrl+G'})`}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-theme-surface hover:bg-theme-hover border border-theme-border text-theme-text text-sm font-medium transition-all shadow-sm cursor-pointer group active:scale-98 min-h-[42px]"
           >
-            <Sparkles className="w-4 h-4 text-purple-400 group-hover:rotate-12 transition-transform" />
+            <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 group-hover:rotate-12 transition-transform" />
             <span>Generator</span>
           </button>
 

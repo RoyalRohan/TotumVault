@@ -66,8 +66,8 @@ export const PasswordGeneratorModal: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-theme-border">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-theme-surface border border-theme-border text-purple-400 flex items-center justify-center shadow-sm">
-              <Sparkles className="w-4 h-4" />
+            <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-sm">
+              <Sparkles className="w-4 h-4 stroke-[1.75]" />
             </div>
             <div>
               <h2 className="text-base font-semibold text-theme-text tracking-tight">Password Generator</h2>
@@ -78,14 +78,14 @@ export const PasswordGeneratorModal: React.FC = () => {
             onClick={() => setIsGeneratorOpen(false)}
             className="p-2 rounded-xl hover:bg-theme-surface text-theme-text-muted hover:text-theme-text transition-colors cursor-pointer"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4 stroke-[1.75]" />
           </button>
         </div>
 
         {/* Generated Password Box */}
         <div className="my-5 space-y-2.5">
           <div className="p-4 rounded-xl bg-theme-surface border border-theme-border flex items-center justify-between group gap-2 shadow-sm">
-            <span className="font-mono text-base font-semibold text-purple-400 dark:text-purple-300 break-all select-all tracking-wider">
+            <span className="font-mono text-base font-semibold text-purple-700 dark:text-purple-300 break-all select-all tracking-wider">
               {generatedPw || 'Generating...'}
             </span>
 
@@ -117,7 +117,7 @@ export const PasswordGeneratorModal: React.FC = () => {
               {entropy.bits} bits • {entropy.crackTimeDisplay}
             </span>
           </div>
-          <div className="h-1.5 w-full bg-slate-200 dark:bg-[#21262d] rounded-full overflow-hidden flex gap-1">
+          <div className="h-1.5 w-full bg-slate-200 dark:bg-[#252a33] rounded-full overflow-hidden flex gap-1">
             {[0, 1, 2, 3].map((idx) => (
               <div
                 key={idx}
@@ -157,7 +157,7 @@ export const PasswordGeneratorModal: React.FC = () => {
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-theme-text-muted">
                   <span>Password Length</span>
-                  <span className="font-mono font-bold text-purple-500 dark:text-purple-400">{config.length} characters</span>
+                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400">{config.length} characters</span>
                 </div>
                 <input
                   type="range"
@@ -241,7 +241,7 @@ export const PasswordGeneratorModal: React.FC = () => {
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-theme-text-muted">
                   <span>Word Count</span>
-                  <span className="font-mono font-bold text-purple-500 dark:text-purple-400">{config.word_count} words</span>
+                  <span className="font-mono font-bold text-purple-600 dark:text-purple-400">{config.word_count} words</span>
                 </div>
                 <input
                   type="range"

@@ -129,7 +129,7 @@ export const CardForm: React.FC<CardFormProps> = ({
       </div>
 
       {/* Card Details Group */}
-      <FormSection title="Card Information" icon={<CreditCard className="w-3.5 h-3.5 text-indigo-400" />}>
+      <FormSection title="Card Information" icon={<CreditCard className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <div>
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5">
             Cardholder Name
@@ -212,7 +212,7 @@ export const CardForm: React.FC<CardFormProps> = ({
       </FormSection>
 
       {/* Billing Address */}
-      <FormSection title="Billing Address" icon={<MapPin className="w-3.5 h-3.5 text-indigo-500" />}>
+      <FormSection title="Billing Address" icon={<MapPin className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <textarea
           rows={2}
           value={billingAddress}

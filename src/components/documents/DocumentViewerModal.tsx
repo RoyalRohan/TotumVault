@@ -57,6 +57,10 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [viewRotation, setViewRotation] = useState<number>(0);
 
+  // Touch gesture refs (pinch-to-zoom & double-tap)
+  const lastTouchDistanceRef = useRef<number | null>(null);
+  const lastTapTimeRef = useRef<number>(0);
+
   // UI Drawer / Modal states
   const [showInfoPanel, setShowInfoPanel] = useState<boolean>(false);
   const [showDeleteDocConfirm, setShowDeleteDocConfirm] = useState<boolean>(false);
@@ -156,7 +160,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     setViewRotation(0);
   };
 
-  // Pan controls
+  // Mouse pan controls
   const handleMouseDown = (e: React.MouseEvent) => {
     if (zoomScale <= 1) return;
     setIsPanning(true);
@@ -172,6 +176,60 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   };
 
   const handleMouseUp = () => setIsPanning(false);
+
+  // Touch controls: 2-finger pinch-to-zoom & 1-finger pan & double-tap toggle zoom
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      lastTouchDistanceRef.current = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+    } else if (e.touches.length === 1) {
+      const now = Date.now();
+      if (now - lastTapTimeRef.current < 300) {
+        // Double tap: toggle between 1x and 2.5x zoom
+        setZoomScale((prev) => {
+          if (prev > 1.2) {
+            setPanOffset({ x: 0, y: 0 });
+            return 1;
+          }
+          return 2.5;
+        });
+        lastTapTimeRef.current = 0;
+        return;
+      }
+      lastTapTimeRef.current = now;
+
+      if (zoomScale > 1) {
+        setIsPanning(true);
+        const t = e.touches[0];
+        panStartRef.current = { x: t.clientX - panOffset.x, y: t.clientY - panOffset.y };
+      }
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDistanceRef.current !== null) {
+      const t1 = e.touches[0];
+      const t2 = e.touches[1];
+      const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      if (dist > 10 && lastTouchDistanceRef.current > 10) {
+        const factor = dist / lastTouchDistanceRef.current;
+        lastTouchDistanceRef.current = dist;
+        setZoomScale((prev) => Math.max(0.6, Math.min(4, prev * factor)));
+      }
+    } else if (e.touches.length === 1 && isPanning && zoomScale > 1) {
+      const t = e.touches[0];
+      setPanOffset({
+        x: t.clientX - panStartRef.current.x,
+        y: t.clientY - panStartRef.current.y,
+      });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    lastTouchDistanceRef.current = null;
+    setIsPanning(false);
+  };
 
   // Favorite toggle
   const handleToggleFavorite = async () => {
@@ -282,7 +340,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
 
       if (!selectedPath) return;
 
-      // Extract raw base64 and write bytes
       const base64Data = activeImageData.includes(',')
         ? activeImageData.split(',')[1]
         : activeImageData;
@@ -311,542 +368,546 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     : false;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md select-none overflow-hidden animate-scale-up">
-      <div className="w-full h-full flex flex-col justify-between">
-        {/* TOP BAR */}
-        <div className="flex items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 bg-zinc-950/80 border-b border-zinc-800/80 backdrop-blur-lg shrink-0 z-20 pt-safe">
-          {/* Left: Back / Title / Badge */}
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-              title="Close Viewer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-            </button>
+    <div className="fixed inset-0 z-50 flex flex-col h-screen h-[100dvh] max-h-[100dvh] bg-black/90 backdrop-blur-md select-none overflow-hidden animate-scale-up">
+      {/* TOP NAVIGATION & CONTROLS BAR */}
+      <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 bg-zinc-950/85 border-b border-zinc-800/80 backdrop-blur-lg shrink-0 z-20 pt-safe pl-safe pr-safe">
+        {/* Left: Back / Title / Badge */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer shrink-0"
+            title="Close Viewer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </button>
 
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="text-sm sm:text-base font-semibold text-white truncate max-w-xs sm:max-w-md">
-                  {documentDetail?.metadata.title || 'Loading document...'}
-                </h2>
-                {categoryConfig && (
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border ${categoryConfig.bgColor} ${categoryConfig.textColor} ${categoryConfig.borderColor} shrink-0`}
-                  >
-                    <CategoryIcon className="w-3 h-3" />
-                    <span>{categoryConfig.label}</span>
-                  </span>
-                )}
-                {isExpired && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0">
-                    Expired
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-zinc-400 truncate">
-                {documentDetail
-                  ? `Page ${currentPageIndex + 1} of ${documentDetail.pages.length}`
-                  : 'Decrypting...'}
-              </p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h2 className="text-xs sm:text-base font-semibold text-white truncate max-w-[140px] min-[380px]:max-w-[180px] sm:max-w-md">
+                {documentDetail?.metadata.title || 'Loading document...'}
+              </h2>
+              {categoryConfig && (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-medium border bg-purple-500/15 text-purple-300 border-purple-500/30 shrink-0"
+                >
+                  <CategoryIcon className="w-3 h-3 stroke-[1.75]" />
+                  <span className="hidden min-[420px]:inline">{categoryConfig.label}</span>
+                </span>
+              )}
+              {isExpired && (
+                <span className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30 shrink-0">
+                  Expired
+                </span>
+              )}
             </div>
-          </div>
-
-          {/* Right: Controls & Actions */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Zoom Controls */}
-            <div className="hidden sm:flex items-center bg-zinc-900/80 border border-zinc-800 rounded-xl p-0.5">
-              <button
-                type="button"
-                onClick={handleZoomOut}
-                className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                title="Zoom Out"
-              >
-                <ZoomOut className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={handleResetZoom}
-                className="px-2 py-1 text-[11px] font-mono font-medium text-zinc-300 hover:text-white cursor-pointer"
-                title="Reset Zoom"
-              >
-                {Math.round(zoomScale * 100)}%
-              </button>
-              <button
-                type="button"
-                onClick={handleZoomIn}
-                className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
-                title="Zoom In"
-              >
-                <ZoomIn className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Rotate */}
-            <button
-              type="button"
-              onClick={() => setViewRotation((r) => (r + 90) % 360)}
-              className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-              title="Rotate 90°"
-            >
-              <RotateCw className="w-4 h-4" />
-            </button>
-
-            {/* Favorite */}
-            <button
-              type="button"
-              onClick={handleToggleFavorite}
-              className={`p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 transition-colors cursor-pointer ${
-                documentDetail?.metadata.favorite
-                  ? 'text-amber-400'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-              title="Favorite"
-            >
-              <Star className={`w-4 h-4 ${documentDetail?.metadata.favorite ? 'fill-amber-400' : ''}`} />
-            </button>
-
-            {/* Export Page */}
-            <button
-              type="button"
-              onClick={handleExportPage}
-              className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-              title="Export Decrypted Page"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-
-            {/* Toggle Info Panel */}
-            <button
-              type="button"
-              onClick={() => setShowInfoPanel(!showInfoPanel)}
-              className={`p-2 rounded-xl transition-colors cursor-pointer ${
-                showInfoPanel
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white'
-              }`}
-              title="Document Info"
-            >
-              <Info className="w-4 h-4" />
-            </button>
-
-            {/* Close */}
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer ml-1"
-              title="Close"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <p className="text-[10px] sm:text-xs text-zinc-400 truncate">
+              {documentDetail
+                ? `Page ${currentPageIndex + 1} of ${documentDetail.pages.length}`
+                : 'Decrypting...'}
+            </p>
           </div>
         </div>
 
-        {/* CENTER VIEWPORT: HIGH-RES DOCUMENT CANVAS/IMAGE */}
-        <div
-          className="flex-1 relative overflow-hidden flex items-center justify-center p-4 bg-zinc-950 cursor-grab active:cursor-grabbing"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-        >
-          {isLoading ? (
-            <div className="flex flex-col items-center gap-3 text-zinc-400">
-              <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-              <span className="text-xs">Decrypting document image...</span>
-            </div>
-          ) : activeImageData ? (
-            <div
-              style={{
-                transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale}) rotate(${viewRotation}deg)`,
-                transition: isPanning ? 'none' : 'transform 0.15s ease-out',
-              }}
-              className="max-h-[75vh] max-w-[90vw] select-none shadow-2xl rounded-lg overflow-hidden border border-zinc-800/60"
+        {/* Right: Controls & Actions */}
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Zoom Controls (Responsive: visible on both mobile & desktop) */}
+          <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-xl p-0.5">
+            <button
+              type="button"
+              onClick={handleZoomOut}
+              className="p-1.5 sm:p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              title="Zoom Out"
             >
-              <img
-                src={activeImageData}
-                alt={`Document Page ${currentPageIndex + 1}`}
-                className="max-h-[75vh] max-w-[90vw] object-contain pointer-events-none"
-                draggable={false}
-              />
-            </div>
-          ) : (
-            <div className="text-zinc-500 text-xs">No image data available for this page</div>
-          )}
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={handleResetZoom}
+              className="px-1.5 sm:px-2 py-1 text-[10px] sm:text-[11px] font-mono font-medium text-zinc-300 hover:text-white cursor-pointer"
+              title="Reset Zoom"
+            >
+              {Math.round(zoomScale * 100)}%
+            </button>
+            <button
+              type="button"
+              onClick={handleZoomIn}
+              className="p-1.5 sm:p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              title="Zoom In"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
+            </button>
+          </div>
 
-          {/* Left / Right Chevron Nav Overlay */}
-          {documentDetail && documentDetail.pages.length > 1 && (
-            <>
-              {currentPageIndex > 0 && (
+          {/* Rotate */}
+          <button
+            type="button"
+            onClick={() => setViewRotation((r) => (r + 90) % 360)}
+            className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+            title="Rotate 90°"
+          >
+            <RotateCw className="w-4 h-4" />
+          </button>
+
+          {/* Favorite */}
+          <button
+            type="button"
+            onClick={handleToggleFavorite}
+            className={`p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 transition-colors cursor-pointer ${
+              documentDetail?.metadata.favorite
+                ? 'text-amber-400'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+            title="Favorite"
+          >
+            <Star className={`w-4 h-4 ${documentDetail?.metadata.favorite ? 'fill-amber-400' : ''}`} />
+          </button>
+
+          {/* Export Page */}
+          <button
+            type="button"
+            onClick={handleExportPage}
+            className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+            title="Export Decrypted Page"
+          >
+            <Download className="w-4 h-4" />
+          </button>
+
+          {/* Toggle Info Panel */}
+          <button
+            type="button"
+            onClick={() => setShowInfoPanel(!showInfoPanel)}
+            className={`p-2 rounded-xl transition-colors cursor-pointer ${
+              showInfoPanel
+                ? 'bg-purple-600 text-white'
+                : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 hover:text-white'
+            }`}
+            title="Document Info"
+          >
+            <Info className="w-4 h-4" />
+          </button>
+
+          {/* Close */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer ml-0.5"
+            title="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* CENTER VIEWPORT: HIGH-RES DOCUMENT CANVAS/IMAGE */}
+      <div
+        className="flex-1 min-h-0 w-full relative overflow-hidden flex items-center justify-center p-2 sm:p-4 bg-zinc-950 select-none touch-none cursor-grab active:cursor-grabbing"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {isLoading ? (
+          <div className="flex flex-col items-center gap-3 text-zinc-400">
+            <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs">Decrypting document image...</span>
+          </div>
+        ) : activeImageData ? (
+          <div
+            style={{
+              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale}) rotate(${viewRotation}deg)`,
+              transition: isPanning ? 'none' : 'transform 0.15s ease-out',
+            }}
+            className="max-h-full max-w-full flex items-center justify-center select-none shadow-2xl rounded-lg overflow-hidden border border-zinc-800/60"
+          >
+            <img
+              src={activeImageData}
+              alt={`Document Page ${currentPageIndex + 1}`}
+              className="max-h-[calc(100vh-170px)] sm:max-h-[calc(100vh-160px)] max-w-[95vw] sm:max-w-[90vw] object-contain pointer-events-none select-none"
+              draggable={false}
+            />
+          </div>
+        ) : (
+          <div className="text-zinc-500 text-xs">No image data available for this page</div>
+        )}
+
+        {/* Left / Right Chevron Nav Overlay */}
+        {documentDetail && documentDetail.pages.length > 1 && (
+          <>
+            {currentPageIndex > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  switchPage(currentPageIndex - 1);
+                }}
+                className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white backdrop-blur-md border border-zinc-700/60 shadow-xl transition-all cursor-pointer z-10"
+                title="Previous Page"
+              >
+                <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            )}
+
+            {currentPageIndex < documentDetail.pages.length - 1 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  switchPage(currentPageIndex + 1);
+                }}
+                className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white backdrop-blur-md border border-zinc-700/60 shadow-xl transition-all cursor-pointer z-10"
+                title="Next Page"
+              >
+                <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
+              </button>
+            )}
+          </>
+        )}
+
+        {/* SIDE / BOTTOM SHEET INFO & EDIT DRAWER */}
+        {showInfoPanel && documentDetail && (
+          <div className="fixed inset-x-0 bottom-0 sm:inset-y-0 sm:right-0 sm:left-auto w-full sm:w-96 max-h-[85dvh] sm:max-h-full bg-zinc-900/98 sm:bg-zinc-900/95 border-t sm:border-t-0 sm:border-l border-zinc-800 rounded-t-2xl sm:rounded-none backdrop-blur-2xl p-4 sm:p-5 overflow-y-auto space-y-4 shadow-2xl z-30 animate-scale-up pt-safe pb-safe pl-safe pr-safe">
+            {/* Mobile drag handle */}
+            <div className="w-10 h-1 rounded-full bg-zinc-700 mx-auto -mt-1 mb-2 sm:hidden" />
+
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <h3 className="text-sm font-semibold text-white">Document Information</h3>
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    switchPage(currentPageIndex - 1);
-                  }}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white backdrop-blur-md border border-zinc-700/60 shadow-xl transition-all cursor-pointer"
-                  title="Previous Page"
+                  onClick={() => setIsEditingMetadata(!isEditingMetadata)}
+                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer"
+                  title="Edit Metadata"
                 >
-                  <ChevronLeft className="w-6 h-6" />
+                  <Edit2 className="w-4 h-4" />
                 </button>
-              )}
-
-              {currentPageIndex < documentDetail.pages.length - 1 && (
                 <button
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    switchPage(currentPageIndex + 1);
-                  }}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 p-3 rounded-full bg-zinc-900/80 hover:bg-zinc-800 text-white backdrop-blur-md border border-zinc-700/60 shadow-xl transition-all cursor-pointer"
-                  title="Next Page"
+                  onClick={() => setShowInfoPanel(false)}
+                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer"
                 >
-                  <ChevronRight className="w-6 h-6" />
+                  <X className="w-4 h-4" />
                 </button>
-              )}
-            </>
-          )}
-
-          {/* SIDE INFO & EDIT DRAWER */}
-          {showInfoPanel && documentDetail && (
-            <div className="absolute top-0 right-0 bottom-0 w-full sm:w-96 max-w-full bg-zinc-900/95 border-l border-zinc-800 backdrop-blur-xl p-5 overflow-y-auto space-y-4 shadow-2xl z-30 animate-scale-up pt-safe pb-safe">
-              <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-                <h3 className="text-sm font-semibold text-white">Document Information</h3>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingMetadata(!isEditingMetadata)}
-                    className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer"
-                    title="Edit Metadata"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowInfoPanel(false)}
-                    className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
               </div>
+            </div>
 
-              {!isEditingMetadata ? (
-                <div className="space-y-3.5 text-xs text-zinc-300">
-                  <div>
-                    <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
-                      Title
-                    </span>
-                    <span className="font-semibold text-white text-sm">
-                      {documentDetail.metadata.title}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
-                      Category
-                    </span>
-                    <span className="capitalize">{documentDetail.metadata.doc_type}</span>
-                  </div>
-
-                  {documentDetail.metadata.document_date && (
-                    <div>
-                      <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
-                        Document Date
-                      </span>
-                      <span>{documentDetail.metadata.document_date}</span>
-                    </div>
-                  )}
-
-                  {documentDetail.metadata.expiry_date && (
-                    <div>
-                      <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
-                        Expiry Date
-                      </span>
-                      <span className={isExpired ? 'text-rose-400 font-bold' : ''}>
-                        {documentDetail.metadata.expiry_date} {isExpired && '(Expired)'}
-                      </span>
-                    </div>
-                  )}
-
-                  {documentDetail.metadata.tags && documentDetail.metadata.tags.length > 0 && (
-                    <div>
-                      <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
-                        Tags
-                      </span>
-                      <div className="flex flex-wrap gap-1">
-                        {documentDetail.metadata.tags.map((t) => (
-                          <span
-                            key={t}
-                            className="px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 text-[11px]"
-                          >
-                            #{t}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {documentDetail.metadata.description && (
-                    <div>
-                      <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
-                        Description / Notes
-                      </span>
-                      <p className="text-zinc-300 whitespace-pre-wrap leading-relaxed bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-800/80">
-                        {documentDetail.metadata.description}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="pt-2 border-t border-zinc-800/80 text-[11px] text-zinc-500 space-y-1">
-                    <div>Pages: {documentDetail.pages.length}</div>
-                    {documentDetail.pages[currentPageIndex] && (
-                      <div>
-                        Current Page Dimensions:{' '}
-                        {documentDetail.pages[currentPageIndex].width} &times;{' '}
-                        {documentDetail.pages[currentPageIndex].height} px (
-                        {formatBytes(documentDetail.pages[currentPageIndex].file_size)})
-                      </div>
-                    )}
-                    <div>Encrypted with AES-256-GCM</div>
-                  </div>
-
-                  {/* Danger Zone: Delete Entire Document */}
-                  <div className="pt-4 border-t border-zinc-800">
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteDocConfirm(true)}
-                      className="w-full py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete Entire Document</span>
-                    </button>
-                  </div>
+            {!isEditingMetadata ? (
+              <div className="space-y-3.5 text-xs text-zinc-300">
+                <div>
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
+                    Title
+                  </span>
+                  <span className="font-semibold text-white text-sm">
+                    {documentDetail.metadata.title}
+                  </span>
                 </div>
-              ) : (
-                /* EDIT METADATA FORM */
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
-                      Title *
-                    </label>
-                    <input
-                      type="text"
-                      value={editTitle}
-                      onChange={(e) => setEditTitle(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
-                    />
-                  </div>
 
-                  <div>
-                    <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
-                      Category
-                    </label>
-                    <select
-                      value={editCategory}
-                      onChange={(e) => setEditCategory(e.target.value as DocumentCategoryType)}
-                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
-                    >
-                      {DOCUMENT_CATEGORIES.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div>
+                  <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
+                    Category
+                  </span>
+                  <span className="capitalize">{documentDetail.metadata.doc_type}</span>
+                </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
-                        Document Date
-                      </label>
-                      <input
-                        type="date"
-                        value={editDocDate}
-                        onChange={(e) => setEditDocDate(e.target.value)}
-                        className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-2 py-1.5 text-white text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
-                        Expiry Date
-                      </label>
-                      <input
-                        type="date"
-                        value={editExpiryDate}
-                        onChange={(e) => setEditExpiryDate(e.target.value)}
-                        className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-2 py-1.5 text-white text-xs"
-                      />
-                    </div>
-                  </div>
-
+                {documentDetail.metadata.document_date && (
                   <div>
-                    <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                    <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
+                      Document Date
+                    </span>
+                    <span>{documentDetail.metadata.document_date}</span>
+                  </div>
+                )}
+
+                {documentDetail.metadata.expiry_date && (
+                  <div>
+                    <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
+                      Expiry Date
+                    </span>
+                    <span className={isExpired ? 'text-rose-400 font-bold' : ''}>
+                      {documentDetail.metadata.expiry_date} {isExpired && '(Expired)'}
+                    </span>
+                  </div>
+                )}
+
+                {documentDetail.metadata.tags && documentDetail.metadata.tags.length > 0 && (
+                  <div>
+                    <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
                       Tags
-                    </label>
-                    <div className="flex flex-wrap gap-1 mb-1">
-                      {editTags.map((t) => (
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {documentDetail.metadata.tags.map((t) => (
                         <span
                           key={t}
-                          className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] flex items-center gap-1"
+                          className="px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 text-[11px]"
                         >
                           #{t}
-                          <button
-                            type="button"
-                            onClick={() => setEditTags(editTags.filter((tag) => tag !== t))}
-                            className="hover:text-rose-400"
-                          >
-                            &times;
-                          </button>
                         </span>
                       ))}
                     </div>
-                    <div className="flex gap-1">
-                      <input
-                        type="text"
-                        value={editTagInput}
-                        onChange={(e) => setEditTagInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            const val = editTagInput.trim().toLowerCase();
-                            if (val && !editTags.includes(val)) {
-                              setEditTags([...editTags, val]);
-                              setEditTagInput('');
-                            }
-                          }
-                        }}
-                        placeholder="Add tag and hit Enter..."
-                        className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-white text-xs"
-                      />
-                    </div>
                   </div>
+                )}
 
+                {documentDetail.metadata.description && (
+                  <div>
+                    <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
+                      Description / Notes
+                    </span>
+                    <p className="text-zinc-300 whitespace-pre-wrap leading-relaxed bg-zinc-950/60 p-2.5 rounded-xl border border-zinc-800/80">
+                      {documentDetail.metadata.description}
+                    </p>
+                  </div>
+                )}
+
+                <div className="pt-2 border-t border-zinc-800/80 text-[11px] text-zinc-500 space-y-1">
+                  <div>Pages: {documentDetail.pages.length}</div>
+                  {documentDetail.pages[currentPageIndex] && (
+                    <div>
+                      Current Page Dimensions:{' '}
+                      {documentDetail.pages[currentPageIndex].width} &times;{' '}
+                      {documentDetail.pages[currentPageIndex].height} px (
+                      {formatBytes(documentDetail.pages[currentPageIndex].file_size)})
+                    </div>
+                  )}
+                  <div>Encrypted with AES-256-GCM</div>
+                </div>
+
+                {/* Danger Zone: Delete Entire Document */}
+                <div className="pt-4 border-t border-zinc-800">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteDocConfirm(true)}
+                    className="w-full py-2.5 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/25 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Entire Document</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* EDIT METADATA FORM */
+              <div className="space-y-3 text-xs">
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                    Title *
+                  </label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                    Category
+                  </label>
+                  <select
+                    value={editCategory}
+                    onChange={(e) => setEditCategory(e.target.value as DocumentCategoryType)}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-purple-500"
+                  >
+                    {DOCUMENT_CATEGORIES.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
-                      Description / Notes
+                      Document Date
                     </label>
-                    <textarea
-                      value={editDescription}
-                      onChange={(e) => setEditDescription(e.target.value)}
-                      rows={3}
-                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-white text-xs resize-none"
+                    <input
+                      type="date"
+                      value={editDocDate}
+                      onChange={(e) => setEditDocDate(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-2 py-1.5 text-white text-xs"
                     />
                   </div>
-
-                  <div className="pt-2 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingMetadata(false)}
-                      className="flex-1 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveMetadata}
-                      className="flex-1 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold"
-                    >
-                      Save
-                    </button>
+                  <div>
+                    <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                      Expiry Date
+                    </label>
+                    <input
+                      type="date"
+                      value={editExpiryDate}
+                      onChange={(e) => setEditExpiryDate(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-2 py-1.5 text-white text-xs"
+                    />
                   </div>
                 </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                    Tags
+                  </label>
+                  <div className="flex flex-wrap gap-1 mb-1">
+                    {editTags.map((t) => (
+                      <span
+                        key={t}
+                        className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 text-[10px] flex items-center gap-1"
+                      >
+                        #{t}
+                        <button
+                          type="button"
+                          onClick={() => setEditTags(editTags.filter((tag) => tag !== t))}
+                          className="hover:text-rose-400"
+                        >
+                          &times;
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-1">
+                    <input
+                      type="text"
+                      value={editTagInput}
+                      onChange={(e) => setEditTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          const val = editTagInput.trim().toLowerCase();
+                          if (val && !editTags.includes(val)) {
+                            setEditTags([...editTags, val]);
+                            setEditTagInput('');
+                          }
+                        }
+                      }}
+                      placeholder="Add tag and hit Enter..."
+                      className="flex-1 bg-zinc-950 border border-zinc-700 rounded-lg px-2 py-1 text-white text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
+                    Description / Notes
+                  </label>
+                  <textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    rows={3}
+                    className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-white text-xs resize-none"
+                  />
+                </div>
+
+                <div className="pt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingMetadata(false)}
+                    className="flex-1 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveMetadata}
+                    className="flex-1 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* BOTTOM TOOLBAR: MULTI-PAGE THUMBNAIL CAROUSEL & PAGE ACTIONS */}
+      <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-zinc-950/85 border-t border-zinc-800/80 backdrop-blur-lg shrink-0 z-20 flex flex-col sm:flex-row items-center justify-between gap-2 pb-safe pl-safe pr-safe">
+        {/* Thumbnails strip */}
+        <div className="flex items-center gap-2 overflow-x-auto max-w-full sm:max-w-xl py-1 scrollbar-none">
+          {documentDetail?.pages.map((page, idx) => (
+            <button
+              key={page.id}
+              type="button"
+              onClick={() => switchPage(idx)}
+              className={`relative shrink-0 w-11 sm:w-12 h-14 sm:h-16 rounded-lg overflow-hidden border-2 transition-all cursor-pointer bg-black ${
+                currentPageIndex === idx
+                  ? 'border-purple-500 scale-105 shadow-md shadow-purple-500/20'
+                  : 'border-zinc-800 opacity-60 hover:opacity-100'
+              }`}
+              title={`Jump to Page ${idx + 1}`}
+            >
+              {page.thumbnail_data ? (
+                <img
+                  src={page.thumbnail_data}
+                  alt={`Thumb ${idx + 1}`}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-400">
+                  p.{idx + 1}
+                </div>
               )}
-            </div>
+              <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[9px] font-bold text-center text-white py-0.5">
+                {idx + 1}
+              </span>
+            </button>
+          ))}
+
+          {/* Add Page Button */}
+          {documentDetail && (
+            <button
+              type="button"
+              onClick={() => onAddPage(documentDetail.metadata.id)}
+              className="shrink-0 w-11 sm:w-12 h-14 sm:h-16 rounded-lg border-2 border-dashed border-zinc-700 hover:border-purple-500/80 bg-zinc-900/60 hover:bg-zinc-800 flex flex-col items-center justify-center gap-1 text-zinc-400 hover:text-purple-400 transition-colors cursor-pointer"
+              title="Add Page to this Document"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-[9px] font-semibold">+ Page</span>
+            </button>
           )}
         </div>
 
-        {/* BOTTOM TOOLBAR: MULTI-PAGE THUMBNAIL CAROUSEL & PAGE ACTIONS */}
-        <div className="px-3.5 sm:px-4 py-2 sm:py-3 bg-zinc-950/80 border-t border-zinc-800/80 backdrop-blur-lg shrink-0 z-20 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3 pb-safe">
-          {/* Thumbnails strip */}
-          <div className="flex items-center gap-2 overflow-x-auto max-w-full sm:max-w-xl py-1">
-            {documentDetail?.pages.map((page, idx) => (
-              <button
-                key={page.id}
-                type="button"
-                onClick={() => switchPage(idx)}
-                className={`relative shrink-0 w-12 h-16 rounded-lg overflow-hidden border-2 transition-all cursor-pointer bg-black ${
-                  currentPageIndex === idx
-                    ? 'border-purple-500 scale-105 shadow-md shadow-purple-500/20'
-                    : 'border-zinc-800 opacity-60 hover:opacity-100'
-                }`}
-                title={`Jump to Page ${idx + 1}`}
-              >
-                {page.thumbnail_data ? (
-                  <img
-                    src={page.thumbnail_data}
-                    alt={`Thumb ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-400">
-                    p.{idx + 1}
-                  </div>
-                )}
-                <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[9px] font-bold text-center text-white py-0.5">
-                  {idx + 1}
-                </span>
-              </button>
-            ))}
+        {/* Page management tools */}
+        {documentDetail && (
+          <div className="flex items-center gap-2 text-xs shrink-0">
+            {/* Move Page Left / Right */}
+            {documentDetail.pages.length > 1 && (
+              <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-xl p-0.5">
+                <button
+                  type="button"
+                  disabled={currentPageIndex === 0}
+                  onClick={() => handleMovePage('left')}
+                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                  title="Move Page Earlier"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="px-1.5 text-[10px] text-zinc-400 font-mono">Reorder</span>
+                <button
+                  type="button"
+                  disabled={currentPageIndex === documentDetail.pages.length - 1}
+                  onClick={() => handleMovePage('right')}
+                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+                  title="Move Page Later"
+                >
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
-            {/* Add Page Button */}
-            {documentDetail && (
+            {/* Delete Current Page */}
+            {documentDetail.pages.length > 1 && (
               <button
                 type="button"
-                onClick={() => onAddPage(documentDetail.metadata.id)}
-                className="shrink-0 w-12 h-16 rounded-lg border-2 border-dashed border-zinc-700 hover:border-purple-500/80 bg-zinc-900/60 hover:bg-zinc-800 flex flex-col items-center justify-center gap-1 text-zinc-400 hover:text-purple-400 transition-colors cursor-pointer"
-                title="Add Page to this Document"
+                onClick={() => setShowDeletePageConfirm(true)}
+                className="py-1.5 px-2.5 rounded-xl bg-zinc-900/80 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 border border-zinc-800 hover:border-rose-500/30 font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Delete This Page"
               >
-                <Plus className="w-4 h-4" />
-                <span className="text-[9px] font-semibold">+ Page</span>
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Page</span>
               </button>
             )}
           </div>
-
-          {/* Page management tools */}
-          {documentDetail && (
-            <div className="flex items-center gap-2 text-xs">
-              {/* Move Page Left / Right */}
-              {documentDetail.pages.length > 1 && (
-                <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-xl p-0.5">
-                  <button
-                    type="button"
-                    disabled={currentPageIndex === 0}
-                    onClick={() => handleMovePage('left')}
-                    className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                    title="Move Page Earlier"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                  </button>
-                  <span className="px-1.5 text-[10px] text-zinc-400 font-mono">Reorder</span>
-                  <button
-                    type="button"
-                    disabled={currentPageIndex === documentDetail.pages.length - 1}
-                    onClick={() => handleMovePage('right')}
-                    className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
-                    title="Move Page Later"
-                  >
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
-
-              {/* Delete Current Page */}
-              {documentDetail.pages.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => setShowDeletePageConfirm(true)}
-                  className="py-1.5 px-2.5 rounded-xl bg-zinc-900/80 hover:bg-rose-500/20 text-zinc-400 hover:text-rose-400 border border-zinc-800 hover:border-rose-500/30 font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
-                  title="Delete This Page"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete Page</span>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
       {/* CONFIRM DELETE ENTIRE DOCUMENT MODAL */}

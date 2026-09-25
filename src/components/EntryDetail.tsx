@@ -96,19 +96,19 @@ export const EntryDetail: React.FC = () => {
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case 'secure_notes':
-        return <FileText className="w-5 h-5 text-emerald-500" />;
+        return <FileText className="w-5 h-5 stroke-[1.75]" />;
       case 'totp':
-        return <Clock className="w-5 h-5 text-teal-500" />;
+        return <Clock className="w-5 h-5 stroke-[1.75]" />;
       case 'cards':
-        return <CreditCard className="w-5 h-5 text-indigo-500" />;
+        return <CreditCard className="w-5 h-5 stroke-[1.75]" />;
       case 'licenses':
-        return <Scroll className="w-5 h-5 text-amber-600 dark:text-amber-500" />;
+        return <Scroll className="w-5 h-5 stroke-[1.75]" />;
       case 'servers':
-        return <Server className="w-5 h-5 text-purple-500" />;
+        return <Server className="w-5 h-5 stroke-[1.75]" />;
       case 'api_credentials':
-        return <Terminal className="w-5 h-5 text-rose-500" />;
+        return <Terminal className="w-5 h-5 stroke-[1.75]" />;
       default:
-        return <Key className="w-5 h-5 text-purple-400" />;
+        return <Key className="w-5 h-5 stroke-[1.75]" />;
     }
   };
 
@@ -309,11 +309,11 @@ export const EntryDetail: React.FC = () => {
           {entry.url && (
             <div className="flex items-center justify-between group pt-3.5 border-t border-theme-border">
               <div className="flex items-center gap-3 min-w-0 flex-1 pr-3">
-                <Globe className="w-4.5 h-4.5 text-purple-400 shrink-0" />
+                <Globe className="w-4.5 h-4.5 stroke-[1.75] text-purple-600 dark:text-purple-400 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <span className="text-xs font-bold uppercase tracking-wider text-theme-text-muted block mb-0.5">Website</span>
                   <span
-                    className="text-sm font-mono text-purple-400 truncate block hover:underline cursor-pointer"
+                    className="text-sm font-mono text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 truncate block hover:underline cursor-pointer"
                     onClick={() => handleOpenUrl()}
                   >
                     {entry.url}
@@ -480,11 +480,11 @@ export const EntryDetail: React.FC = () => {
     return (
       <div className="space-y-4">
         {/* Visual Realistic Payment Card */}
-        <div className="relative rounded-2xl p-5 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white border border-indigo-500/30 shadow-xl overflow-hidden min-h-[190px] flex flex-col justify-between select-none">
+        <div className="relative rounded-2xl p-5 bg-gradient-to-br from-[#1c2028] via-[#171a20] to-[#111318] text-white border border-[#252a33] shadow-xl overflow-hidden min-h-[190px] flex flex-col justify-between select-none">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <CreditCard className="w-6 h-6 text-indigo-400" />
-              <span className="font-bold text-xs uppercase tracking-widest text-indigo-300">
+              <CreditCard className="w-6 h-6 stroke-[1.75] text-purple-400" />
+              <span className="font-bold text-xs uppercase tracking-widest text-purple-300">
                 {entry.card_type || 'Payment Card'}
               </span>
             </div>
@@ -640,7 +640,7 @@ export const EntryDetail: React.FC = () => {
         <div className="bg-theme-surface border border-theme-border rounded-2xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between border-b border-theme-border pb-2.5">
             <div className="flex items-center gap-2">
-              <Scroll className="w-4 h-4 text-amber-400" />
+              <Scroll className="w-4 h-4 text-amber-700 dark:text-amber-400" />
               <span className="text-xs font-bold uppercase tracking-wider text-theme-text-muted">
                 Software License Key
               </span>
@@ -655,7 +655,7 @@ export const EntryDetail: React.FC = () => {
               </button>
               <button
                 onClick={() => handleCopy(key, 'License Key')}
-                className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-600/15 text-amber-400 border border-amber-500/30 hover:bg-amber-600/25 transition-colors cursor-pointer"
+                className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-100 dark:bg-amber-600/15 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-500/30 hover:bg-amber-200 dark:hover:bg-amber-600/25 transition-colors cursor-pointer"
               >
                 {copiedField === 'License Key' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                 <span>Copy Key</span>
@@ -715,7 +715,7 @@ export const EntryDetail: React.FC = () => {
                   Vendor Website
                 </span>
                 <span
-                  className="text-sm font-mono text-purple-400 hover:underline cursor-pointer truncate block"
+                  className="text-sm font-mono text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 hover:underline cursor-pointer truncate block"
                   onClick={() => handleOpenUrl()}
                 >
                   {entry.url}
@@ -761,7 +761,7 @@ export const EntryDetail: React.FC = () => {
         <div className="bg-theme-surface border border-theme-border rounded-2xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-purple-600/15 text-purple-400 border border-purple-500/30 uppercase font-mono">
+              <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-purple-600/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 uppercase font-mono">
                 {proto}
               </span>
               <span className="font-mono text-base sm:text-lg font-bold text-theme-text">
@@ -850,7 +850,7 @@ export const EntryDetail: React.FC = () => {
                   </button>
                   <button
                     onClick={() => handleCopy(entry.server_key!, 'SSH Key')}
-                    className="flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded bg-purple-600/15 text-purple-400 border border-purple-500/30 cursor-pointer"
+                    className="flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded bg-purple-600/15 text-purple-600 dark:text-purple-400 border border-purple-500/30 cursor-pointer"
                   >
                     {copiedField === 'SSH Key' ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                     <span>Copy Key</span>
@@ -1037,11 +1037,11 @@ export const EntryDetail: React.FC = () => {
             className="md:hidden flex items-center gap-1 px-3 py-2 rounded-xl bg-theme-elevated hover:bg-theme-hover border border-theme-border text-theme-text transition-colors cursor-pointer shrink-0 shadow-sm"
             title="Back to item list"
           >
-            <ChevronLeft className="w-4 h-4 text-purple-400" />
+            <ChevronLeft className="w-4 h-4 text-purple-600 dark:text-purple-400" />
             <span className="text-xs font-semibold">Back</span>
           </button>
 
-          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-theme-elevated border border-theme-border flex items-center justify-center shadow-md shrink-0">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-md shrink-0">
             {getCategoryIcon(entry.category)}
           </div>
           <div className="min-w-0">

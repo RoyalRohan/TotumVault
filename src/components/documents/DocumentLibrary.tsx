@@ -86,7 +86,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
               <h1 className="text-base sm:text-xl font-bold text-theme-text tracking-tight truncate">
                 Document Vault
               </h1>
-              <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
+              <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shrink-0">
                 {documents.length} {documents.length === 1 ? 'doc' : 'docs'}
               </span>
             </div>
@@ -111,7 +111,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
               onClick={() => onOpenScanner('upload')}
               className="py-2 px-3 sm:py-2.5 sm:px-3.5 rounded-xl bg-theme-surface hover:bg-theme-bg border border-theme-border text-theme-text text-xs font-semibold transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer min-h-[38px]"
             >
-              <Upload className="w-4 h-4 text-purple-400" />
+              <Upload className="w-4 h-4 stroke-[1.75] text-purple-600 dark:text-purple-400" />
               <span className="hidden sm:inline">Upload</span>
             </button>
           </div>
@@ -126,8 +126,8 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
               onClick={() => setSelectedCategory('all')}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
                 selectedCategory === 'all'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'bg-theme-surface border border-theme-border text-theme-text-muted hover:text-theme-text'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/80 dark:hover:bg-theme-hover'
               }`}
             >
               All ({documents.length})
@@ -138,8 +138,8 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
               onClick={() => setSelectedCategory('favorites')}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
                 selectedCategory === 'favorites'
-                  ? 'bg-amber-500 text-white shadow-sm'
-                  : 'bg-theme-surface border border-theme-border text-theme-text-muted hover:text-theme-text'
+                  ? 'bg-amber-500 text-white shadow-xs'
+                  : 'bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/80 dark:hover:bg-theme-hover'
               }`}
             >
               <Star className="w-3.5 h-3.5 fill-current" />
@@ -158,13 +158,21 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                   onClick={() => setSelectedCategory(cat.id)}
                   className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
                     isSelected
-                      ? 'bg-purple-600 text-white shadow-sm'
-                      : 'bg-theme-surface border border-theme-border text-theme-text-muted hover:text-theme-text'
+                      ? 'bg-purple-600 text-white shadow-xs'
+                      : 'bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/80 dark:hover:bg-theme-hover'
                   }`}
                 >
-                  <Icon className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-purple-400'}`} />
+                  <Icon className={`w-3.5 h-3.5 stroke-[1.75] ${isSelected ? 'text-white' : 'text-purple-600 dark:text-purple-400'}`} />
                   <span>{cat.label}</span>
-                  {count > 0 && <span className="opacity-70 text-[10px]">({count})</span>}
+                  {count > 0 && (
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                      isSelected
+                        ? 'bg-purple-700 text-white'
+                        : 'bg-slate-100 dark:bg-theme-elevated text-slate-700 dark:text-theme-text-muted border border-slate-200 dark:border-theme-border font-bold'
+                    }`}>
+                      {count}
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -220,12 +228,12 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
       </div>
 
       {/* DOCUMENT LIST / GRID VIEWPORT */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-5 pb-24 sm:pb-8">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-5 pb-24 sm:pb-8 pb-safe pl-safe pr-safe">
         {filteredDocuments.length === 0 ? (
           /* EMPTY STATE */
           <div className="h-full flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto space-y-4">
-            <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shadow-inner">
-              <FileText className="w-8 h-8" />
+            <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-inner">
+              <FileText className="w-8 h-8 stroke-[1.75]" />
             </div>
             <div>
               <h3 className="text-base font-bold text-theme-text">
@@ -253,7 +261,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                   onClick={() => onOpenScanner('upload')}
                   className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-theme-surface hover:bg-theme-bg border border-theme-border text-theme-text text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors"
                 >
-                  <Upload className="w-4 h-4 text-purple-400" />
+                  <Upload className="w-4 h-4 stroke-[1.75] text-purple-600 dark:text-purple-400" />
                   <span>Upload Image</span>
                 </button>
               </div>
@@ -272,7 +280,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
           </div>
         ) : viewMode === 'grid' ? (
           /* GRID VIEW */
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 animate-scale-up">
+          <div className="grid grid-cols-1 min-[340px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 animate-scale-up">
             {filteredDocuments.map((doc) => {
               const catConfig = getCategoryConfig(doc.doc_type);
               const CatIcon = catConfig.icon;
@@ -297,16 +305,16 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                         />
                       ) : (
                         <div className="flex flex-col items-center gap-2 text-theme-text-muted">
-                          <CatIcon className="w-8 h-8 sm:w-10 sm:h-10 opacity-40 text-purple-400" />
+                          <CatIcon className="w-8 h-8 sm:w-10 sm:h-10 opacity-40 text-purple-600 dark:text-purple-400 stroke-[1.75]" />
                         </div>
                       )}
 
                       {/* Category Badge */}
                       <div className="absolute top-2 left-2">
                         <span
-                          className={`inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-lg text-[9px] sm:text-[10px] font-bold border backdrop-blur-md shadow-sm ${catConfig.bgColor} ${catConfig.textColor} ${catConfig.borderColor}`}
+                          className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-lg text-[9px] sm:text-[10px] font-medium border backdrop-blur-md shadow-sm bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30"
                         >
-                          <CatIcon className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                          <CatIcon className="w-2.5 h-2.5 sm:w-3 sm:h-3 stroke-[1.75]" />
                           <span className="hidden xs:inline sm:inline">{catConfig.label}</span>
                         </span>
                       </div>
@@ -342,7 +350,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                     {/* Metadata Details */}
                     <div className="mt-2.5 space-y-1">
                       <div className="flex items-start justify-between gap-1.5">
-                        <h4 className="text-xs sm:text-sm font-bold text-theme-text truncate group-hover:text-purple-400 transition-colors">
+                        <h4 className="text-xs sm:text-sm font-bold text-theme-text truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                           {doc.title}
                         </h4>
                       </div>
@@ -377,7 +385,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                   {/* Card Footer: Dates */}
                   <div className="mt-2.5 pt-2 border-t border-theme-border/60 flex items-center justify-between text-[10px] sm:text-[11px] text-theme-text-muted">
                     <div className="flex items-center gap-1 min-w-0">
-                      <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-purple-400 shrink-0" />
+                      <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-purple-600 dark:text-purple-400 stroke-[1.75] shrink-0" />
                       <span className="truncate">{doc.document_date || new Date(doc.created_at).toLocaleDateString()}</span>
                     </div>
 
@@ -421,18 +429,18 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <CatIcon className="w-6 h-6 opacity-40 text-purple-400" />
+                        <CatIcon className="w-6 h-6 opacity-40 text-purple-600 dark:text-purple-400 stroke-[1.75]" />
                       )}
                     </div>
 
                     {/* Title and tags */}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-semibold text-theme-text truncate group-hover:text-purple-400 transition-colors">
+                        <h4 className="text-sm font-semibold text-theme-text truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                           {doc.title}
                         </h4>
                         <span
-                          className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold border ${catConfig.bgColor} ${catConfig.textColor} ${catConfig.borderColor} shrink-0`}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-medium border bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 shrink-0"
                         >
                           {catConfig.label}
                         </span>

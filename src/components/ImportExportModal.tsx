@@ -361,8 +361,8 @@ export const ImportExportModal: React.FC = () => {
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-3.5 border-b border-theme-border shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shadow-sm shrink-0">
-              {mode === 'export' ? <HardDriveDownload className="w-5 h-5" /> : <HardDriveUpload className="w-5 h-5" />}
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-sm shrink-0">
+              {mode === 'export' ? <HardDriveDownload className="w-5 h-5 stroke-[1.75]" /> : <HardDriveUpload className="w-5 h-5 stroke-[1.75]" />}
             </div>
             <div>
               <h2 className="text-base font-semibold text-theme-text tracking-tight">
@@ -516,7 +516,7 @@ export const ImportExportModal: React.FC = () => {
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-1.5">
-                          <Shield className={`w-4 h-4 ${exportFormat === 'tvault' ? 'text-purple-400' : 'text-theme-text-muted'}`} />
+                          <Shield className={`w-4 h-4 stroke-[1.75] ${exportFormat === 'tvault' ? 'text-purple-600 dark:text-purple-400' : 'text-theme-text-muted'}`} />
                           <span className="text-sm font-semibold">Encrypted</span>
                         </div>
                         <span className="text-xs text-theme-text-muted block">.tvault (Full Vault Backup)</span>
@@ -527,12 +527,12 @@ export const ImportExportModal: React.FC = () => {
                         onClick={() => setExportFormat('csv')}
                         className={`p-3.5 sm:p-4 rounded-xl border text-left transition-all cursor-pointer ${
                           exportFormat === 'csv'
-                            ? 'bg-amber-600/15 border-amber-500/50 text-amber-600 dark:text-amber-300 shadow-sm font-semibold'
+                            ? 'bg-amber-50 dark:bg-amber-600/15 border-amber-300 dark:border-amber-500/50 text-amber-900 dark:text-amber-300 shadow-sm font-semibold'
                             : 'bg-theme-surface border-theme-border text-theme-text-muted hover:text-theme-text'
                         }`}
                       >
                         <div className="flex items-center gap-2 mb-1.5">
-                          <FileSpreadsheet className={`w-4 h-4 ${exportFormat === 'csv' ? 'text-amber-500' : 'text-theme-text-muted'}`} />
+                          <FileSpreadsheet className={`w-4 h-4 stroke-[1.75] ${exportFormat === 'csv' ? 'text-amber-700 dark:text-amber-400' : 'text-theme-text-muted'}`} />
                           <span className="text-sm font-semibold">CSV</span>
                         </div>
                         <span className="text-xs text-theme-text-muted block">.csv (Spreadsheet)</span>
@@ -543,7 +543,7 @@ export const ImportExportModal: React.FC = () => {
                   {/* Destination Information */}
                   <div className="p-3.5 rounded-xl bg-theme-surface border border-theme-border text-xs space-y-1.5">
                     <div className="flex items-center gap-2 font-semibold text-theme-text">
-                      <Folder className="w-4 h-4 text-purple-400" />
+                      <Folder className="w-4 h-4 stroke-[1.75] text-purple-600 dark:text-purple-400" />
                       <span>Save Destination</span>
                     </div>
                     <p className="text-theme-text-muted leading-relaxed">
@@ -553,13 +553,13 @@ export const ImportExportModal: React.FC = () => {
 
                   {/* Security Hint */}
                   {exportFormat === 'csv' ? (
-                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-300 text-xs flex items-start gap-2.5">
-                      <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                    <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 text-amber-950 dark:text-amber-300 text-xs flex items-start gap-2.5 font-medium">
+                      <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5 stroke-[1.75]" />
                       <span>CSV files are unencrypted. Anyone who opens the file can see your passwords in plain text.</span>
                     </div>
                   ) : (
                     <div className="p-3.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-300 text-xs flex items-center gap-2.5">
-                      <Shield className="w-4 h-4 text-purple-400 shrink-0" />
+                      <Shield className="w-4 h-4 stroke-[1.75] text-purple-600 dark:text-purple-400 shrink-0" />
                       <span>Protected with your current master password using AES-256-GCM. Includes documents.</span>
                     </div>
                   )}
@@ -590,8 +590,8 @@ export const ImportExportModal: React.FC = () => {
                           onClick={handleChooseImportFile}
                           className="w-full p-5 rounded-xl border border-dashed border-theme-border hover:border-purple-500/60 bg-theme-surface/50 hover:bg-theme-surface transition-all flex flex-col items-center justify-center gap-2.5 cursor-pointer group"
                         >
-                          <div className="w-11 h-11 rounded-xl bg-theme-surface group-hover:bg-purple-600/20 text-theme-text-muted group-hover:text-purple-400 flex items-center justify-center transition-colors">
-                            <FileUp className="w-5 h-5" />
+                          <div className="w-11 h-11 rounded-xl bg-theme-surface group-hover:bg-purple-600/20 text-theme-text-muted group-hover:text-purple-600 dark:group-hover:text-purple-400 flex items-center justify-center transition-colors">
+                            <FileUp className="w-5 h-5 stroke-[1.75]" />
                           </div>
                           <div className="text-center">
                             <span className="text-sm font-semibold text-theme-text block">
@@ -635,7 +635,7 @@ export const ImportExportModal: React.FC = () => {
                         ) : (
                           <>
                             <span>Inspect & Preview File</span>
-                            <ArrowRight className="w-4 h-4" />
+                            <ArrowRight className="w-4 h-4 stroke-[1.75]" />
                           </>
                         )}
                       </button>
@@ -652,10 +652,10 @@ export const ImportExportModal: React.FC = () => {
                           onClick={() => setImportStep('select')}
                           className="flex items-center gap-1.5 text-xs text-theme-text-muted hover:text-theme-text transition-colors cursor-pointer py-1 px-2 rounded-lg hover:bg-theme-surface"
                         >
-                          <ArrowLeft className="w-3.5 h-3.5" />
+                          <ArrowLeft className="w-3.5 h-3.5 stroke-[1.75]" />
                           <span>Choose different file</span>
                         </button>
-                        <span className="text-xs font-mono font-medium text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
+                        <span className="text-xs font-mono font-medium text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full border border-purple-500/20">
                           {importPreview.format.toUpperCase()}
                         </span>
                       </div>
@@ -691,8 +691,8 @@ export const ImportExportModal: React.FC = () => {
                         <div className="flex items-center justify-between text-xs font-semibold text-theme-text-muted">
                           <span>Categories in File</span>
                           {importPreview.documents_count > 0 && (
-                            <span className="text-purple-400 flex items-center gap-1">
-                              <FileText className="w-3.5 h-3.5" />
+                            <span className="text-purple-600 dark:text-purple-400 flex items-center gap-1 font-medium">
+                              <FileText className="w-3.5 h-3.5 stroke-[1.75]" />
                               {importPreview.documents_count} Documents included
                             </span>
                           )}
@@ -711,16 +711,16 @@ export const ImportExportModal: React.FC = () => {
 
                       {/* Conflict / Duplicate Handling */}
                       {importPreview.duplicate_count > 0 ? (
-                        <div className="space-y-2.5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                        <div className="space-y-2.5 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30">
                           <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2 text-xs font-semibold text-amber-600 dark:text-amber-300">
-                              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                            <div className="flex items-center gap-2 text-xs font-bold text-amber-900 dark:text-amber-300">
+                              <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0" />
                               <span>{importPreview.duplicate_count} Duplicate Items Detected</span>
                             </div>
                             <button
                               type="button"
                               onClick={() => setShowDuplicatesList(!showDuplicatesList)}
-                              className="text-[11px] text-amber-600 dark:text-amber-300 underline font-medium cursor-pointer flex items-center gap-1"
+                              className="text-[11px] text-amber-800 dark:text-amber-300 underline font-semibold cursor-pointer flex items-center gap-1"
                             >
                               <span>{showDuplicatesList ? 'Hide details' : 'View details'}</span>
                               {showDuplicatesList ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
@@ -728,7 +728,7 @@ export const ImportExportModal: React.FC = () => {
                           </div>
 
                           {showDuplicatesList && (
-                            <div className="max-h-36 overflow-y-auto space-y-1.5 pt-1 pr-1 border-t border-amber-500/20 text-xs">
+                            <div className="max-h-36 overflow-y-auto space-y-1.5 pt-1 pr-1 border-t border-amber-200 dark:border-amber-500/20 text-xs">
                               {importPreview.duplicates.map((dup, idx) => (
                                 <div
                                   key={idx}
@@ -742,7 +742,7 @@ export const ImportExportModal: React.FC = () => {
                                       Category: {dup.category} &bull; Matched: {dup.reason}
                                     </span>
                                   </div>
-                                  <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-300 font-bold shrink-0">
+                                  <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-amber-200 dark:bg-amber-500/20 text-amber-900 dark:text-amber-300 font-bold shrink-0">
                                     Conflict
                                   </span>
                                 </div>
@@ -751,8 +751,8 @@ export const ImportExportModal: React.FC = () => {
                           )}
 
                           {/* Duplicate Strategy Options */}
-                          <div className="pt-2 border-t border-amber-500/20 space-y-1.5">
-                            <label className="text-[11px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider block">
+                          <div className="pt-2 border-t border-amber-200 dark:border-amber-500/20 space-y-1.5">
+                            <label className="text-[11px] font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider block">
                               Duplicate Resolution Strategy
                             </label>
                             <div className="grid grid-cols-3 gap-1.5 text-xs">
@@ -761,7 +761,7 @@ export const ImportExportModal: React.FC = () => {
                                 onClick={() => setDuplicateStrategy('keep_existing')}
                                 className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
                                   duplicateStrategy === 'keep_existing'
-                                    ? 'bg-amber-500 text-white font-bold border-amber-600 shadow-sm'
+                                    ? 'bg-amber-600 text-white font-bold border-amber-700 shadow-sm'
                                     : 'bg-theme-surface/80 border-theme-border text-theme-text hover:bg-theme-surface'
                                 }`}
                               >
@@ -774,7 +774,7 @@ export const ImportExportModal: React.FC = () => {
                                 onClick={() => setDuplicateStrategy('import_both')}
                                 className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
                                   duplicateStrategy === 'import_both'
-                                    ? 'bg-amber-500 text-white font-bold border-amber-600 shadow-sm'
+                                    ? 'bg-amber-600 text-white font-bold border-amber-700 shadow-sm'
                                     : 'bg-theme-surface/80 border-theme-border text-theme-text hover:bg-theme-surface'
                                 }`}
                               >
@@ -787,7 +787,7 @@ export const ImportExportModal: React.FC = () => {
                                 onClick={() => setDuplicateStrategy('replace_existing')}
                                 className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
                                   duplicateStrategy === 'replace_existing'
-                                    ? 'bg-amber-500 text-white font-bold border-amber-600 shadow-sm'
+                                    ? 'bg-amber-600 text-white font-bold border-amber-700 shadow-sm'
                                     : 'bg-theme-surface/80 border-theme-border text-theme-text hover:bg-theme-surface'
                                 }`}
                               >
@@ -851,7 +851,7 @@ export const ImportExportModal: React.FC = () => {
                         </div>
                         <div className="flex items-center justify-between">
                           <span>Imported entries to be written:</span>
-                          <span className="font-bold text-purple-400">{importPreview.total_imported} items</span>
+                          <span className="font-bold text-purple-600 dark:text-purple-400">{importPreview.total_imported} items</span>
                         </div>
                         {importPreview.documents_count > 0 && (
                           <div className="flex items-center justify-between">
@@ -911,19 +911,19 @@ export const ImportExportModal: React.FC = () => {
                         </div>
                         <div className="p-3 rounded-xl bg-theme-surface border border-theme-border">
                           <span className="text-[11px] text-theme-text-muted block">Replaced Existing</span>
-                          <span className="text-lg font-bold text-purple-400">{importSummary.replaced}</span>
+                          <span className="text-lg font-bold text-purple-600 dark:text-purple-400">{importSummary.replaced}</span>
                         </div>
                         <div className="p-3 rounded-xl bg-theme-surface border border-theme-border">
                           <span className="text-[11px] text-theme-text-muted block">Duplicates Handled</span>
-                          <span className="text-lg font-bold text-amber-500">{importSummary.duplicates}</span>
+                          <span className="text-lg font-bold text-amber-700 dark:text-amber-400">{importSummary.duplicates}</span>
                         </div>
                         <div className="p-3 rounded-xl bg-theme-surface border border-theme-border">
                           <span className="text-[11px] text-theme-text-muted block">Documents Restored</span>
-                          <span className="text-lg font-bold text-emerald-500">{importSummary.documents_imported}</span>
+                          <span className="text-lg font-bold text-emerald-700 dark:text-emerald-400">{importSummary.documents_imported}</span>
                         </div>
                         <div className="p-3 rounded-xl bg-theme-surface border border-theme-border">
                           <span className="text-[11px] text-theme-text-muted block">Failed / Corrupt</span>
-                          <span className="text-lg font-bold text-rose-500">{importSummary.failed}</span>
+                          <span className="text-lg font-bold text-rose-700 dark:text-rose-400">{importSummary.failed}</span>
                         </div>
                       </div>
 

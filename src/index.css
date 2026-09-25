@@ -1,36 +1,100 @@
 @import "tailwindcss";
 
-:root, [data-theme="dark"] {
-  --bg-app: #0d1117;
-  --bg-surface: #161b22;
-  --bg-surface-elevated: #21262d;
-  --bg-surface-hover: #30363d;
-  --bg-subtle: #010409;
-  --bg-input: #0d1117;
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, .dark, .dark *));
 
-  --border-subtle: #30363d;
-  --border-strong: rgba(240, 246, 252, 0.15);
+/* ==========================================================================
+   OFFLINE BUNDLED NERD FONTS (@font-face)
+   ========================================================================== */
+
+@font-face {
+  font-family: 'JetBrainsMono Nerd Font';
+  src: url('./assets/fonts/JetBrainsMonoNerdFont-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrainsMono Nerd Font';
+  src: url('./assets/fonts/JetBrainsMonoNerdFont-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrainsMono Nerd Font';
+  src: url('./assets/fonts/JetBrainsMonoNerdFont-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'FiraCode Nerd Font';
+  src: url('./assets/fonts/FiraCodeNerdFont-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'FiraCode Nerd Font';
+  src: url('./assets/fonts/FiraCodeNerdFont-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'FiraCode Nerd Font';
+  src: url('./assets/fonts/FiraCodeNerdFont-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ==========================================================================
+   THEME COLOR SYSTEMS
+   ========================================================================== */
+
+:root, [data-theme="dark"] {
+  /* Neutral charcoal/black background & surfaces (#0b0c10, #111318, #171a20, #1c2028) */
+  --bg-app: #0b0c10;
+  --bg-surface: #111318;
+  --bg-surface-elevated: #171a20;
+  --bg-surface-hover: #1c2028;
+  --bg-subtle: #0e1015;
+  --bg-input: #0e1015;
+
+  /* Subtle neutral borders (#252a33, #303642) */
+  --border-subtle: #252a33;
+  --border-strong: #303642;
   --border-focus: #9333ea;
 
-  --text-primary: #f0f6fc;
-  --text-secondary: #8b949e;
-  --text-muted: #8b949e;
-  --text-dim: #6e7681;
+  /* High legibility neutral typography (White / Neutral Gray, no lavender tint) */
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-muted: #6b7280;
+  --text-dim: #4b5563;
 
-  --glass-bg: rgba(22, 27, 34, 0.96);
-  --glass-border: #30363d;
-  --glass-card-bg: rgba(22, 27, 34, 0.85);
-  --glass-card-hover: #21262d;
-  --glass-card-border: #30363d;
-  --modal-overlay: rgba(1, 4, 9, 0.82);
+  /* Neutral dark glass panels & cards */
+  --glass-bg: rgba(17, 19, 24, 0.96);
+  --glass-border: #252a33;
+  --glass-card-bg: rgba(23, 26, 32, 0.95);
+  --glass-card-hover: #1c2028;
+  --glass-card-border: #252a33;
+  --modal-overlay: rgba(0, 0, 0, 0.80);
 
-  --scrollbar-track: #0d1117;
-  --scrollbar-thumb: #30363d;
+  /* Scrollbars */
+  --scrollbar-track: #0b0c10;
+  --scrollbar-thumb: #252a33;
 
   --color-scheme: dark;
 }
 
 [data-theme="light"] {
+  /* Crisp clean surfaces with maximum contrast */
   --bg-app: #f8fafc;
   --bg-surface: #ffffff;
   --bg-surface-elevated: #f1f5f9;
@@ -38,31 +102,62 @@
   --bg-subtle: #f8fafc;
   --bg-input: #ffffff;
 
+  /* Visible, clear neutral borders */
   --border-subtle: #e2e8f0;
   --border-strong: #cbd5e1;
   --border-focus: #9333ea;
 
+  /* High-contrast readable typography (Crisp slate-900/700/500) */
   --text-primary: #0f172a;
-  --text-secondary: #475569;
+  --text-secondary: #334155;
   --text-muted: #64748b;
-  --text-dim: #94a3b8;
+  --text-dim: #64748b;
 
-  --glass-bg: rgba(255, 255, 255, 0.96);
-  --glass-border: rgba(0, 0, 0, 0.08);
-  --glass-card-bg: rgba(255, 255, 255, 0.9);
-  --glass-card-hover: rgba(241, 245, 249, 0.98);
-  --glass-card-border: rgba(0, 0, 0, 0.08);
-  --modal-overlay: rgba(15, 23, 42, 0.45);
+  --glass-bg: rgba(255, 255, 255, 0.98);
+  --glass-border: #e2e8f0;
+  --glass-card-bg: rgba(255, 255, 255, 0.96);
+  --glass-card-hover: #f1f5f9;
+  --glass-card-border: #e2e8f0;
+  --modal-overlay: rgba(15, 23, 42, 0.55);
 
-  --scrollbar-track: rgba(241, 245, 249, 0.8);
-  --scrollbar-thumb: rgba(148, 163, 184, 0.5);
+  --scrollbar-track: #f8fafc;
+  --scrollbar-thumb: #cbd5e1;
 
   --color-scheme: light;
 }
 
+/* ==========================================================================
+   FONT SELECTION SYSTEM (5 Choices)
+   ========================================================================== */
+
+:root, [data-font="inter"] {
+  --app-font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --app-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+[data-font="geist"] {
+  --app-font-family: 'Geist Sans', 'Geist', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --app-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+[data-font="ibm-plex-sans"] {
+  --app-font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --app-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+[data-font="jetbrains-mono-nerd"] {
+  --app-font-family: 'JetBrainsMono Nerd Font', 'JetBrains Mono', ui-monospace, monospace;
+  --app-font-mono: 'JetBrainsMono Nerd Font', 'JetBrains Mono', ui-monospace, monospace;
+}
+
+[data-font="fira-code-nerd"] {
+  --app-font-family: 'FiraCode Nerd Font', 'Fira Code', ui-monospace, monospace;
+  --app-font-mono: 'FiraCode Nerd Font', 'Fira Code', ui-monospace, monospace;
+}
+
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-sans: var(--app-font-family);
+  --font-mono: var(--app-font-mono);
 
   --color-brand-50: #faf5ff;
   --color-brand-100: #f3e8ff;
@@ -100,9 +195,9 @@
   --color-slate-450: #64748b;
   --color-slate-550: #475569;
   --color-slate-650: #334155;
-  --color-slate-750: #21262d;
-  --color-slate-850: #161b22;
-  --color-slate-950: #0d1117;
+  --color-slate-750: #252a33;
+  --color-slate-850: #171a20;
+  --color-slate-950: #0b0c10;
 
   --color-amber-250: #fde68a;
   --color-amber-450: #d29922;
@@ -114,7 +209,7 @@
   --color-accent-emerald: #3fb950;
   --color-accent-rose: #f85149;
   --color-accent-amber: #d29922;
-  --color-accent-purple: #bc8cff;
+  --color-accent-purple: #9333ea;
   --color-accent-cyan: #58a6ff;
 }
 
@@ -122,17 +217,20 @@
   body {
     background-color: var(--bg-app);
     color: var(--text-primary);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-    letter-spacing: -0.011em;
+    font-family: var(--app-font-family);
+    letter-spacing: -0.01em;
     user-select: none;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
+  button, input, select, textarea {
+    font-family: inherit;
+  }
+
   code, kbd, samp, pre, .font-mono {
-    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: var(--app-font-mono);
     font-feature-settings: 'tnum', 'zero';
   }
 
@@ -170,7 +268,7 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  background: var(--border-strong);
 }
 
 /* Glassmorphism Panels & Shadows */
@@ -179,7 +277,7 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
-  box-shadow: 0 16px 32px rgba(1, 4, 9, 0.55);
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.45);
 }
 
 .glass-card {
@@ -191,7 +289,7 @@
 .glass-card:hover {
   background-color: var(--glass-card-hover);
   border-color: var(--border-strong);
-  box-shadow: 0 4px 12px rgba(1, 4, 9, 0.35);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .input-dark, .input-themed {
@@ -201,10 +299,24 @@
   transition: all 0.12s ease-in-out;
 }
 
+.input-dark::placeholder, .input-themed::placeholder, input::placeholder, textarea::placeholder {
+  color: var(--text-dim);
+  opacity: 0.9;
+}
+
+[data-theme="light"] .input-dark, [data-theme="light"] .input-themed {
+  border-color: #cbd5e1;
+}
+
+[data-theme="light"] .input-dark::placeholder, [data-theme="light"] .input-themed::placeholder, [data-theme="light"] input::placeholder, [data-theme="light"] textarea::placeholder {
+  color: #64748b;
+  opacity: 1;
+}
+
 .input-dark:focus, .input-themed:focus {
   outline: none;
   border-color: var(--border-focus);
-  box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.35);
+  box-shadow: 0 0 0 2px rgba(147, 51, 234, 0.35);
 }
 
 /* Custom Micro Animations */
@@ -254,6 +366,14 @@
   padding-top: env(safe-area-inset-top, 0px);
 }
 
+.pl-safe {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.pr-safe {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -262,4 +382,3 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-

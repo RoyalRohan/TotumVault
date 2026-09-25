@@ -43,18 +43,19 @@ export const Sidebar: React.FC = () => {
     return entries.filter((e) => e.category === cat).length;
   };
 
+  // Minimal, consistent line-based monochrome icons with uniform stroke width
   const navItems: { id: CategoryType; label: string; icon: React.ReactNode }[] = [
-    { id: 'all', label: 'All Items', icon: <Layers className="w-4 h-4" /> },
-    { id: 'favorites', label: 'Favorites', icon: <Star className="w-4 h-4 text-amber-500 fill-amber-500/20" /> },
-    { id: 'documents', label: 'Documents & Bills', icon: <FolderLock className="w-4 h-4 text-cyan-500" /> },
-    { id: 'logins', label: 'Logins', icon: <Key className="w-4 h-4 text-purple-400" /> },
-    { id: 'secure_notes', label: 'Secure Notes', icon: <FileText className="w-4 h-4 text-emerald-500" /> },
-    { id: 'totp', label: 'Authenticator (2FA)', icon: <Clock className="w-4 h-4 text-teal-500" /> },
-    { id: 'cards', label: 'Payment Cards', icon: <CreditCard className="w-4 h-4 text-indigo-500" /> },
-    { id: 'licenses', label: 'Software Licenses', icon: <Scroll className="w-4 h-4 text-amber-600 dark:text-amber-500" /> },
-    { id: 'servers', label: 'Servers & SSH', icon: <Server className="w-4 h-4 text-purple-500" /> },
-    { id: 'api_credentials', label: 'API Credentials', icon: <Terminal className="w-4 h-4 text-rose-500" /> },
-    { id: 'health', label: 'Security Health', icon: <Shield className="w-4 h-4 text-sky-500" /> },
+    { id: 'all', label: 'All Items', icon: <Layers className="w-4 h-4 stroke-[1.75]" /> },
+    { id: 'favorites', label: 'Favorites', icon: <Star className="w-4 h-4 stroke-[1.75]" /> },
+    { id: 'documents', label: 'Documents & Bills', icon: <FolderLock className="w-4 h-4 stroke-[1.75]" /> },
+    { id: 'logins', label: 'Logins', icon: <Key className="w-4 h-4 stroke-[1.75]" /> },
+    { id: 'secure_notes', label: 'Secure Notes', icon: <FileText className="w-4 h-4 stroke-[1.75]" /> },
+    { id: 'totp', label: 'Authenticator (2FA)', icon: <Clock className="w-4 h-4 stroke-[1.75]" /> },
+    { id: 'cards', label: 'Payment Cards', icon: <CreditCard className="w-4 h-4 stroke-[1.75]" /> },
+    { id: 'licenses', label: 'Software Licenses', icon: <Scroll className="w-4 h-4 stroke-[1.75]" /> },
+    { id: 'servers', label: 'Servers & SSH', icon: <Server className="w-4 h-4 stroke-[1.75]" /> },
+    { id: 'api_credentials', label: 'API Credentials', icon: <Terminal className="w-4 h-4 stroke-[1.75]" /> },
+    { id: 'health', label: 'Security Health', icon: <Shield className="w-4 h-4 stroke-[1.75]" /> },
   ];
 
   const handleNavClick = (id: CategoryType) => {
@@ -82,7 +83,7 @@ export const Sidebar: React.FC = () => {
             />
           </div>
           <div>
-            <h1 className="font-bold text-theme-text tracking-wide text-sm">TotumVault</h1>
+            <h1 className="font-bold text-theme-text tracking-tight text-sm">TotumVault</h1>
           </div>
         </div>
 
@@ -95,7 +96,7 @@ export const Sidebar: React.FC = () => {
             title="Lock Vault Now"
             className="p-2 rounded-xl bg-theme-surface hover:bg-theme-hover border border-theme-border text-theme-text-muted hover:text-theme-text transition-all cursor-pointer shadow-sm group"
           >
-            <Lock className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+            <Lock className="w-3.5 h-3.5 stroke-[1.75] group-hover:scale-110 transition-transform" />
           </button>
 
           {isMobile && (
@@ -104,7 +105,7 @@ export const Sidebar: React.FC = () => {
               className="p-2 rounded-xl bg-theme-surface hover:bg-theme-hover border border-theme-border text-theme-text-muted hover:text-theme-text transition-all cursor-pointer shadow-sm"
               title="Close Menu"
             >
-              <X className="w-3.5 h-3.5" />
+              <X className="w-3.5 h-3.5 stroke-[1.75]" />
             </button>
           )}
         </div>
@@ -122,35 +123,49 @@ export const Sidebar: React.FC = () => {
             <button
               key={item.id}
               onClick={() => handleNavClick(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer group min-h-[44px] ${
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-all cursor-pointer group min-h-[44px] ${
                 isActive
-                  ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 shadow-sm border border-purple-500/20 font-semibold'
-                  : 'text-theme-text-muted hover:text-theme-text hover:bg-theme-hover border border-transparent'
+                  ? 'bg-purple-100/90 dark:bg-purple-950/40 text-purple-950 dark:text-purple-200 shadow-xs border border-purple-300 dark:border-purple-500/40 font-semibold'
+                  : 'text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/90 dark:hover:bg-theme-hover border border-transparent hover:border-slate-200 dark:hover:border-[#252a33] font-medium'
               }`}
             >
               <div className="flex items-center gap-3">
-                <span className={`transition-transform group-hover:scale-105 ${isActive ? 'text-purple-600 dark:text-purple-400' : 'text-theme-text-muted'}`}>
+                <span
+                  className={`transition-colors shrink-0 ${
+                    isActive
+                      ? 'text-purple-700 dark:text-purple-400'
+                      : 'text-slate-500 dark:text-theme-text-muted group-hover:text-slate-950 dark:group-hover:text-white'
+                  }`}
+                >
                   {item.icon}
                 </span>
-                <span className="tracking-tight">{item.label}</span>
+                <span
+                  className={`tracking-tight ${
+                    isActive
+                      ? 'text-purple-950 dark:text-purple-100 font-bold'
+                      : 'text-slate-800 dark:text-theme-text group-hover:text-slate-950 dark:group-hover:text-white group-hover:font-semibold'
+                  }`}
+                >
+                  {item.label}
+                </span>
               </div>
 
               {item.id === 'health' ? (
                 totalVulnerabilities > 0 ? (
-                  <span className="text-xs px-2 py-0.5 rounded-full font-mono bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/25 font-bold">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-rose-100 dark:bg-rose-500/15 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-500/30 font-bold shadow-2xs">
                     {totalVulnerabilities} alert{totalVulnerabilities > 1 ? 's' : ''}
                   </span>
                 ) : (
-                  <span className="text-xs px-2 py-0.5 rounded-full font-mono bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 font-medium">
+                  <span className="text-xs px-2.5 py-0.5 rounded-full font-mono bg-emerald-100 dark:bg-emerald-500/15 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 font-bold shadow-2xs">
                     Secure
                   </span>
                 )
               ) : (
                 <span
-                  className={`text-xs px-2.5 py-0.5 rounded-full font-mono transition-colors ${
+                  className={`text-xs px-2.5 py-0.5 rounded-full font-mono transition-all ${
                     isActive
-                      ? 'bg-purple-500/20 text-purple-700 dark:text-purple-300 font-bold'
-                      : 'bg-theme-elevated text-theme-text-muted'
+                      ? 'bg-purple-600 text-white font-bold shadow-xs dark:bg-purple-500/40 dark:text-purple-200 dark:border dark:border-purple-500/50'
+                      : 'bg-white dark:bg-[#171a20] text-slate-800 dark:text-slate-200 border border-slate-200/90 dark:border-[#252a33] font-bold group-hover:bg-slate-50 dark:group-hover:bg-[#1c2028] group-hover:text-slate-950 dark:group-hover:text-white group-hover:border-slate-300 dark:group-hover:border-[#303642] shadow-2xs'
                   }`}
                 >
                   {count}
@@ -168,10 +183,10 @@ export const Sidebar: React.FC = () => {
             setIsImportExportOpen(true);
             if (isMobile) setIsMobileNavOpen(false);
           }}
-          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-theme-text-muted hover:text-theme-text hover:bg-theme-hover border border-transparent hover:border-theme-border transition-all cursor-pointer min-h-[44px]"
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/90 dark:hover:bg-theme-hover border border-transparent hover:border-slate-200 dark:hover:border-theme-border transition-all cursor-pointer min-h-[44px] group"
         >
-          <HardDriveDownload className="w-4 h-4 text-purple-400" />
-          <span>Backup & Restore</span>
+          <HardDriveDownload className="w-4 h-4 stroke-[1.75] text-slate-500 dark:text-theme-text-muted group-hover:text-slate-900 dark:group-hover:text-theme-text" />
+          <span className="font-medium">Backup & Restore</span>
         </button>
 
         <button
@@ -179,10 +194,10 @@ export const Sidebar: React.FC = () => {
             setIsSettingsOpen(true);
             if (isMobile) setIsMobileNavOpen(false);
           }}
-          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-theme-text-muted hover:text-theme-text hover:bg-theme-hover border border-transparent hover:border-theme-border transition-all cursor-pointer min-h-[44px]"
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/90 dark:hover:bg-theme-hover border border-transparent hover:border-slate-200 dark:hover:border-theme-border transition-all cursor-pointer min-h-[44px] group"
         >
-          <Settings className="w-4 h-4 text-theme-text-muted" />
-          <span>Preferences</span>
+          <Settings className="w-4 h-4 stroke-[1.75] text-slate-500 dark:text-theme-text-muted group-hover:text-slate-900 dark:group-hover:text-theme-text" />
+          <span className="font-medium">Preferences</span>
         </button>
       </div>
     </div>

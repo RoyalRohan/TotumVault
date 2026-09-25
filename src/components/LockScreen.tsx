@@ -86,20 +86,20 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="text-center">
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-theme-surface border border-theme-border text-xs text-theme-text font-medium shadow-sm">
-                <Lock className="w-3.5 h-3.5 text-purple-500 dark:text-purple-400" />
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border text-xs text-slate-800 dark:text-theme-text font-semibold shadow-2xs">
+                <Lock className="w-3.5 h-3.5 stroke-[1.75] text-purple-700 dark:text-purple-400" />
                 <span>Vault Locked</span>
               </div>
             </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-theme-text-muted block">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-theme-text-muted block">
                   Master Password
                 </label>
                 {capsLockOn && (
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-500 animate-scale-up">
-                    <AlertTriangle className="w-3.5 h-3.5" />
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-400 animate-scale-up">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                     <span>Caps Lock ON</span>
                   </div>
                 )}
@@ -118,7 +118,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text p-1.5 transition-colors cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:text-theme-text-muted dark:hover:text-theme-text p-1.5 transition-colors cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -152,7 +152,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
           onClick={handleOpenDeveloper}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-medium text-theme-text-muted hover:text-purple-400 transition-colors underline underline-offset-4 decoration-theme-border hover:decoration-purple-400 cursor-pointer"
+          className="font-medium text-theme-text-muted hover:text-purple-600 dark:hover:text-purple-400 transition-colors underline underline-offset-4 decoration-theme-border hover:decoration-purple-600 dark:hover:decoration-purple-400 cursor-pointer"
         >
           Rohan Ghimire
         </a>
