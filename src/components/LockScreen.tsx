@@ -114,7 +114,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
             </div>
 
             {/* Biometric Unlock Section (Class 3 Strong Biometrics) */}
-            {isBiometricEnabled && isBiometricSupported && (
+            {isBiometricEnabled && (
               <div className="space-y-3">
                 {isBiometricLockedOut ? (
                   <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2 leading-relaxed">

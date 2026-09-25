@@ -21,10 +21,18 @@ pub fn clear_os_clipboard() {
 
     #[cfg(target_os = "windows")]
     {
-        let _ = Command::new("cmd")
-            .args(["/c", "clip"])
-            .stdin(Stdio::null())
-            .spawn();
+        #[link(name = "user32")]
+        extern "system" {
+            fn OpenClipboard(hwnd: *mut std::ffi::c_void) -> i32;
+            fn EmptyClipboard() -> i32;
+            fn CloseClipboard() -> i32;
+        }
+        unsafe {
+            if OpenClipboard(std::ptr::null_mut()) != 0 {
+                EmptyClipboard();
+                CloseClipboard();
+            }
+        }
     }
 
     #[cfg(target_os = "macos")]
@@ -32,6 +40,16 @@ pub fn clear_os_clipboard() {
         let _ = Command::new("pbcopy")
             .stdin(Stdio::null())
             .spawn();
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        // Handled via WebView clipboard and Android activity lifecycle
+    }
+
+    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos", target_os = "android")))]
+    {
+        // Platform unsupported for direct OS clipboard commands
     }
 }
 

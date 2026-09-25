@@ -158,7 +158,11 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
 
   // Biometrics State
-  const [isBiometricSupported, setIsBiometricSupported] = useState<boolean>(false);
+  const [isBiometricSupported, setIsBiometricSupported] = useState<boolean>(() => {
+    if (typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent)) return true;
+    if (typeof localStorage !== 'undefined' && localStorage.getItem('totumvault_bio_token') !== null) return true;
+    return false;
+  });
   const [isBiometricEnabled, setIsBiometricEnabled] = useState<boolean>(false);
   const [biometricFailedAttempts, setBiometricFailedAttempts] = useState<number>(0);
   const isBiometricLockedOut = biometricFailedAttempts >= 3;
@@ -194,7 +198,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Smart Clipboard Settings & State
   const [clipboardClearSeconds, setClipboardClearSecondsState] = useState<number>(() => {
     const saved = localStorage.getItem('totumvault_clipboard_clear_seconds');
-    return saved !== null ? parseInt(saved, 10) : 30;
+    return saved !== null ? parseInt(saved, 10) : 60;
   });
   const setClipboardClearSeconds = useCallback((secs: number) => {
     setClipboardClearSecondsState(secs);
@@ -338,11 +342,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    // 3. Fallback DOM execCommand with a non-empty space character
-    // A single whitespace ensures the DOM selection range is not collapsed, which allows execCommand to succeed
+    // 3. Fallback DOM execCommand with empty string (ensures clipboard is truly emptied, not replaced with a space)
     try {
       const textarea = document.createElement('textarea');
-      textarea.value = ' ';
+      textarea.value = '';
       textarea.style.position = 'fixed';
       textarea.style.left = '-9999px';
       textarea.style.top = '-9999px';
@@ -508,7 +511,9 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const token = await invoke<string>('setup_biometric_unlock', { masterPassword });
       sessionStorage.setItem('totumvault_bio_token', token);
+      localStorage.setItem('totumvault_bio_token', token);
       setIsBiometricEnabled(true);
+      setIsBiometricSupported(true);
       setBiometricFailedAttempts(0);
       showToast('Biometric unlock configured successfully', 'success');
       return true;
@@ -525,9 +530,15 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     try {
-      const token = sessionStorage.getItem('totumvault_bio_token') || '';
+      const token = sessionStorage.getItem('totumvault_bio_token') || localStorage.getItem('totumvault_bio_token') || '';
+      if (!token) {
+        showToast('Biometric enrollment data not found. Please unlock with your master password.', 'error');
+        return false;
+      }
+
       const success = await invoke<boolean>('unlock_vault_biometric', { biometricToken: token });
       if (success) {
+        sessionStorage.setItem('totumvault_bio_token', token);
         setBiometricFailedAttempts(0);
         showToast('Vault unlocked with biometrics', 'success');
         await refreshStatus();
@@ -554,6 +565,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       await invoke('disable_biometric_unlock');
       sessionStorage.removeItem('totumvault_bio_token');
+      localStorage.removeItem('totumvault_bio_token');
       setIsBiometricEnabled(false);
       setBiometricFailedAttempts(0);
       showToast('Biometric unlock disabled', 'info');
@@ -584,12 +596,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const info = await checkAppUpdate();
       setUpdateInfo(info);
-      if (manual) {
-        if (info.hasUpdate) {
-          showToast(`Update available: v${info.latestVersion}`, 'info');
-        } else {
-          showToast(`TotumVault is up to date (v${info.currentVersion})`, 'success');
-        }
+      if (info.hasUpdate) {
+        showToast(`Update available: TotumVault v${info.latestVersion}!`, 'info');
+      } else if (manual) {
+        showToast(`TotumVault is up to date (v${info.currentVersion})`, 'success');
       }
       return info;
     } catch (err: any) {
@@ -610,36 +620,55 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     const checkBiometricHardwareAvailability = async () => {
       let isAvailable = false;
+      const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
+      const isAndroid = ua.includes('android');
 
-      // 1. Check native Android bridge if present
+      // 1. Query native backend capability if available
+      try {
+        const capability = await invoke<BiometricCapability>('check_biometric_capability');
+        if (capability?.supported || capability?.platform === 'android') {
+          isAvailable = true;
+        }
+      } catch {
+        // Fallback to client detection
+      }
+
+      // 2. Android device detection: Android phones with fingerprint / biometric hardware
+      if (isAndroid) {
+        isAvailable = true;
+      }
+
+      // 3. Check native Android bridge if present
       if (typeof (window as any).AndroidBiometrics?.isHardwareAvailable === 'function') {
         try {
-          isAvailable = Boolean((window as any).AndroidBiometrics.isHardwareAvailable());
+          if ((window as any).AndroidBiometrics.isHardwareAvailable()) {
+            isAvailable = true;
+          }
         } catch {
-          isAvailable = false;
+          // ignore
         }
       }
-      // 2. Query platform authenticator availability (standard WebAuthn/FIDO2 supported in Android WebView)
-      else if (
+
+      // 4. Query platform authenticator availability (standard WebAuthn/FIDO2 supported in Android WebView)
+      if (
+        !isAvailable &&
         typeof window !== 'undefined' &&
         window.PublicKeyCredential &&
         typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function'
       ) {
         try {
-          isAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+          const webAuthnAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+          if (webAuthnAvailable) {
+            isAvailable = true;
+          }
         } catch {
-          isAvailable = false;
+          // ignore
         }
       }
 
-      // 3. Query native backend capability if available
-      try {
-        const capability = await invoke<BiometricCapability>('check_biometric_capability');
-        if (capability && !capability.supported) {
-          isAvailable = false;
-        }
-      } catch {
-        // Fallback to detected state
+      // 5. If biometric was previously configured in the vault or stored locally, it is supported
+      if (localStorage.getItem('totumvault_bio_token')) {
+        isAvailable = true;
       }
 
       setIsBiometricSupported(isAvailable);
