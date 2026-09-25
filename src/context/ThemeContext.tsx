@@ -43,7 +43,7 @@ export const APP_FONTS: FontDefinition[] = [
   },
   {
     id: 'jetbrains-mono-nerd',
-    name: 'JetBrainsMono Nerd Font',
+    name: 'JetBrains Mono',
     category: 'Developer Mono',
     fontFamily: "'JetBrainsMono Nerd Font', 'JetBrains Mono', monospace",
     previewText: 'def lock(): 󰌆 󰌾 󰘚 => 0x9333ea',
@@ -51,7 +51,7 @@ export const APP_FONTS: FontDefinition[] = [
   },
   {
     id: 'fira-code-nerd',
-    name: 'FiraCode Nerd Font',
+    name: 'Fira Code',
     category: 'Ligature Mono',
     fontFamily: "'FiraCode Nerd Font', 'Fira Code', monospace",
     previewText: 'const key = [󰌆, 󰌾, 󰘚] !== null',

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Eye, EyeOff, Key, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Lock, Eye, EyeOff, Key, ArrowRight, AlertTriangle, Fingerprint, ShieldAlert } from 'lucide-react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { useVault } from '../context/VaultContext';
 import logoImg from '../assets/logo.png';
@@ -9,13 +9,34 @@ interface LockScreenProps {
 }
 
 export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
-  const { status, unlockVault } = useVault();
+  const {
+    status,
+    unlockVault,
+    isBiometricSupported,
+    isBiometricEnabled,
+    isBiometricLockedOut,
+    biometricFailedAttempts,
+    unlockWithBiometric,
+  } = useVault();
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isBioSubmitting, setIsBioSubmitting] = useState(false);
   const [capsLockOn, setCapsLockOn] = useState(false);
   const [shake, setShake] = useState(false);
+
+  const handleBiometricUnlock = async () => {
+    if (isBiometricLockedOut || isBioSubmitting) return;
+    setError('');
+    setIsBioSubmitting(true);
+    const success = await unlockWithBiometric();
+    setIsBioSubmitting(false);
+    if (!success) {
+      setShake(true);
+      setTimeout(() => setShake(false), 600);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,6 +112,45 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
                 <span>Vault Locked</span>
               </div>
             </div>
+
+            {/* Biometric Unlock Section (Class 3 Strong Biometrics) */}
+            {isBiometricEnabled && isBiometricSupported && (
+              <div className="space-y-3">
+                {isBiometricLockedOut ? (
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs flex items-center gap-2 leading-relaxed">
+                    <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                    <span>Biometric unlock locked (3/3 attempts failed). Please unlock using your master password.</span>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleBiometricUnlock}
+                      disabled={isBioSubmitting}
+                      className="w-full py-3 px-4 rounded-xl bg-theme-surface hover:bg-theme-hover border border-theme-border text-theme-text text-sm font-semibold transition-colors shadow-2xs flex items-center justify-center gap-2.5 cursor-pointer group"
+                    >
+                      {isBioSubmitting ? (
+                        <div className="w-4 h-4 border-2 border-purple-500/30 border-t-purple-600 rounded-full animate-spin" />
+                      ) : (
+                        <Fingerprint className="w-5 h-5 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />
+                      )}
+                      <span>Unlock with Biometrics</span>
+                      {biometricFailedAttempts > 0 && (
+                        <span className="text-xs text-rose-500 font-mono">({3 - biometricFailedAttempts} left)</span>
+                      )}
+                    </button>
+
+                    <div className="relative flex py-1 items-center">
+                      <div className="flex-grow border-t border-theme-border"></div>
+                      <span className="flex-shrink mx-3 text-[11px] text-theme-text-dim uppercase font-semibold">
+                        or enter password
+                      </span>
+                      <div className="flex-grow border-t border-theme-border"></div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">

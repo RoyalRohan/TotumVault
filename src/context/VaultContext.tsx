@@ -8,12 +8,17 @@ import {
   ImportCommitOptions,
   ImportPreview,
   ImportResultSummary,
+  LoginFolder,
   PwGenConfig,
   SaveDocumentInput,
   SavePageInput,
+  ScreenProtectionStatus,
+  BiometricCapability,
+  UpdateInfo,
   VaultHealthReport,
   VaultStatus,
 } from '../types';
+import { checkAppUpdate } from '../utils/updater';
 
 export interface ExportResult {
   path: string;
@@ -52,6 +57,45 @@ interface VaultContextType {
   openEditor: (entry?: DecryptedEntry, category?: CategoryType) => void;
   closeEditor: () => void;
   initialEditorCategory: CategoryType | null;
+
+  // Login Folders
+  folders: LoginFolder[];
+  selectedFolderId: string | null;
+  setSelectedFolderId: (id: string | null) => void;
+  refreshFolders: () => Promise<void>;
+  createFolder: (name: string, parentId?: string | null) => Promise<LoginFolder | null>;
+  renameFolder: (id: string, name: string) => Promise<void>;
+  deleteFolder: (id: string, deleteContents: boolean) => Promise<void>;
+  moveEntryToFolder: (entryId: string, folderId: string | null) => Promise<void>;
+
+  // Biometrics
+  isBiometricSupported: boolean;
+  isBiometricEnabled: boolean;
+  biometricFailedAttempts: number;
+  isBiometricLockedOut: boolean;
+  setupBiometric: (masterPassword: string) => Promise<boolean>;
+  unlockWithBiometric: () => Promise<boolean>;
+  disableBiometric: () => Promise<void>;
+
+  // Screen Protection
+  screenProtection: ScreenProtectionStatus | null;
+  setScreenProtection: (enabled: boolean) => Promise<void>;
+
+  // Auto Updates
+  updateInfo: UpdateInfo | null;
+  isCheckingUpdate: boolean;
+  checkForUpdates: (manual?: boolean) => Promise<UpdateInfo | null>;
+  dismissUpdate: () => void;
+
+  // Clipboard Settings & Actions
+  clipboardClearSeconds: number;
+  setClipboardClearSeconds: (secs: number) => void;
+  clearClipboard: (notify?: boolean) => Promise<boolean>;
+
+  // Privacy Screen Shield Test
+  isPrivacyShieldTest: boolean;
+  triggerPrivacyShieldTest: () => void;
+  dismissPrivacyShieldTest: () => void;
 
   // Document Vault Scanner State & Actions
   isScannerOpen: boolean;
@@ -109,6 +153,54 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [activeCategory, setActiveCategory] = useState<CategoryType>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Login Folders State
+  const [folders, setFolders] = useState<LoginFolder[]>([]);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+
+  // Biometrics State
+  const [isBiometricSupported, setIsBiometricSupported] = useState<boolean>(false);
+  const [isBiometricEnabled, setIsBiometricEnabled] = useState<boolean>(false);
+  const [biometricFailedAttempts, setBiometricFailedAttempts] = useState<number>(0);
+  const isBiometricLockedOut = biometricFailedAttempts >= 3;
+
+  // Screen Protection State
+  const [screenProtection, setScreenProtectionState] = useState<ScreenProtectionStatus>(() => {
+    const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('totumvault_screen_protection') : null;
+    const active = saved !== 'false';
+    return {
+      supported: true,
+      platform: 'protected',
+      active,
+      description: active
+        ? 'Privacy screen protection active. Window obscures on blur, screenshot key capture, and print attempts.'
+        : 'Privacy screen protection disabled.',
+    };
+  });
+  const [isPrivacyShieldTest, setIsPrivacyShieldTest] = useState<boolean>(false);
+  const triggerPrivacyShieldTest = useCallback(() => {
+    setIsPrivacyShieldTest(true);
+    setTimeout(() => {
+      setIsPrivacyShieldTest(false);
+    }, 4500);
+  }, []);
+  const dismissPrivacyShieldTest = useCallback(() => {
+    setIsPrivacyShieldTest(false);
+  }, []);
+
+  // Auto Updates State
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
+
+  // Smart Clipboard Settings & State
+  const [clipboardClearSeconds, setClipboardClearSecondsState] = useState<number>(() => {
+    const saved = localStorage.getItem('totumvault_clipboard_clear_seconds');
+    return saved !== null ? parseInt(saved, 10) : 30;
+  });
+  const setClipboardClearSeconds = useCallback((secs: number) => {
+    setClipboardClearSecondsState(secs);
+    localStorage.setItem('totumvault_clipboard_clear_seconds', secs.toString());
+  }, []);
+
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -139,22 +231,37 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
+  const refreshFolders = useCallback(async () => {
+    try {
+      const f = await invoke<LoginFolder[]>('get_login_folders');
+      setFolders(f);
+    } catch (err) {
+      console.error('Failed to list folders:', err);
+    }
+  }, []);
+
   const refreshStatus = useCallback(async () => {
     try {
       const res = await invoke<VaultStatus>('get_vault_status');
       setStatus(res);
       if (res.unlocked) {
-        const [fetchedEntries, fetchedDocs] = await Promise.all([
+        const [fetchedEntries, fetchedDocs, fetchedFolders, bioEnabled] = await Promise.all([
           invoke<DecryptedEntry[]>('get_entries'),
           invoke<DocumentMetadata[]>('list_documents'),
+          invoke<LoginFolder[]>('get_login_folders').catch(() => []),
+          invoke<boolean>('is_biometric_enabled').catch(() => false),
         ]);
         setEntries(fetchedEntries);
         setDocuments(fetchedDocs);
+        setFolders(fetchedFolders);
+        setIsBiometricEnabled(bioEnabled);
       } else {
         setEntries([]);
         setDocuments([]);
+        setFolders([]);
         setSelectedEntryId(null);
         setSelectedDocumentId(null);
+        setSelectedFolderId(null);
       }
     } catch (err) {
       console.error('Tauri IPC call failed:', err);
@@ -187,6 +294,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const success = await invoke<boolean>('unlock_vault', { masterPassword: password });
       if (success) {
+        setBiometricFailedAttempts(0); // Reset biometric attempts
         showToast('Vault unlocked', 'success');
         await refreshStatus();
         return true;
@@ -202,34 +310,354 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const clipboardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clipboardClearTimeRef = useRef<number | null>(null);
+  const clipboardPendingFlushRef = useRef<boolean>(false);
+  const lastCopiedTextRef = useRef<string | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
   const lastBackendTouchRef = useRef<number>(Date.now());
 
-  const lockVault = useCallback(async () => {
-    if (clipboardTimeoutRef.current) {
-      clearTimeout(clipboardTimeoutRef.current);
-      clipboardTimeoutRef.current = null;
+  const clearClipboard = useCallback(async (notify = false): Promise<boolean> => {
+    let success = false;
+
+    // 1. Try Rust native backend command (clears OS clipboard across all applications in Tauri)
+    try {
+      await invoke('clear_clipboard');
+      if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+        success = true;
+      }
+    } catch {
+      // Ignored if outside Tauri
     }
-    clipboardClearTimeRef.current = null;
+
+    // 2. Try standard navigator.clipboard.writeText('')
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText('');
+        success = true;
+      } catch {
+        // May fail if unfocused in browser
+      }
+    }
+
+    // 3. Fallback DOM execCommand with a non-empty space character
+    // A single whitespace ensures the DOM selection range is not collapsed, which allows execCommand to succeed
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = ' ';
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '-9999px';
+      textarea.style.opacity = '0';
+      textarea.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (ok) {
+        success = true;
+      }
+    } catch {
+      // ignore
+    }
+
+    if (success) {
+      clipboardClearTimeRef.current = null;
+      clipboardPendingFlushRef.current = false;
+      lastCopiedTextRef.current = null;
+
+      if (clipboardTimeoutRef.current) {
+        clearTimeout(clipboardTimeoutRef.current);
+        clipboardTimeoutRef.current = null;
+      }
+
+      if (notify) {
+        showToast('Clipboard automatically cleared for security', 'info');
+      }
+      return true;
+    } else {
+      // If browser blocked clipboard modification due to background/unfocused state,
+      // mark as pending so the very next user focus or interaction wipes it cleanly!
+      clipboardPendingFlushRef.current = true;
+      return false;
+    }
+  }, [showToast]);
+
+  const lockVault = useCallback(async () => {
+    await clearClipboard(false);
     try {
       await invoke('lock_vault');
     } catch (err: any) {
       console.error('Lock vault failed:', err);
     }
-    try {
-      await navigator.clipboard.writeText('');
-    } catch {
-      // ignore when window does not have clipboard focus
-    }
     setStatus((prev) => ({ ...prev, unlocked: false }));
     setEntries([]);
     setDocuments([]);
+    setFolders([]);
     setSelectedEntryId(null);
     setSelectedDocumentId(null);
+    setSelectedFolderId(null);
     setEditingEntry(null);
     setHealthReport(null);
     showToast('Vault locked', 'info');
+  }, [showToast, clearClipboard]);
+
+  const copyToClipboard = useCallback(async (text: string, label: string) => {
+    if (!text) return;
+    try {
+      // 1. Write text to clipboard
+      let copied = false;
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        } catch {
+          // Fallback to execCommand below
+        }
+      }
+
+      if (!copied) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+
+      lastCopiedTextRef.current = text;
+      clipboardPendingFlushRef.current = false;
+
+      // 2. Schedule OS-level wipe in Rust backend if clear timer is active
+      if (clipboardClearSeconds > 0) {
+        invoke('schedule_clipboard_wipe', { clearAfterSecs: clipboardClearSeconds }).catch(() => {});
+      }
+
+      // 3. Reset existing timeout
+      if (clipboardTimeoutRef.current) {
+        clearTimeout(clipboardTimeoutRef.current);
+        clipboardTimeoutRef.current = null;
+      }
+
+      // 4. Set auto-clear timer
+      if (clipboardClearSeconds > 0) {
+        showToast(`${label} copied! Auto-clears in ${clipboardClearSeconds}s.`, 'success');
+        clipboardClearTimeRef.current = Date.now() + clipboardClearSeconds * 1000;
+
+        clipboardTimeoutRef.current = setTimeout(async () => {
+          await clearClipboard(true);
+        }, clipboardClearSeconds * 1000);
+      } else {
+        showToast(`${label} copied to clipboard`, 'success');
+      }
+    } catch {
+      showToast('Failed to copy to clipboard', 'error');
+    }
+  }, [showToast, clipboardClearSeconds, clearClipboard]);
+
+  // Folder Operations
+  const createFolder = useCallback(async (name: string, parentId?: string | null): Promise<LoginFolder | null> => {
+    try {
+      const f = await invoke<LoginFolder>('create_login_folder', { name: name.trim(), parentId: parentId || null });
+      await refreshFolders();
+      showToast(`Folder "${f.name}" created`, 'success');
+      return f;
+    } catch (err: any) {
+      showToast(err.toString(), 'error');
+      return null;
+    }
+  }, [refreshFolders, showToast]);
+
+  const renameFolder = useCallback(async (id: string, name: string) => {
+    try {
+      await invoke('rename_login_folder', { id, name: name.trim() });
+      await refreshFolders();
+      showToast('Folder renamed', 'info');
+    } catch (err: any) {
+      showToast(err.toString(), 'error');
+    }
+  }, [refreshFolders, showToast]);
+
+  const deleteFolder = useCallback(async (id: string, deleteContents: boolean) => {
+    try {
+      await invoke('delete_login_folder', { id, deleteContents });
+      if (selectedFolderId === id) {
+        setSelectedFolderId(null);
+      }
+      await refreshFolders();
+      await refreshStatus();
+      showToast(deleteContents ? 'Folder and entries deleted' : 'Folder deleted (entries unfiled)', 'info');
+    } catch (err: any) {
+      showToast(err.toString(), 'error');
+    }
+  }, [selectedFolderId, refreshFolders, refreshStatus, showToast]);
+
+  const moveEntryToFolder = useCallback(async (entryId: string, folderId: string | null) => {
+    try {
+      await invoke('move_entry_to_folder', { entryId, folderId });
+      await refreshStatus();
+      showToast('Entry moved', 'info');
+    } catch (err: any) {
+      showToast(err.toString(), 'error');
+    }
+  }, [refreshStatus, showToast]);
+
+  // Biometrics
+  const setupBiometric = useCallback(async (masterPassword: string): Promise<boolean> => {
+    try {
+      const token = await invoke<string>('setup_biometric_unlock', { masterPassword });
+      sessionStorage.setItem('totumvault_bio_token', token);
+      setIsBiometricEnabled(true);
+      setBiometricFailedAttempts(0);
+      showToast('Biometric unlock configured successfully', 'success');
+      return true;
+    } catch (err: any) {
+      showToast(err.toString(), 'error');
+      return false;
+    }
   }, [showToast]);
+
+  const unlockWithBiometric = useCallback(async (): Promise<boolean> => {
+    if (isBiometricLockedOut) {
+      showToast('Maximum biometric attempts exceeded (3/3). Please enter master password.', 'error');
+      return false;
+    }
+
+    try {
+      const token = sessionStorage.getItem('totumvault_bio_token') || '';
+      const success = await invoke<boolean>('unlock_vault_biometric', { biometricToken: token });
+      if (success) {
+        setBiometricFailedAttempts(0);
+        showToast('Vault unlocked with biometrics', 'success');
+        await refreshStatus();
+        return true;
+      } else {
+        const nextAttempts = biometricFailedAttempts + 1;
+        setBiometricFailedAttempts(nextAttempts);
+        if (nextAttempts >= 3) {
+          showToast('Biometric lockout (3 failed attempts). Master password required.', 'error');
+        } else {
+          showToast(`Biometric verification failed (${nextAttempts}/3 attempts)`, 'warning');
+        }
+        return false;
+      }
+    } catch (err: any) {
+      const nextAttempts = biometricFailedAttempts + 1;
+      setBiometricFailedAttempts(nextAttempts);
+      showToast(`Biometric error: ${err}`, 'error');
+      return false;
+    }
+  }, [biometricFailedAttempts, isBiometricLockedOut, refreshStatus, showToast]);
+
+  const disableBiometric = useCallback(async () => {
+    try {
+      await invoke('disable_biometric_unlock');
+      sessionStorage.removeItem('totumvault_bio_token');
+      setIsBiometricEnabled(false);
+      setBiometricFailedAttempts(0);
+      showToast('Biometric unlock disabled', 'info');
+    } catch (err: any) {
+      showToast(err.toString(), 'error');
+    }
+  }, [showToast]);
+
+  // Screen Protection
+  const setScreenProtection = useCallback(async (enabled: boolean) => {
+    try {
+      const st = await invoke<ScreenProtectionStatus>('set_screen_protection', { enabled });
+      setScreenProtectionState(st);
+      localStorage.setItem('totumvault_screen_protection', enabled ? 'true' : 'false');
+      if (enabled) {
+        showToast(st.description || 'Screen capture protection active', 'success');
+      } else {
+        showToast('Screen capture protection disabled', 'info');
+      }
+    } catch (err: any) {
+      showToast(`Screen protection error: ${err}`, 'error');
+    }
+  }, [showToast]);
+
+  // Auto Updates
+  const checkForUpdates = useCallback(async (manual = false): Promise<UpdateInfo | null> => {
+    setIsCheckingUpdate(true);
+    try {
+      const info = await checkAppUpdate();
+      setUpdateInfo(info);
+      if (manual) {
+        if (info.hasUpdate) {
+          showToast(`Update available: v${info.latestVersion}`, 'info');
+        } else {
+          showToast(`TotumVault is up to date (v${info.currentVersion})`, 'success');
+        }
+      }
+      return info;
+    } catch (err: any) {
+      if (manual) {
+        showToast(err.message || 'Failed to check updates', 'error');
+      }
+      return null;
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  }, [showToast]);
+
+  const dismissUpdate = useCallback(() => {
+    setUpdateInfo(null);
+  }, []);
+
+  // Check hardware biometrics & restore screen protection & startup updates
+  useEffect(() => {
+    const checkBiometricHardwareAvailability = async () => {
+      let isAvailable = false;
+
+      // 1. Check native Android bridge if present
+      if (typeof (window as any).AndroidBiometrics?.isHardwareAvailable === 'function') {
+        try {
+          isAvailable = Boolean((window as any).AndroidBiometrics.isHardwareAvailable());
+        } catch {
+          isAvailable = false;
+        }
+      }
+      // 2. Query platform authenticator availability (standard WebAuthn/FIDO2 supported in Android WebView)
+      else if (
+        typeof window !== 'undefined' &&
+        window.PublicKeyCredential &&
+        typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function'
+      ) {
+        try {
+          isAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+        } catch {
+          isAvailable = false;
+        }
+      }
+
+      // 3. Query native backend capability if available
+      try {
+        const capability = await invoke<BiometricCapability>('check_biometric_capability');
+        if (capability && !capability.supported) {
+          isAvailable = false;
+        }
+      } catch {
+        // Fallback to detected state
+      }
+
+      setIsBiometricSupported(isAvailable);
+    };
+
+    checkBiometricHardwareAvailability();
+
+    const savedProtection = localStorage.getItem('totumvault_screen_protection');
+    const shouldProtect = savedProtection !== 'false';
+    invoke<ScreenProtectionStatus>('set_screen_protection', { enabled: shouldProtect })
+      .then((st) => setScreenProtectionState(st))
+      .catch(() => {});
+
+    const checkStartup = localStorage.getItem('totumvault_check_updates_on_startup');
+    if (checkStartup !== 'false') {
+      checkForUpdates(false);
+    }
+  }, [checkForUpdates]);
 
 
   const saveEntry = useCallback(async (entry: DecryptedEntry, isFavoriteToggle = false) => {
@@ -281,29 +709,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsScannerOpen(false);
     setScannerTargetDocId(undefined);
   }, []);
-
-  const copyToClipboard = useCallback(async (text: string, label: string) => {
-    if (!text) return;
-    try {
-      await navigator.clipboard.writeText(text);
-      showToast(`${label} copied! Will auto-clear in 30s.`, 'success');
-      clipboardClearTimeRef.current = Date.now() + 30000;
-
-      if (clipboardTimeoutRef.current) {
-        clearTimeout(clipboardTimeoutRef.current);
-      }
-      clipboardTimeoutRef.current = setTimeout(async () => {
-        try {
-          await navigator.clipboard.writeText('');
-        } catch {
-          // ignore focus errors
-        }
-        clipboardClearTimeRef.current = null;
-      }, 30000);
-    } catch (err) {
-      showToast('Failed to copy to clipboard', 'error');
-    }
-  }, [showToast]);
 
   const generatePassword = useCallback(async (config: PwGenConfig): Promise<string> => {
     try {
@@ -519,38 +924,68 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [selectedEntryId, entries]);
 
-  // Track user activity to determine idle time & sync with Rust backend
+  // Real-time clipboard auto-clear interval (every 1s)
   useEffect(() => {
+    const timer = setInterval(() => {
+      if (
+        clipboardPendingFlushRef.current ||
+        (clipboardClearTimeRef.current && Date.now() >= clipboardClearTimeRef.current)
+      ) {
+        clearClipboard(true);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [clearClipboard]);
+
+  // Track user activity to determine idle time & flush overdue clipboard upon window return
+  useEffect(() => {
+    const checkAndFlushOverdueClipboard = () => {
+      if (
+        clipboardPendingFlushRef.current ||
+        (clipboardClearTimeRef.current && Date.now() >= clipboardClearTimeRef.current)
+      ) {
+        clearClipboard(true);
+      }
+    };
+
     const handleActivity = () => {
       lastActivityRef.current = Date.now();
       if (status.unlocked && Date.now() - lastBackendTouchRef.current > 25000) {
         lastBackendTouchRef.current = Date.now();
         invoke('touch_user_activity').catch(() => {});
       }
+      checkAndFlushOverdueClipboard();
     };
 
     const handleFocus = () => {
       handleActivity();
-      if (clipboardClearTimeRef.current && Date.now() >= clipboardClearTimeRef.current) {
-        navigator.clipboard.writeText('').catch(() => {});
-        clipboardClearTimeRef.current = null;
+      checkAndFlushOverdueClipboard();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkAndFlushOverdueClipboard();
       }
     };
 
     window.addEventListener('mousemove', handleActivity, { passive: true });
     window.addEventListener('mousedown', handleActivity, { passive: true });
+    window.addEventListener('pointerdown', handleActivity, { passive: true });
     window.addEventListener('keydown', handleActivity, { passive: true });
     window.addEventListener('touchstart', handleActivity, { passive: true });
     window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener('mousemove', handleActivity);
       window.removeEventListener('mousedown', handleActivity);
+      window.removeEventListener('pointerdown', handleActivity);
       window.removeEventListener('keydown', handleActivity);
       window.removeEventListener('touchstart', handleActivity);
       window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [status.unlocked]);
+  }, [status.unlocked, clearClipboard]);
 
   // Periodic heartbeat to enforce auto-lock
   useEffect(() => {
@@ -673,6 +1108,33 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         getDocumentPageData,
         analyzeImport,
         commitImport,
+        folders,
+        selectedFolderId,
+        setSelectedFolderId,
+        refreshFolders,
+        createFolder,
+        renameFolder,
+        deleteFolder,
+        moveEntryToFolder,
+        isBiometricSupported,
+        isBiometricEnabled,
+        biometricFailedAttempts,
+        isBiometricLockedOut,
+        setupBiometric,
+        unlockWithBiometric,
+        disableBiometric,
+        screenProtection,
+        setScreenProtection,
+        updateInfo,
+        isCheckingUpdate,
+        checkForUpdates,
+        dismissUpdate,
+        clipboardClearSeconds,
+        setClipboardClearSeconds,
+        clearClipboard,
+        isPrivacyShieldTest,
+        triggerPrivacyShieldTest,
+        dismissPrivacyShieldTest,
       }}
     >
       {children}

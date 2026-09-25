@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Key,
   Star,
@@ -23,11 +23,13 @@ import {
   Clock,
   ChevronLeft,
   Tag,
+  Folder,
 } from 'lucide-react';
 import { useVault } from '../context/VaultContext';
 import { TotpViewer } from './TotpViewer';
 import { calculatePasswordStrength, calculateEntropy } from '../utils/cryptoUtils';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { getLicenseStatusInfo } from '../utils/license';
 
 export const EntryDetail: React.FC = () => {
   const {
@@ -38,8 +40,11 @@ export const EntryDetail: React.FC = () => {
     deleteEntry,
     copyToClipboard,
     saveEntry,
+    folders,
+    moveEntryToFolder,
   } = useVault();
 
+  const [showSecureNote, setShowSecureNote] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showCardNumber, setShowCardNumber] = useState(false);
   const [showCvv, setShowCvv] = useState(false);
@@ -50,6 +55,20 @@ export const EntryDetail: React.FC = () => {
   const [showSshKey, setShowSshKey] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [visibleCustomFields, setVisibleCustomFields] = useState<Record<string, boolean>>({});
+
+  // Reset all secret visibility states whenever selected entry changes, closes, or vault locks
+  useEffect(() => {
+    setShowSecureNote(false);
+    setShowPassword(false);
+    setShowCardNumber(false);
+    setShowCvv(false);
+    setShowPin(false);
+    setShowLicenseKey(false);
+    setShowApiKey(false);
+    setShowApiSecret(false);
+    setShowSshKey(false);
+    setVisibleCustomFields({});
+  }, [selectedEntryId]);
 
   const entry = entries.find((e) => e.id === selectedEntryId);
 
@@ -349,26 +368,88 @@ export const EntryDetail: React.FC = () => {
   // 2. SECURE NOTE DETAIL
   const renderSecureNoteDetail = () => (
     <div className="space-y-4">
-      <div className="bg-theme-surface border border-theme-border rounded-2xl p-5 space-y-3 shadow-sm">
+      <div className="bg-theme-surface border border-theme-border rounded-2xl p-4 sm:p-5 space-y-3 shadow-sm">
         <div className="flex items-center justify-between border-b border-theme-border pb-2.5">
           <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-emerald-400" />
+            <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400 stroke-[1.75]" />
             <span className="text-xs font-bold uppercase tracking-wider text-theme-text-muted">
               Private Note Content
             </span>
           </div>
-          <button
-            onClick={() => handleCopy(entry.notes, 'Note Content')}
-            className="flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 p-1 cursor-pointer"
-          >
-            {copiedField === 'Note Content' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-            <span>Copy Full Note</span>
-          </button>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowSecureNote(!showSecureNote)}
+              className="p-1.5 sm:px-2.5 rounded-xl bg-theme-elevated hover:bg-theme-hover text-theme-text-muted hover:text-theme-text border border-theme-border transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+              title={showSecureNote ? 'Hide Note Content' : 'Reveal Note Content'}
+              aria-label={showSecureNote ? 'Hide Note Content' : 'Reveal Note Content'}
+            >
+              {showSecureNote ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Hide</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                  <span className="hidden sm:inline">Reveal</span>
+                </>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleCopy(entry.notes, 'Note Content')}
+              className="p-1.5 sm:px-2.5 rounded-xl bg-theme-elevated hover:bg-theme-hover text-theme-text-muted hover:text-theme-text border border-theme-border transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
+              title="Copy Full Note"
+              aria-label="Copy Full Note"
+            >
+              {copiedField === 'Note Content' ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="hidden sm:inline text-emerald-600 dark:text-emerald-400">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Copy Note</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
-        <div className="p-4 rounded-xl bg-theme-elevated border border-theme-border font-mono text-sm leading-relaxed text-theme-text whitespace-pre-wrap select-text">
-          {entry.notes || <span className="italic text-theme-text-muted">Note is empty.</span>}
-        </div>
+        {showSecureNote ? (
+          <div className="p-4 rounded-xl bg-theme-elevated border border-theme-border font-mono text-sm leading-relaxed text-theme-text whitespace-pre-wrap select-text animate-fade-in">
+            {entry.notes || <span className="italic text-theme-text-muted">Note is empty.</span>}
+          </div>
+        ) : (
+          <div
+            onClick={() => setShowSecureNote(true)}
+            className="p-6 rounded-xl bg-theme-elevated/70 hover:bg-theme-elevated border border-theme-border border-dashed flex flex-col items-center justify-center text-center cursor-pointer group transition-all min-h-[140px] animate-fade-in"
+            title="Click to reveal note content"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setShowSecureNote(true);
+              }
+            }}
+          >
+            <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-2.5 group-hover:scale-105 transition-transform">
+              <Eye className="w-5 h-5 stroke-[1.75]" />
+            </div>
+            <p className="text-xs font-bold text-theme-text">Note Content Hidden</p>
+            <p className="text-[11px] text-theme-text-muted mt-0.5 max-w-xs">
+              Click anywhere on this box or press the Reveal button above to view note.
+            </p>
+            <div className="mt-3 font-mono text-xs text-theme-text-dim tracking-widest select-none opacity-50">
+              ••••••••••••••••••••••••••••••••
+            </div>
+          </div>
+        )}
       </div>
 
       {renderCustomFields()}
@@ -633,6 +714,7 @@ export const EntryDetail: React.FC = () => {
   // 5. LICENSE DETAIL
   const renderLicenseDetail = () => {
     const key = entry.license_key || entry.password || '';
+    const licenseStatus = getLicenseStatusInfo(entry.license_expires_at);
 
     return (
       <div className="space-y-4">
@@ -698,14 +780,22 @@ export const EntryDetail: React.FC = () => {
               </div>
             )}
 
-            {entry.license_expires_at && (
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-theme-text-muted block mb-0.5">
-                  Expires
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-theme-text-muted block mb-0.5">
+                Expires
+              </span>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-sm font-mono text-theme-text">
+                  {entry.license_expires_at || 'Perpetual (No Expiry)'}
                 </span>
-                <span className="text-sm font-mono text-theme-text">{entry.license_expires_at}</span>
+                <span
+                  className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${licenseStatus.badgeClass}`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${licenseStatus.dotClass}`} />
+                  <span>{licenseStatus.label}</span>
+                </span>
               </div>
-            )}
+            </div>
           </div>
 
           {entry.url && (
@@ -1065,6 +1155,24 @@ export const EntryDetail: React.FC = () => {
               <span className="text-xs text-theme-text-muted font-medium">
                 {getCategoryLabel(entry.category)}
               </span>
+              {entry.category === 'logins' && (
+                <div className="flex items-center gap-1.5">
+                  <Folder className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                  <select
+                    value={entry.folder_id || ''}
+                    onChange={(e) => moveEntryToFolder(entry.id, e.target.value || null)}
+                    className="text-xs bg-theme-elevated border border-theme-border rounded-lg px-2 py-0.5 text-theme-text font-medium cursor-pointer focus:outline-hidden"
+                    title="Move to Folder"
+                  >
+                    <option value="">(Unfiled / Root)</option>
+                    {folders.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               {entry.tags && entry.tags.length > 0 && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {entry.tags.map((tag) => (

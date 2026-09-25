@@ -9,7 +9,7 @@ use uuid::Uuid;
 use zeroize::Zeroize;
 
 use crate::crypto::aes_gcm::{decrypt_bytes, encrypt_bytes};
-use crate::crypto::argon2_kdf::{derive_kek, generate_random_salt};
+use crate::crypto::argon2_kdf::{derive_kek, generate_random_salt, DerivedKey};
 use crate::crypto::key_wrap::{generate_vault_key, unwrap_vault_key, wrap_vault_key, VaultKey};
 use crate::db::sqlite::{
     delete_document_page_record, delete_document_record, delete_entry_record,
@@ -20,13 +20,15 @@ use crate::db::sqlite::{
     wipe_all_documents, wipe_all_entries,
 };
 
+use rand::RngCore;
+
 use super::importer::{
     analyze_import_data, find_matching_entry, parse_backup_content, parse_csv_to_entries,
 };
 use super::models::{
     BackupDocumentItem, BackupEntryItem, BackupPageItem, DecryptedEntry, DocumentDetail,
     DocumentMetadata, DocumentPage, ImportCommitOptions, ImportPreview, ImportResultSummary,
-    PortableVaultBackup, SaveDocumentInput, SavePageInput,
+    LoginFolder, PortableVaultBackup, SaveDocumentInput, SavePageInput,
 };
 
 pub struct VaultManager {
@@ -218,6 +220,217 @@ impl VaultManager {
         Ok(())
     }
 
+    // ==========================================
+    // LOGIN SUBFOLDERS
+    // ==========================================
+
+    pub fn get_login_folders(&mut self) -> Result<Vec<LoginFolder>, String> {
+        self.check_auto_lock();
+        if self.active_key.is_none() {
+            return Err("Vault is locked".to_string());
+        }
+
+        let conn = init_db(&self.db_path)?;
+        if let Some(json_str) = get_metadata(&conn, "login_folders")? {
+            let folders: Vec<LoginFolder> = serde_json::from_str(&json_str)
+                .unwrap_or_default();
+            Ok(folders)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    pub fn save_login_folders(&mut self, folders: &[LoginFolder]) -> Result<(), String> {
+        self.check_auto_lock();
+        if self.active_key.is_none() {
+            return Err("Vault is locked".to_string());
+        }
+
+        let conn = init_db(&self.db_path)?;
+        let json_str = serde_json::to_string(folders)
+            .map_err(|e| format!("Failed to serialize login folders: {}", e))?;
+        save_metadata(&conn, "login_folders", &json_str)?;
+        self.touch_activity();
+        Ok(())
+    }
+
+    pub fn create_login_folder(&mut self, name: &str, parent_id: Option<String>) -> Result<LoginFolder, String> {
+        let clean_name = name.trim();
+        if clean_name.is_empty() {
+            return Err("Folder name cannot be empty".to_string());
+        }
+
+        let mut folders = self.get_login_folders()?;
+        if folders.iter().any(|f| f.name.eq_ignore_ascii_case(clean_name) && f.parent_id == parent_id) {
+            return Err(format!("A folder named '{}' already exists in this location", clean_name));
+        }
+
+        let new_folder = LoginFolder {
+            id: Uuid::new_v4().to_string(),
+            name: clean_name.to_string(),
+            parent_id,
+            created_at: Utc::now().to_rfc3339(),
+        };
+
+        folders.push(new_folder.clone());
+        self.save_login_folders(&folders)?;
+        Ok(new_folder)
+    }
+
+    pub fn rename_login_folder(&mut self, id: &str, new_name: &str) -> Result<(), String> {
+        let clean_name = new_name.trim();
+        if clean_name.is_empty() {
+            return Err("Folder name cannot be empty".to_string());
+        }
+
+        let mut folders = self.get_login_folders()?;
+        let folder_idx = folders.iter().position(|f| f.id == id)
+            .ok_or_else(|| "Folder not found".to_string())?;
+
+        let parent_id = folders[folder_idx].parent_id.clone();
+        if folders.iter().any(|f| f.id != id && f.name.eq_ignore_ascii_case(clean_name) && f.parent_id == parent_id) {
+            return Err(format!("A folder named '{}' already exists in this location", clean_name));
+        }
+
+        folders[folder_idx].name = clean_name.to_string();
+        self.save_login_folders(&folders)?;
+        Ok(())
+    }
+
+    pub fn delete_login_folder(&mut self, id: &str, delete_contents: bool) -> Result<(), String> {
+        let mut folders = self.get_login_folders()?;
+        
+        let mut target_ids = std::collections::HashSet::new();
+        target_ids.insert(id.to_string());
+
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for f in &folders {
+                if let Some(ref pid) = f.parent_id {
+                    if target_ids.contains(pid) && !target_ids.contains(&f.id) {
+                        target_ids.insert(f.id.clone());
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        let entries = self.get_entries()?;
+        for mut entry in entries {
+            if let Some(ref fid) = entry.folder_id {
+                if target_ids.contains(fid) {
+                    if delete_contents {
+                        self.delete_entry(&entry.id)?;
+                    } else {
+                        entry.folder_id = None;
+                        self.save_entry(entry)?;
+                    }
+                }
+            }
+        }
+
+        folders.retain(|f| !target_ids.contains(&f.id));
+        self.save_login_folders(&folders)?;
+        Ok(())
+    }
+
+    pub fn move_entry_to_folder(&mut self, entry_id: &str, folder_id: Option<String>) -> Result<(), String> {
+        let entries = self.get_entries()?;
+        let mut target_entry = entries.into_iter().find(|e| e.id == entry_id)
+            .ok_or_else(|| "Entry not found".to_string())?;
+
+        target_entry.folder_id = folder_id;
+        self.save_entry(target_entry)?;
+        Ok(())
+    }
+
+    // ==========================================
+    // BIOMETRIC (STRONG) KEY BINDING - Class 3 Hardware Keystore Authorization
+    // ==========================================
+
+    pub fn setup_biometric_unlock(&mut self, master_password: &str) -> Result<String, String> {
+        self.check_auto_lock();
+        let conn = init_db(&self.db_path)?;
+
+        let salt = get_metadata(&conn, "kdf_salt")?
+            .ok_or_else(|| "Vault metadata corrupt: missing KDF salt".to_string())?;
+        let nonce_b64 = get_metadata(&conn, "wrapped_vek_nonce")?
+            .ok_or_else(|| "Vault metadata corrupt: missing VEK nonce".to_string())?;
+        let ciphertext_b64 = get_metadata(&conn, "wrapped_vek_ciphertext")?
+            .ok_or_else(|| "Vault metadata corrupt: missing VEK ciphertext".to_string())?;
+
+        let kek = derive_kek(master_password, &salt)?;
+        let vek = unwrap_vault_key(&kek, &nonce_b64, &ciphertext_b64)
+            .map_err(|_| "Invalid master password".to_string())?;
+
+        let mut token_bytes = [0u8; 32];
+        rand::thread_rng().fill_bytes(&mut token_bytes);
+        let bio_token_b64 = BASE64.encode(&token_bytes);
+
+        let bio_kek = DerivedKey(token_bytes);
+        let wrapped_bio = wrap_vault_key(&vek, &bio_kek)?;
+        token_bytes.zeroize();
+
+        save_metadata(&conn, "biometric_vek_nonce", &wrapped_bio.nonce_b64)?;
+        save_metadata(&conn, "biometric_vek_ciphertext", &wrapped_bio.ciphertext_b64)?;
+        save_metadata(&conn, "biometric_enabled", "true")?;
+
+        Ok(bio_token_b64)
+    }
+
+    pub fn unlock_vault_biometric(&mut self, bio_token_b64: &str) -> Result<bool, String> {
+        let conn = init_db(&self.db_path)?;
+        let enabled = get_metadata(&conn, "biometric_enabled")?.unwrap_or_default();
+        if enabled != "true" {
+            return Err("Biometric unlock is not enabled".to_string());
+        }
+
+        let nonce_b64 = get_metadata(&conn, "biometric_vek_nonce")?
+            .ok_or_else(|| "Missing biometric key nonce".to_string())?;
+        let ciphertext_b64 = get_metadata(&conn, "biometric_vek_ciphertext")?
+            .ok_or_else(|| "Missing biometric key ciphertext".to_string())?;
+
+        let mut token_bytes = BASE64.decode(bio_token_b64)
+            .map_err(|_| "Invalid biometric token encoding".to_string())?;
+
+        if token_bytes.len() != 32 {
+            token_bytes.zeroize();
+            return Err("Invalid biometric key length".to_string());
+        }
+
+        let mut key_arr = [0u8; 32];
+        key_arr.copy_from_slice(&token_bytes);
+        token_bytes.zeroize();
+        let bio_kek = DerivedKey(key_arr);
+
+        match unwrap_vault_key(&bio_kek, &nonce_b64, &ciphertext_b64) {
+            Ok(vek) => {
+                self.active_key = Some(vek);
+                self.touch_activity();
+                Ok(true)
+            }
+            Err(_) => Ok(false),
+        }
+    }
+
+    pub fn disable_biometric_unlock(&mut self) -> Result<(), String> {
+        let conn = init_db(&self.db_path)?;
+        save_metadata(&conn, "biometric_enabled", "false")?;
+        save_metadata(&conn, "biometric_vek_nonce", "")?;
+        save_metadata(&conn, "biometric_vek_ciphertext", "")?;
+        Ok(())
+    }
+
+    pub fn is_biometric_enabled(&self) -> bool {
+        if let Ok(conn) = init_db(&self.db_path) {
+            if let Ok(Some(val)) = get_metadata(&conn, "biometric_enabled") {
+                return val == "true";
+            }
+        }
+        false
+    }
+
     pub fn change_master_password(&mut self, old_pass: &str, new_pass: &str) -> Result<(), String> {
         self.check_auto_lock();
         if new_pass.trim().len() < 8 {
@@ -253,6 +466,11 @@ impl VaultManager {
         save_metadata(&conn, "kdf_salt", &new_salt)?;
         save_metadata(&conn, "wrapped_vek_nonce", &rewrapped.nonce_b64)?;
         save_metadata(&conn, "wrapped_vek_ciphertext", &rewrapped.ciphertext_b64)?;
+
+        // Automatically revoke any prior biometric enrollment on password change
+        let _ = save_metadata(&conn, "biometric_enabled", "false");
+        let _ = save_metadata(&conn, "biometric_vek_nonce", "");
+        let _ = save_metadata(&conn, "biometric_vek_ciphertext", "");
 
         self.touch_activity();
         Ok(())
@@ -1242,6 +1460,89 @@ mod tests {
         let _ = fs::remove_dir_all(test_dir3);
     }
 
+    #[test]
+    fn test_login_folders_hierarchy_and_cascade() {
+        let test_dir = get_test_dir("login_folders");
+        let mut mgr = VaultManager::new(test_dir.clone());
+        mgr.create_vault("Password123!").unwrap();
+
+        // Create folders
+        let f1 = mgr.create_login_folder("Work", None).unwrap();
+        let f2 = mgr.create_login_folder("Clients", Some(f1.id.clone())).unwrap();
+
+        let folders = mgr.get_login_folders().unwrap();
+        assert_eq!(folders.len(), 2);
+        assert_eq!(folders[1].parent_id, Some(f1.id.clone()));
+
+        // Create entry in f2
+        let entry = DecryptedEntry {
+            id: "work_client_1".to_string(),
+            title: "Client Portal".to_string(),
+            username: "admin".to_string(),
+            category: "logins".to_string(),
+            folder_id: Some(f2.id.clone()),
+            ..Default::default()
+        };
+        mgr.save_entry(entry).unwrap();
+
+        // Move entry to f1
+        mgr.move_entry_to_folder("work_client_1", Some(f1.id.clone())).unwrap();
+        let entries = mgr.get_entries().unwrap();
+        let e = entries.iter().find(|x| x.id == "work_client_1").unwrap();
+        assert_eq!(e.folder_id, Some(f1.id.clone()));
+
+        // Delete f1 unfiling contents
+        mgr.delete_login_folder(&f1.id, false).unwrap();
+        let folders_after = mgr.get_login_folders().unwrap();
+        assert_eq!(folders_after.len(), 0); // f1 and child f2 removed
+
+        let entries_after = mgr.get_entries().unwrap();
+        let e_after = entries_after.iter().find(|x| x.id == "work_client_1").unwrap();
+        assert_eq!(e_after.folder_id, None); // Unfiled to root
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_biometric_wrapping_lifecycle() {
+        let test_dir = get_test_dir("bio_lifecycle");
+        let mut mgr = VaultManager::new(test_dir.clone());
+        mgr.create_vault("Password123!").unwrap();
+
+        assert!(!mgr.is_biometric_enabled());
+
+        // Setup biometric unlock
+        let token = mgr.setup_biometric_unlock("Password123!").unwrap();
+        assert!(mgr.is_biometric_enabled());
+
+        // Lock vault
+        mgr.lock_vault();
+        assert!(!mgr.is_unlocked());
+
+        // Fail unlock with wrong token
+        let wrong_token = BASE64.encode([99u8; 32]);
+        let unlocked = mgr.unlock_vault_biometric(&wrong_token).unwrap();
+        assert!(!unlocked);
+        assert!(!mgr.is_unlocked());
+
+        // Successfully unlock with correct token
+        let unlocked = mgr.unlock_vault_biometric(&token).unwrap();
+        assert!(unlocked);
+        assert!(mgr.is_unlocked());
+
+        // Disable biometric unlock
+        mgr.disable_biometric_unlock().unwrap();
+        assert!(!mgr.is_biometric_enabled());
+
+        // Re-enable and test password change revocation
+        let _token2 = mgr.setup_biometric_unlock("Password123!").unwrap();
+        assert!(mgr.is_biometric_enabled());
+
+        mgr.change_master_password("Password123!", "NewPassword456!").unwrap();
+        assert!(!mgr.is_biometric_enabled()); // Revoked on password change
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
 }
 
 

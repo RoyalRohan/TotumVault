@@ -33,12 +33,21 @@ export interface EntryBase {
   last_used_at?: string;
 }
 
+export interface LoginFolder {
+  id: string;
+  name: string;
+  parent_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface LoginEntry extends EntryBase {
   category: 'logins';
   username: string;
   email: string;
   password: string;
   url: string;
+  folder_id?: string | null;
   totp_secret?: string;
   totp_issuer?: string;
 }
@@ -119,6 +128,7 @@ export interface DecryptedEntry {
   notes: string;
   category: string;
   favorite: boolean;
+  folder_id?: string | null;
   tags: string[];
   custom_fields: CustomField[];
   totp_secret?: string;
@@ -301,5 +311,37 @@ export interface SaveDocumentInput {
   expiry_date?: string;
   favorite: boolean;
   pages: SavePageInput[];
+}
+
+export interface ScreenProtectionStatus {
+  supported: boolean;
+  platform: string;
+  active: boolean;
+  description: string;
+}
+
+export interface BiometricCapability {
+  supported: boolean;
+  platform: string;
+  description: string;
+}
+
+export interface AppVersionInfo {
+  version: string;
+  os: string;
+  arch: string;
+}
+
+export interface UpdateInfo {
+  currentVersion: string;
+  latestVersion: string;
+  hasUpdate: boolean;
+  releaseTitle: string;
+  releaseNotes: string;
+  publishedAt: string;
+  htmlUrl: string;
+  assetName?: string;
+  assetDownloadUrl?: string;
+  assetSize?: number;
 }
 

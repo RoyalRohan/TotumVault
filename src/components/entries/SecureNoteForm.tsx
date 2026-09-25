@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText } from 'lucide-react';
+import { FileText, Eye, EyeOff } from 'lucide-react';
 import { DecryptedEntry, CustomField, CategoryType } from '../../types';
 import { EntryFormShell } from './shared/EntryFormShell';
 import { TagEditor } from './shared/TagEditor';
@@ -20,6 +20,7 @@ export const SecureNoteForm: React.FC<SecureNoteFormProps> = ({
 }) => {
   const [title, setTitle] = useState(initialData?.title || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
+  const [maskContent, setMaskContent] = useState(false);
   const [favorite, setFavorite] = useState(initialData?.favorite || false);
   const [tags, setTags] = useState<string[]>(initialData?.tags || []);
   const [customFields, setCustomFields] = useState<CustomField[]>(initialData?.custom_fields || []);
@@ -79,18 +80,39 @@ export const SecureNoteForm: React.FC<SecureNoteFormProps> = ({
       <div className="space-y-1.5 flex-1">
         <div className="flex items-center justify-between">
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider flex items-center gap-1.5">
-            <FileText className="w-3.5 h-3.5 text-emerald-400" />
+            <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 stroke-[1.75]" />
             <span>Encrypted Note Content</span>
           </label>
-          <span className="text-[11px] text-theme-text-dim font-mono">
-            {notes.length} characters
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMaskContent(!maskContent)}
+              className="px-2 py-0.5 rounded-lg bg-theme-surface hover:bg-theme-hover border border-theme-border text-theme-text-muted hover:text-theme-text text-[11px] font-medium flex items-center gap-1 transition-colors cursor-pointer"
+              title={maskContent ? 'Reveal Note Content' : 'Mask Note Content'}
+            >
+              {maskContent ? (
+                <>
+                  <Eye className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+                  <span>Reveal</span>
+                </>
+              ) : (
+                <>
+                  <EyeOff className="w-3 h-3" />
+                  <span>Mask</span>
+                </>
+              )}
+            </button>
+            <span className="text-[11px] text-theme-text-dim font-mono">
+              {notes.length} characters
+            </span>
+          </div>
         </div>
         <textarea
           rows={9}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Type or paste confidential notes, secrets, cryptographic seed phrases, or private documents here..."
+          style={maskContent ? ({ WebkitTextSecurity: 'disc' } as React.CSSProperties) : undefined}
           className="w-full input-themed rounded-xl p-4 text-sm placeholder-slate-400 focus:outline-none font-mono resize-y leading-relaxed"
         />
       </div>

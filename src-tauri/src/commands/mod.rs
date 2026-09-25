@@ -7,9 +7,10 @@ use uuid::Uuid;
 use crate::totp::generator::{generate_totp_code as calc_totp, validate_totp_secret};
 use crate::vault::health::evaluate_vault_health;
 use crate::vault::manager::SharedVaultManager;
+use crate::security::{apply_screen_protection, ScreenProtectionStatus};
 use crate::vault::models::{
     DecryptedEntry, DocumentDetail, DocumentMetadata, ImportCommitOptions, ImportPreview,
-    ImportResultSummary, PwGenConfig, SaveDocumentInput, SavePageInput, TotpResult,
+    ImportResultSummary, LoginFolder, PwGenConfig, SaveDocumentInput, SavePageInput, TotpResult,
     VaultHealthReport, VaultStatus,
 };
 
@@ -684,6 +685,169 @@ pub fn import_plaintext_csv(
     }
 
     Ok(count)
+}
+
+#[derive(serde::Serialize)]
+pub struct AppVersionInfo {
+    pub version: String,
+    pub os: String,
+    pub arch: String,
+}
+
+#[tauri::command]
+pub fn get_app_version() -> AppVersionInfo {
+    AppVersionInfo {
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        os: std::env::consts::OS.to_string(),
+        arch: std::env::consts::ARCH.to_string(),
+    }
+}
+
+#[tauri::command]
+pub fn get_login_folders(state: State<'_, SharedVaultManager>) -> Result<Vec<LoginFolder>, String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    manager.get_login_folders()
+}
+
+#[tauri::command]
+pub fn create_login_folder(
+    state: State<'_, SharedVaultManager>,
+    name: String,
+    parent_id: Option<String>,
+) -> Result<LoginFolder, String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    manager.create_login_folder(&name, parent_id)
+}
+
+#[tauri::command]
+pub fn rename_login_folder(
+    state: State<'_, SharedVaultManager>,
+    id: String,
+    name: String,
+) -> Result<(), String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    manager.rename_login_folder(&id, &name)
+}
+
+#[tauri::command]
+pub fn delete_login_folder(
+    state: State<'_, SharedVaultManager>,
+    id: String,
+    delete_contents: bool,
+) -> Result<(), String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    manager.delete_login_folder(&id, delete_contents)
+}
+
+#[tauri::command]
+pub fn move_entry_to_folder(
+    state: State<'_, SharedVaultManager>,
+    entry_id: String,
+    folder_id: Option<String>,
+) -> Result<(), String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    manager.move_entry_to_folder(&entry_id, folder_id)
+}
+
+#[tauri::command]
+pub fn setup_biometric_unlock(
+    state: State<'_, SharedVaultManager>,
+    master_password: String,
+) -> Result<String, String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    manager.setup_biometric_unlock(&master_password)
+}
+
+#[tauri::command]
+pub fn unlock_vault_biometric(
+    state: State<'_, SharedVaultManager>,
+    biometric_token: String,
+) -> Result<bool, String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    manager.unlock_vault_biometric(&biometric_token)
+}
+
+#[tauri::command]
+pub fn disable_biometric_unlock(state: State<'_, SharedVaultManager>) -> Result<(), String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    manager.disable_biometric_unlock()
+}
+
+#[tauri::command]
+pub fn is_biometric_enabled(state: State<'_, SharedVaultManager>) -> Result<bool, String> {
+    let manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    Ok(manager.is_biometric_enabled())
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct BiometricCapability {
+    pub supported: bool,
+    pub platform: String,
+    pub description: String,
+}
+
+#[tauri::command]
+pub fn check_biometric_capability() -> Result<BiometricCapability, String> {
+    #[cfg(target_os = "android")]
+    {
+        Ok(BiometricCapability {
+            supported: true,
+            platform: "android".to_string(),
+            description: "Android BiometricPrompt & Keystore hardware capability".to_string(),
+        })
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Ok(BiometricCapability {
+            supported: false,
+            platform: "linux".to_string(),
+            description: "Biometric hardware is not available on standard Linux desktop; master password is used".to_string(),
+        })
+    }
+    #[cfg(target_os = "windows")]
+    {
+        Ok(BiometricCapability {
+            supported: false,
+            platform: "windows".to_string(),
+            description: "Windows Hello biometric integration requires hardware enrollment".to_string(),
+        })
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Ok(BiometricCapability {
+            supported: false,
+            platform: "macos".to_string(),
+            description: "Touch ID requires local authentication hardware".to_string(),
+        })
+    }
+    #[cfg(not(any(target_os = "android", target_os = "linux", target_os = "windows", target_os = "macos")))]
+    {
+        Ok(BiometricCapability {
+            supported: false,
+            platform: "unknown".to_string(),
+            description: "Biometric authentication not supported on this platform".to_string(),
+        })
+    }
+}
+
+#[tauri::command]
+pub fn set_screen_protection(
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<ScreenProtectionStatus, String> {
+    apply_screen_protection(&app, enabled)
+}
+
+#[tauri::command]
+pub fn clear_clipboard() -> Result<(), String> {
+    crate::clipboard::manager::clear_os_clipboard();
+    Ok(())
+}
+
+#[tauri::command]
+pub fn schedule_clipboard_wipe(clear_after_secs: u64) -> Result<(), String> {
+    crate::clipboard::manager::schedule_clipboard_wipe(clear_after_secs);
+    Ok(())
 }
 
 #[cfg(test)]

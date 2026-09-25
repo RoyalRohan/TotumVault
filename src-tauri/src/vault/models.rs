@@ -61,6 +61,8 @@ pub struct DecryptedEntry {
     pub created_at: String,
     pub updated_at: String,
     pub last_used_at: Option<String>,
+    #[serde(default)]
+    pub folder_id: Option<String>,
 
     // Authenticator extensions
     #[serde(default)]
@@ -137,6 +139,17 @@ pub struct DecryptedEntryHeader {
     pub tags: Vec<String>,
     pub has_totp: bool,
     pub updated_at: String,
+    #[serde(default)]
+    pub folder_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct LoginFolder {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub parent_id: Option<String>,
+    pub created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

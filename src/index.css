@@ -382,3 +382,31 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Privacy Screen Shield Active State */
+body.totum-privacy-shield-active #root {
+  filter: blur(36px) grayscale(80%) brightness(0.2);
+  pointer-events: none !important;
+  user-select: none !important;
+  transition: filter 0.15s ease-out, opacity 0.15s ease-out;
+  opacity: 0.1;
+}
+
+/* Print Protection against credential leakage */
+@media print {
+  html, body, #root, #root * {
+    visibility: hidden !important;
+    display: none !important;
+  }
+  body::before {
+    content: "Protected by TotumVault — Printing sensitive credentials and documents is prohibited.";
+    visibility: visible !important;
+    display: block !important;
+    text-align: center;
+    padding: 80px 20px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+  }
+}
+

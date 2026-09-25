@@ -22,6 +22,7 @@ import { DocumentDetail, DocumentCategoryType } from '../../types';
 import { getCategoryConfig, formatBytes, DOCUMENT_CATEGORIES } from './documentUtils';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
+import { useHorizontalScroll } from '../../utils/useHorizontalScroll';
 
 interface DocumentViewerModalProps {
   documentId: string | null;
@@ -66,6 +67,9 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const [showDeleteDocConfirm, setShowDeleteDocConfirm] = useState<boolean>(false);
   const [showDeletePageConfirm, setShowDeletePageConfirm] = useState<boolean>(false);
   const [isEditingMetadata, setIsEditingMetadata] = useState<boolean>(false);
+
+  // Mouse wheel horizontal scrolling for thumbnails
+  const { scrollRef: thumbnailsScrollRef } = useHorizontalScroll<HTMLDivElement>();
 
   // Edit metadata form state
   const [editTitle, setEditTitle] = useState('');
@@ -822,7 +826,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
       {/* BOTTOM TOOLBAR: MULTI-PAGE THUMBNAIL CAROUSEL & PAGE ACTIONS */}
       <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-zinc-950/85 border-t border-zinc-800/80 backdrop-blur-lg shrink-0 z-20 flex flex-col sm:flex-row items-center justify-between gap-2 pb-safe pl-safe pr-safe">
         {/* Thumbnails strip */}
-        <div className="flex items-center gap-2 overflow-x-auto max-w-full sm:max-w-xl py-1 scrollbar-none">
+        <div ref={thumbnailsScrollRef} className="flex items-center gap-2 overflow-x-auto max-w-full sm:max-w-xl py-1 scrollbar-none select-none">
           {documentDetail?.pages.map((page, idx) => (
             <button
               key={page.id}

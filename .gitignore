@@ -29,3 +29,12 @@ totumvault_data
 *.njsproj
 *.sln
 *.sw?
+
+# Tests, scratch and mock files
+scratch/
+src/mock/
+*.test.js
+*.test.mjs
+*.test.ts
+test_*.mjs
+test_*.js

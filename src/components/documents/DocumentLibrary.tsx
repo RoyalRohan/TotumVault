@@ -9,9 +9,13 @@ import {
   Calendar,
   Layers,
   ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { DOCUMENT_CATEGORIES, getCategoryConfig } from './documentUtils';
+import { getLicenseStatus } from '../../utils/license';
+import { useHorizontalScroll } from '../../utils/useHorizontalScroll';
 
 interface DocumentLibraryProps {
   onOpenScanner: (mode: 'camera' | 'upload') => void;
@@ -28,6 +32,16 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title' | 'title_desc' | 'expiry'>('newest');
+
+  // Mouse wheel and drag horizontal scrolling for category filter chips
+  const {
+    scrollRef: chipsScrollRef,
+    canScrollLeft,
+    canScrollRight,
+    scrollByLeft,
+    scrollByRight,
+    isDragging,
+  } = useHorizontalScroll<HTMLDivElement>();
 
   // Filter & sort documents
   const filteredDocuments = useMemo(() => {
@@ -77,7 +91,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
   const favoritesCount = useMemo(() => documents.filter((d) => d.favorite).length, [documents]);
 
   return (
-    <div className="flex-1 flex flex-col h-full overflow-hidden bg-theme-bg select-none">
+    <div className="flex-1 min-h-0 min-w-0 w-full flex flex-col h-full overflow-hidden bg-theme-bg select-none">
       {/* HEADER SECTION */}
       <div className="px-3.5 sm:px-5 py-3 sm:py-4 border-b border-theme-border shrink-0 bg-theme-surface/40 backdrop-blur-md">
         <div className="flex items-center justify-between gap-3">
@@ -120,62 +134,95 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
         {/* SEARCH, FILTER CHIPS & TOOLBAR */}
         <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
           {/* Category Filter Chips Bar */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none -mx-3.5 px-3.5 sm:mx-0 sm:px-0">
-            <button
-              type="button"
-              onClick={() => setSelectedCategory('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                selectedCategory === 'all'
-                  ? 'bg-purple-600 text-white shadow-xs'
-                  : 'bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/80 dark:hover:bg-theme-hover'
+          <div className="relative flex-1 min-w-0 flex items-center group -mx-3.5 px-3.5 sm:mx-0 sm:px-0">
+            {/* Left Scroll Chevron Button (Desktop) */}
+            {canScrollLeft && (
+              <button
+                type="button"
+                onClick={() => scrollByLeft(220)}
+                aria-label="Scroll categories left"
+                className="absolute left-0 z-10 hidden sm:flex items-center justify-center w-6 h-6 rounded-full bg-white dark:bg-theme-surface border border-slate-200 dark:border-theme-border text-slate-700 dark:text-theme-text shadow-sm hover:bg-slate-100 dark:hover:bg-theme-hover active:scale-95 transition-all cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            <div
+              ref={chipsScrollRef}
+              className={`flex-1 flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none select-none scroll-smooth ${
+                canScrollLeft ? 'sm:pl-7' : ''
+              } ${canScrollRight ? 'sm:pr-7' : ''} ${
+                isDragging ? 'cursor-grabbing' : 'cursor-grab'
               }`}
             >
-              All ({documents.length})
-            </button>
+              <button
+                type="button"
+                onClick={() => setSelectedCategory('all')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                  selectedCategory === 'all'
+                    ? 'bg-purple-600 text-white shadow-xs'
+                    : 'bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/80 dark:hover:bg-theme-hover'
+                }`}
+              >
+                All ({documents.length})
+              </button>
 
-            <button
-              type="button"
-              onClick={() => setSelectedCategory('favorites')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                selectedCategory === 'favorites'
-                  ? 'bg-amber-500 text-white shadow-xs'
-                  : 'bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/80 dark:hover:bg-theme-hover'
-              }`}
-            >
-              <Star className="w-3.5 h-3.5 fill-current" />
-              <span>Starred ({favoritesCount})</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setSelectedCategory('favorites')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                  selectedCategory === 'favorites'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/80 dark:hover:bg-theme-hover'
+                }`}
+              >
+                <Star className="w-3.5 h-3.5 fill-current" />
+                <span>Starred ({favoritesCount})</span>
+              </button>
 
-            {DOCUMENT_CATEGORIES.map((cat) => {
-              const Icon = cat.icon;
-              const count = documents.filter((d) => d.doc_type === cat.id).length;
-              const isSelected = selectedCategory === cat.id;
+              {DOCUMENT_CATEGORIES.map((cat) => {
+                const Icon = cat.icon;
+                const count = documents.filter((d) => d.doc_type === cat.id).length;
+                const isSelected = selectedCategory === cat.id;
 
-              return (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
-                    isSelected
-                      ? 'bg-purple-600 text-white shadow-xs'
-                      : 'bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/80 dark:hover:bg-theme-hover'
-                  }`}
-                >
-                  <Icon className={`w-3.5 h-3.5 stroke-[1.75] ${isSelected ? 'text-white' : 'text-purple-600 dark:text-purple-400'}`} />
-                  <span>{cat.label}</span>
-                  {count > 0 && (
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
                       isSelected
-                        ? 'bg-purple-700 text-white'
-                        : 'bg-slate-100 dark:bg-theme-elevated text-slate-700 dark:text-theme-text-muted border border-slate-200 dark:border-theme-border font-bold'
-                    }`}>
-                      {count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                        ? 'bg-purple-600 text-white shadow-xs'
+                        : 'bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/80 dark:hover:bg-theme-hover'
+                    }`}
+                  >
+                    <Icon className={`w-3.5 h-3.5 stroke-[1.75] ${isSelected ? 'text-white' : 'text-purple-600 dark:text-purple-400'}`} />
+                    <span>{cat.label}</span>
+                    {count > 0 && (
+                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                        isSelected
+                          ? 'bg-purple-700 text-white'
+                          : 'bg-slate-100 dark:bg-theme-elevated text-slate-700 dark:text-theme-text-muted border border-slate-200 dark:border-theme-border font-bold'
+                      }`}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Right Scroll Chevron Button (Desktop) */}
+            {canScrollRight && (
+              <button
+                type="button"
+                onClick={() => scrollByRight(220)}
+                aria-label="Scroll categories right"
+                className="absolute right-0 z-10 hidden sm:flex items-center justify-center w-6 h-6 rounded-full bg-white dark:bg-theme-surface border border-slate-200 dark:border-theme-border text-slate-700 dark:text-theme-text shadow-sm hover:bg-slate-100 dark:hover:bg-theme-hover active:scale-95 transition-all cursor-pointer"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* View Toggle & Sort Controls */}
@@ -228,7 +275,12 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
       </div>
 
       {/* DOCUMENT LIST / GRID VIEWPORT */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-5 pb-24 sm:pb-8 pb-safe pl-safe pr-safe">
+      <div
+        className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 pb-28 sm:pb-8 pb-safe pl-safe pr-safe overscroll-y-contain focus:outline-none"
+        tabIndex={0}
+        role="region"
+        aria-label="Documents collection"
+      >
         {filteredDocuments.length === 0 ? (
           /* EMPTY STATE */
           <div className="h-full flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto space-y-4">
@@ -284,9 +336,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
             {filteredDocuments.map((doc) => {
               const catConfig = getCategoryConfig(doc.doc_type);
               const CatIcon = catConfig.icon;
-              const isExpired = doc.expiry_date
-                ? new Date(doc.expiry_date).getTime() < Date.now()
-                : false;
+              const isExpired = getLicenseStatus(doc.expiry_date) === 'expired';
 
               return (
                 <div
@@ -409,9 +459,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
             {filteredDocuments.map((doc) => {
               const catConfig = getCategoryConfig(doc.doc_type);
               const CatIcon = catConfig.icon;
-              const isExpired = doc.expiry_date
-                ? new Date(doc.expiry_date).getTime() < Date.now()
-                : false;
+              const isExpired = getLicenseStatus(doc.expiry_date) === 'expired';
 
               return (
                 <div

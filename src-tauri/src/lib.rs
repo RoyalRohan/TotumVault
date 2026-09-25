@@ -5,6 +5,7 @@ pub mod clipboard;
 pub mod commands;
 pub mod crypto;
 pub mod db;
+pub mod security;
 pub mod totp;
 pub mod vault;
 
@@ -69,6 +70,20 @@ pub fn run() {
             commands::reorder_document_pages,
             commands::toggle_document_favorite,
             commands::read_source_file,
+            commands::get_app_version,
+            commands::get_login_folders,
+            commands::create_login_folder,
+            commands::rename_login_folder,
+            commands::delete_login_folder,
+            commands::move_entry_to_folder,
+            commands::setup_biometric_unlock,
+            commands::unlock_vault_biometric,
+            commands::disable_biometric_unlock,
+            commands::is_biometric_enabled,
+            commands::check_biometric_capability,
+            commands::set_screen_protection,
+            commands::clear_clipboard,
+            commands::schedule_clipboard_wipe,
         ])
 
         .run(tauri::generate_context!())

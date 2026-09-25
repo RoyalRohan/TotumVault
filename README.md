@@ -29,18 +29,25 @@ TotumVault supports purpose-built records for logins, secure notes, authenticato
 
 - **Local-first vault** — credentials and documents stay on the device unless you explicitly export an encrypted backup.
 - **Encrypted storage** — sensitive entry payloads and document pages are protected with AES-256-GCM authenticated encryption using unique random nonces.
+- **Privacy Screen Shield & Capture Defense** — hardware window display affinity (`WDA_EXCLUDEFROMCAPTURE` on Windows, native compositor isolation on Wayland, `FLAG_SECURE` on Android) paired with an active application privacy shield that obscures the window with deep frosted glass (`blur(36px)`) when unfocused, minimized, or upon screenshot shortcut detection (`PrintScreen`, `Win+Shift+S`, `Ctrl+Shift+S`).
+- **Multi-Tier Smart Clipboard Protection** — background OS clipboard purges (`wl-copy` on Wayland, `xclip`/`xsel` on X11, `clip` on Windows, `pbcopy` on macOS) with non-collapsed range replacement, return-to-window sticky flush, and custom countdowns (`5s`, `15s`, `30s`, `60s`, `Never`) or manual instant purge.
+- **Secure Notes Hide / Reveal** — instant Eye/Eye-Off toggle to mask sensitive private note contents with automatic visibility reset upon closing or vault lock.
+- **Software License Expiry Engine** — local calendar date boundary evaluation (active through 23:59:59.999 local time) and ISO timezone preservation with categorized sections (*Active*, *Expires Soon*, *Expired*, and *Lifetime / No Expiry*).
+- **Hierarchical Login Subfolders** — create, rename, and delete nested folders with safe cascade deletion and unified instant search across all subfolders.
+- **Hardware Biometric Unlock** — unlock on supported platforms with Class 3 Strong Biometrics (`BIOMETRIC_STRONG`) with hardware Keystore binding and a 3-attempt lockout policy.
 - **Secure Document & Bill Vault** — safely scan and store bills, receipts, IDs, certificates, warranties, and insurance cards.
 - **On-Device Scanner & Perspective Crop** — live camera capture with viewfinder, image uploads, automatic local contrast edge detection, 4-corner perspective adjustment, 90° rotation, and document text clarity enhancement.
 - **Multi-Page Carousel Viewer** — high-resolution pan and zoom, bottom thumbnail strip, page reordering, page deletion, and metadata management.
+- **Horizontal Mouse Scroll & Pan** — mouse wheel horizontal scrolling, click-and-drag pan, and navigation buttons for category chips and document carousels.
+- **Curated Typography Selection** — choose between 5 developer-grade fonts (**Inter**, **Geist Sans**, **IBM Plex Sans**, **JetBrains Mono**, **Fira Code**) with clean interface rendering.
 - **Safe Import with Conflict Resolution** — pre-inspect backup files (`.tvault`, legacy `.vlock`) and spreadsheets (`.csv`) before writing to disk; choose between non-destructive merge ("Add to Existing Vault") and explicit confirmation for overwrite ("Replace Existing Vault"), with duplicate resolution strategies (Keep Existing, Import Both, Replace Existing).
 - **Dual-Layer Transaction Safety** — SQLite transaction safety combined with automatic physical snapshot backup and rollback to prevent corruption during imports.
 - **Password-based key protection** — Argon2id derives the key that unwraps the Vault Encryption Key (VEK).
-- **Secure clipboard handling** — copied secrets are cleared automatically after a configurable countdown.
 - **Built-in authenticator** — offline RFC 6238 TOTP generation with configurable intervals and hash algorithms.
 - **Password generator** — cryptographically secure password and passphrase generation using OS CSPRNG.
 - **Security health audit** — identify weak, reused, or missing-2FA credentials with Shannon-entropy scoring.
 - **Encrypted `.tvault` backups** — portable vault archives containing all credentials and document pages (with backward compatibility for legacy `.vlock` archives).
-- **Custom fields and tags** — keep extra credentials, files, and metadata organized with interactive search.
+- **Auto Update Checker** — integrated GitHub releases update checker with direct download notes.
 - **Dark, Light, and System themes** — modern dark-purple glass-panel interface with full system theme synchronization.
 - **Cross-platform releases** — native builds for Windows, macOS, Ubuntu/Debian, Fedora/RPM, Arch Linux, and Android.
 
@@ -48,12 +55,12 @@ TotumVault supports purpose-built records for logins, secure notes, authenticato
 
 | Type | Intended for | Examples |
 |---|---|---|
-| **Logins** | Website and application accounts | Username, password, URL, optional TOTP |
-| **Documents & Bills** | Bills, IDs, receipts, contracts, records | Multi-page scans, bills, IDs, warranties, receipts |
-| **Secure Notes** | Private text and recovery information | Recovery codes, confidential notes |
+| **Logins & Folders** | Website and app accounts organized in nested folders | Username, password, URL, optional TOTP, folder hierarchy |
+| **Documents & Bills** | Bills, IDs, receipts, contracts, records | Multi-page scans, bills, IDs, warranties, receipts, favorites |
+| **Secure Notes** | Private text and recovery information with eye-toggle masking | Recovery codes, confidential notes, seed phrases |
 | **Authenticators** | Standalone 2FA secrets | TOTP secret, issuer, account |
-| **Payment Cards** | Card credentials | Card number, expiry, CVV, billing address |
-| **Software Licenses** | Product licenses | License key, publisher, version, dates |
+| **Payment Cards** | Card credentials | Card number, expiry, CVV, billing address, PIN |
+| **Software Licenses** | Product licenses with dynamic expiry tracking | License key, vendor, version, dates, lifetime/active badges |
 | **Servers & SSH** | Infrastructure credentials | Host, port, protocol, username, SSH key |
 | **API Credentials** | Developer/service secrets | Endpoint, API key, token, client credentials |
 

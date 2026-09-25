@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Copy, Check } from 'lucide-react';
+import { useVault } from '../../../context/VaultContext';
 
 interface SecretInputProps {
   label?: string;
@@ -28,6 +29,7 @@ export const SecretInput: React.FC<SecretInputProps> = ({
   className = '',
   isSecret = true,
 }) => {
+  const { copyToClipboard } = useVault();
   const [revealed, setRevealed] = useState(!isSecret);
   const [copied, setCopied] = useState(false);
 
@@ -36,7 +38,7 @@ export const SecretInput: React.FC<SecretInputProps> = ({
     if (onCopy) {
       onCopy(value, copyLabel);
     } else {
-      navigator.clipboard.writeText(value);
+      copyToClipboard(value, copyLabel);
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

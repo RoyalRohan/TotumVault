@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Globe, User, Mail, Clock, FileText } from 'lucide-react';
+import { Globe, User, Mail, Clock, FileText, Folder } from 'lucide-react';
 import { DecryptedEntry, CustomField, CategoryType } from '../../types';
+import { useVault } from '../../context/VaultContext';
 import { EntryFormShell } from './shared/EntryFormShell';
 import { PasswordField } from './shared/PasswordField';
 import { SecretInput } from './shared/SecretInput';
@@ -23,7 +24,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   onCategoryChange,
   onGeneratePassword,
 }) => {
+  const { folders, selectedFolderId } = useVault();
   const [title, setTitle] = useState(initialData?.title || '');
+  const [folderId, setFolderId] = useState<string | null>(
+    initialData?.folder_id ?? (selectedFolderId && selectedFolderId !== '__unfiled__' ? selectedFolderId : null)
+  );
   const [username, setUsername] = useState(initialData?.username || '');
   const [email, setEmail] = useState(initialData?.email || '');
   const [password, setPassword] = useState(initialData?.password || '');
@@ -50,6 +55,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       email: email.trim(),
       password,
       url: url.trim(),
+      folder_id: folderId || null,
       notes: notes.trim(),
       category: 'logins',
       favorite,
@@ -75,9 +81,9 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       onSubmit={handleSubmit}
       submitDisabled={!title.trim()}
     >
-      {/* Title & Website */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
+      {/* Title, Website & Folder */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="sm:col-span-1">
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5">
             Title / Service <span className="text-rose-400">*</span>
           </label>
@@ -85,14 +91,14 @@ export const LoginForm: React.FC<LoginFormProps> = ({
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. GitHub, Google, Netflix..."
+            placeholder="e.g. GitHub, Google..."
             required
             autoFocus
             className="w-full input-themed rounded-xl px-3.5 py-2.5 text-sm placeholder-slate-400 focus:outline-none"
           />
         </div>
 
-        <div>
+        <div className="sm:col-span-1">
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />
             <span>Website URL</span>
@@ -104,6 +110,25 @@ export const LoginForm: React.FC<LoginFormProps> = ({
             placeholder="https://example.com/login"
             className="w-full input-themed rounded-xl px-3.5 py-2.5 text-sm font-mono placeholder-slate-400 focus:outline-none"
           />
+        </div>
+
+        <div className="sm:col-span-1">
+          <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5 flex items-center gap-1.5">
+            <Folder className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />
+            <span>Folder</span>
+          </label>
+          <select
+            value={folderId || ''}
+            onChange={(e) => setFolderId(e.target.value || null)}
+            className="w-full input-themed rounded-xl px-3.5 py-2.5 text-sm focus:outline-none bg-theme-surface text-theme-text"
+          >
+            <option value="">(No Folder / Root)</option>
+            {folders.map((f) => (
+              <option key={f.id} value={f.id}>
+                📁 {f.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Sparkles, Copy, Check } from 'lucide-react';
 import { calculatePasswordStrength, calculateEntropy } from '../../../utils/cryptoUtils';
+import { useVault } from '../../../context/VaultContext';
 
 interface PasswordFieldProps {
   value: string;
@@ -23,6 +24,7 @@ export const PasswordField: React.FC<PasswordFieldProps> = ({
   className = '',
   onCopy,
 }) => {
+  const { copyToClipboard } = useVault();
   const [show, setShow] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -34,7 +36,7 @@ export const PasswordField: React.FC<PasswordFieldProps> = ({
     if (onCopy) {
       onCopy(value, label);
     } else {
-      navigator.clipboard.writeText(value);
+      copyToClipboard(value, label);
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

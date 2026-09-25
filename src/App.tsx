@@ -17,6 +17,7 @@ import { Toast } from './components/Toast';
 import { DocumentLibrary } from './components/documents/DocumentLibrary';
 import { DocumentScannerModal } from './components/documents/DocumentScannerModal';
 import { DocumentViewerModal } from './components/documents/DocumentViewerModal';
+import { PrivacyShieldOverlay } from './components/PrivacyShieldOverlay';
 
 const MainAppContent: React.FC = () => {
   const {
@@ -49,10 +50,10 @@ const MainAppContent: React.FC = () => {
       <Sidebar />
 
       {/* Main Workspace Area */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+      <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden min-w-0">
         <Header />
 
-        <div className="flex-1 flex overflow-hidden relative min-w-0">
+        <div className="flex-1 flex overflow-hidden relative min-w-0 min-h-0 h-full">
           {activeCategory === 'health' ? (
             <SecurityHealthDashboard />
           ) : activeCategory === 'documents' ? (
@@ -109,6 +110,7 @@ const MainAppContent: React.FC = () => {
         }}
       />
 
+      <PrivacyShieldOverlay />
       <Toast />
     </div>
   );

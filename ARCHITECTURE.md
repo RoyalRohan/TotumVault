@@ -123,7 +123,24 @@ The theme system is implemented through `ThemeContext` and CSS variables. The su
 
 The preference is stored in `localStorage` and applied through a root `data-theme` attribute.
 
-## 9. Development principles
+## 9. Privacy Screen Protection & Display Affinity
+
+TotumVault protects against window mirroring, OS task-switcher capture, shoulder-surfing, and screenshot recording:
+
+- **OS Display Affinity**: Where supported, native window display flags (`SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` on Windows, native compositor window isolation on Linux Wayland, and `FLAG_SECURE` on Android) prevent external processes and screen recorders from capturing the window.
+- **Application Privacy Shield**: A full-screen frosted glass overlay (`PrivacyShieldOverlay`) automatically activates whenever the window blurs (loses focus), the tab is hidden, or screenshot shortcuts are detected (`PrintScreen`, `Win+Shift+S`, `Ctrl+Shift+S`, `Cmd+Shift+3/4/5`, and `Ctrl+P`).
+- **Deep Viewport Blur & Print Protection**: The underlying `#root` DOM element receives `filter: blur(36px) grayscale(80%) brightness(0.2); opacity: 0.1` and pointer/selection cancellation while shielded. `@media print` rules completely replace the DOM with an anti-printing notice.
+
+## 10. Multi-Tier Clipboard Sanitization
+
+Clipboard auto-clear prevents sensitive credentials from lingering in memory or in third-party clipboard managers:
+
+- **Tauri Native OS Command**: Rust backend commands execute platform-level wipes (`wl-copy -c` and `wl-copy -c -p` on Linux Wayland, `xclip`/`xsel` on X11, `cmd /c clip` on Windows, `pbcopy` on macOS).
+- **Non-Collapsed DOM Overwrite**: Fallback sanitization in the DOM uses a non-collapsed selection range (`' '`) so that `document.execCommand('copy')` reliably overwrites previous clipboard contents.
+- **Sticky Gesture-Flushing**: When browser sandbox restrictions prevent background unfocused tabs from clearing the clipboard, a pending flush flag is preserved and executes on the very first user interaction (`pointerdown`, `mousedown`, `keydown`, `focus`).
+- **Immediate Purge**: The clipboard is automatically purged when the vault locks, when a screenshot attempt is intercepted, or via the manual "Clear Clipboard Now" action.
+
+## 11. Development principles
 
 When modifying the codebase:
 
