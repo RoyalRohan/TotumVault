@@ -4,6 +4,15 @@ All notable changes to TotumVault are documented here.
 
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [1.3.1] — 2026-09-25
+
+### Fixed
+
+- **Automatic Startup Update Check**: Automatically checks GitHub releases upon launch and displays an interactive update banner and notification toast with a direct download button.
+- **Android Biometric Unlock**: Resolved hardware detection bug on Android devices, enabled fingerprint authentication without false warnings, and persisted the biometric vault key in `localStorage` across app restarts.
+- **True Empty Clipboard Purge**: Eliminated the plain-text space bug (`' '`) that created unwanted entries in clipboard history; now performs true empty buffer clearing (`""`) and native Win32 `EmptyClipboard()`.
+- **Default Auto-Clear Timer**: Updated the default clipboard auto-clear timeout to **60s**.
+
 ## [1.3.0] — 2026-09-25
 
 ### Added

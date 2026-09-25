@@ -17,7 +17,7 @@ export function compareSemver(current: string, latest: string): number {
 
 export async function checkAppUpdate(): Promise<UpdateInfo> {
   let appVersion: AppVersionInfo = {
-    version: '1.3.0',
+    version: '1.3.1',
     os: 'linux',
     arch: 'x86_64',
   };
