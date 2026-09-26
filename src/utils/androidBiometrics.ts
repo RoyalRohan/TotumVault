@@ -17,6 +17,32 @@ declare global {
         reject: (err: any) => void;
       }
     >;
+    __totumBioPromptActive?: boolean;
+    __totumOnWindowFocus?: (focused: boolean) => void;
+  }
+}
+
+let localBioPromptActive = false;
+
+/**
+ * Returns true if native Android BiometricPrompt or system biometric modal is currently active.
+ * Used by PrivacyShieldOverlay to prevent false-positive screen shield obscuration.
+ */
+export function isBiometricPromptActive(): boolean {
+  if (localBioPromptActive) return true;
+  if (typeof window !== 'undefined' && Boolean(window.__totumBioPromptActive)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Explicitly sets biometric prompt active state.
+ */
+export function setBiometricPromptActive(active: boolean): void {
+  localBioPromptActive = active;
+  if (typeof window !== 'undefined') {
+    window.__totumBioPromptActive = active;
   }
 }
 
@@ -105,16 +131,25 @@ export function androidEncryptSecret(secretB64: string): Promise<string> {
       window.__bioCallbacks = {};
     }
 
+    setBiometricPromptActive(true);
+
     const callbackId = 'bio_enc_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
 
     window.__bioCallbacks[callbackId] = {
-      resolve: (val: string) => resolve(val),
-      reject: (err: any) => reject(new Error(typeof err === 'string' ? err : 'Biometric enrollment failed')),
+      resolve: (val: string) => {
+        setBiometricPromptActive(false);
+        resolve(val);
+      },
+      reject: (err: any) => {
+        setBiometricPromptActive(false);
+        reject(new Error(typeof err === 'string' ? err : 'Biometric enrollment failed'));
+      },
     };
 
     try {
       window.AndroidBiometrics!.encryptSecret(secretB64, callbackId);
     } catch (err: any) {
+      setBiometricPromptActive(false);
       delete window.__bioCallbacks[callbackId];
       reject(err);
     }
@@ -136,11 +171,17 @@ export function androidDecryptSecret(): Promise<string> {
       window.__bioCallbacks = {};
     }
 
+    setBiometricPromptActive(true);
+
     const callbackId = 'bio_dec_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
 
     window.__bioCallbacks[callbackId] = {
-      resolve: (decryptedSecret: string) => resolve(decryptedSecret),
+      resolve: (decryptedSecret: string) => {
+        setBiometricPromptActive(false);
+        resolve(decryptedSecret);
+      },
       reject: (err: any) => {
+        setBiometricPromptActive(false);
         const errMsg = typeof err === 'string' ? err : 'Biometric authentication failed';
         reject(new Error(errMsg));
       },
@@ -149,6 +190,7 @@ export function androidDecryptSecret(): Promise<string> {
     try {
       window.AndroidBiometrics!.decryptSecret(callbackId);
     } catch (err: any) {
+      setBiometricPromptActive(false);
       delete window.__bioCallbacks[callbackId];
       reject(err);
     }

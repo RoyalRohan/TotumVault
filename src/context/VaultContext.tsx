@@ -30,6 +30,7 @@ import {
   androidEncryptSecret,
   androidDecryptSecret,
   androidClearEnrolledKey,
+  setBiometricPromptActive,
 } from '../utils/androidBiometrics';
 import { checkAppUpdate } from '../utils/updater';
 
@@ -582,8 +583,19 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const token = await invoke<string>('setup_biometric_unlock', { masterPassword });
 
       if (isAndroidBiometricsAvailable()) {
-        // Real native Android Keystore BIOMETRIC_STRONG encryption
-        await androidEncryptSecret(token);
+        try {
+          // Real native Android Keystore BIOMETRIC_STRONG encryption
+          await androidEncryptSecret(token);
+        } finally {
+          setBiometricPromptActive(false);
+          if (typeof window !== 'undefined') {
+            window.__totumBioPromptActive = false;
+            window.dispatchEvent(new Event('focus'));
+            if (typeof window.__totumOnWindowFocus === 'function') {
+              window.__totumOnWindowFocus(true);
+            }
+          }
+        }
       } else {
         // Desktop / browser session-scoped storage (never persistent localStorage)
         sessionStorage.setItem('totumvault_bio_token', token);
@@ -637,6 +649,15 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             showToast(`Biometric verification failed (${nextAttempts}/3 attempts)`, 'warning');
           }
           return false;
+        } finally {
+          setBiometricPromptActive(false);
+          if (typeof window !== 'undefined') {
+            window.__totumBioPromptActive = false;
+            window.dispatchEvent(new Event('focus'));
+            if (typeof window.__totumOnWindowFocus === 'function') {
+              window.__totumOnWindowFocus(true);
+            }
+          }
         }
       } else {
         token = sessionStorage.getItem('totumvault_bio_token') || '';
@@ -672,6 +693,15 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setBiometricFailedAttempts(nextAttempts);
       showToast(`Biometric error: ${err?.message || err}`, 'error');
       return false;
+    } finally {
+      setBiometricPromptActive(false);
+      if (typeof window !== 'undefined') {
+        window.__totumBioPromptActive = false;
+        window.dispatchEvent(new Event('focus'));
+        if (typeof window.__totumOnWindowFocus === 'function') {
+          window.__totumOnWindowFocus(true);
+        }
+      }
     }
   }, [biometricFailedAttempts, isBiometricLockedOut, refreshStatus, showToast]);
 

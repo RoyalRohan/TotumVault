@@ -125,15 +125,17 @@ class AndroidBiometricsBridge(private val activity: MainActivity, private val we
 
     private fun callbackSuccess(callbackId: String, data: String) {
         activity.runOnUiThread {
+            webView.requestFocus()
             val quoted = JSONObject.quote(data)
-            webView.evaluateJavascript("if (window.__bioCallbacks && window.__bioCallbacks['$callbackId']) { window.__bioCallbacks['$callbackId'].resolve($quoted); delete window.__bioCallbacks['$callbackId']; }", null)
+            webView.evaluateJavascript("if (typeof window !== 'undefined') { window.__totumBioPromptActive = false; window.dispatchEvent(new CustomEvent('totum-bio-prompt-end')); window.dispatchEvent(new Event('focus')); if (typeof window.__totumOnWindowFocus === 'function') { window.__totumOnWindowFocus(true); } if (window.__bioCallbacks && window.__bioCallbacks['$callbackId']) { window.__bioCallbacks['$callbackId'].resolve($quoted); delete window.__bioCallbacks['$callbackId']; } }", null)
         }
     }
 
     private fun callbackError(callbackId: String, err: String) {
         activity.runOnUiThread {
+            webView.requestFocus()
             val quoted = JSONObject.quote(err)
-            webView.evaluateJavascript("if (window.__bioCallbacks && window.__bioCallbacks['$callbackId']) { window.__bioCallbacks['$callbackId'].reject($quoted); delete window.__bioCallbacks['$callbackId']; }", null)
+            webView.evaluateJavascript("if (typeof window !== 'undefined') { window.__totumBioPromptActive = false; window.dispatchEvent(new CustomEvent('totum-bio-prompt-end')); window.dispatchEvent(new Event('focus')); if (typeof window.__totumOnWindowFocus === 'function') { window.__totumOnWindowFocus(true); } if (window.__bioCallbacks && window.__bioCallbacks['$callbackId']) { window.__bioCallbacks['$callbackId'].reject($quoted); delete window.__bioCallbacks['$callbackId']; } }", null)
         }
     }
 
@@ -177,6 +179,7 @@ class AndroidBiometricsBridge(private val activity: MainActivity, private val we
     @JavascriptInterface
     fun encryptSecret(secretB64: String, callbackId: String) {
         activity.runOnUiThread {
+            webView.evaluateJavascript("if (typeof window !== 'undefined') { window.__totumBioPromptActive = true; window.dispatchEvent(new CustomEvent('totum-bio-prompt-start')); }", null)
             try {
                 val ks = getKeyStore()
                 if (ks.containsAlias(keyAlias)) {
@@ -250,6 +253,7 @@ class AndroidBiometricsBridge(private val activity: MainActivity, private val we
     @JavascriptInterface
     fun decryptSecret(callbackId: String) {
         activity.runOnUiThread {
+            webView.evaluateJavascript("if (typeof window !== 'undefined') { window.__totumBioPromptActive = true; window.dispatchEvent(new CustomEvent('totum-bio-prompt-start')); }", null)
             try {
                 val file = getBioFile()
                 if (!file.exists()) {
@@ -349,9 +353,34 @@ for (const actPath of mainActivityPaths) {
 
       // Add onWebViewCreate override to attach JavaScriptInterface
       const webViewHook = `
+  private var webViewRef: android.webkit.WebView? = null
+
   override fun onWebViewCreate(webView: android.webkit.WebView) {
     super.onWebViewCreate(webView)
+    this.webViewRef = webView
     webView.addJavascriptInterface(AndroidBiometricsBridge(this, webView), "AndroidBiometrics")
+  }
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    if (hasFocus) {
+      webViewRef?.let { wv ->
+        wv.post {
+          wv.requestFocus()
+          wv.evaluateJavascript("if (typeof window !== 'undefined') { window.__totumBioPromptActive = false; window.dispatchEvent(new Event('focus')); if (typeof window.__totumOnWindowFocus === 'function') { window.__totumOnWindowFocus(true); } }", null)
+        }
+      }
+    }
+  }
+
+  override fun onResume() {
+    super.onResume()
+    webViewRef?.let { wv ->
+      wv.post {
+        wv.requestFocus()
+        wv.evaluateJavascript("if (typeof window !== 'undefined') { window.dispatchEvent(new Event('focus')); if (typeof window.__totumOnWindowFocus === 'function') { window.__totumOnWindowFocus(true); } }", null)
+      }
+    }
   }
 `;
 

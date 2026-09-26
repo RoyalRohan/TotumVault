@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ShieldAlert, EyeOff } from 'lucide-react';
 import { useVault } from '../context/VaultContext';
+import { isBiometricPromptActive } from '../utils/androidBiometrics';
 
 export const PrivacyShieldOverlay: React.FC = () => {
   const { screenProtection, isPrivacyShieldTest, dismissPrivacyShieldTest, clearClipboard } = useVault();
   const [isWindowFocused, setIsWindowFocused] = useState<boolean>(true);
   const [isTabHidden, setIsTabHidden] = useState<boolean>(false);
   const [screenshotDetected, setScreenshotDetected] = useState<boolean>(false);
+  const [bioPromptActive, setBioPromptActive] = useState<boolean>(false);
   const screenshotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -15,12 +17,49 @@ export const PrivacyShieldOverlay: React.FC = () => {
     };
 
     const onBlur = () => {
+      // If native BiometricPrompt or system authentication modal is active,
+      // do NOT trigger the privacy shield due to the modal taking temporary window focus.
+      if (isBiometricPromptActive() || (typeof window !== 'undefined' && Boolean(window.__totumBioPromptActive))) {
+        return;
+      }
       setIsWindowFocused(false);
     };
 
     const onVisibilityChange = () => {
+      // Avoid false-positive hidden state during biometric prompt display
+      if (isBiometricPromptActive() || (typeof window !== 'undefined' && Boolean(window.__totumBioPromptActive))) {
+        return;
+      }
       setIsTabHidden(document.visibilityState === 'hidden');
     };
+
+    const handleBioPromptStart = () => {
+      setBioPromptActive(true);
+      setIsWindowFocused(true);
+      setIsTabHidden(false);
+    };
+
+    const handleBioPromptEnd = () => {
+      setBioPromptActive(false);
+      setIsWindowFocused(true);
+      setIsTabHidden(false);
+      if (typeof window !== 'undefined') {
+        window.focus();
+      }
+    };
+
+    // Register native bridge focus hook
+    if (typeof window !== 'undefined') {
+      window.__totumOnWindowFocus = (focused: boolean) => {
+        if (focused) {
+          setBioPromptActive(false);
+          setIsWindowFocused(true);
+          setIsTabHidden(false);
+        } else if (!isBiometricPromptActive() && !window.__totumBioPromptActive) {
+          setIsWindowFocused(false);
+        }
+      };
+    }
 
     const triggerScreenshotShield = () => {
       setScreenshotDetected(true);
@@ -87,6 +126,8 @@ export const PrivacyShieldOverlay: React.FC = () => {
     window.addEventListener('focus', onFocus);
     window.addEventListener('blur', onBlur);
     document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('totum-bio-prompt-start', handleBioPromptStart);
+    window.addEventListener('totum-bio-prompt-end', handleBioPromptEnd);
     window.addEventListener('keydown', onKeyDown, { capture: true });
     window.addEventListener('keyup', onKeyDown, { capture: true });
     window.addEventListener('beforeprint', onBeforePrint);
@@ -102,20 +143,31 @@ export const PrivacyShieldOverlay: React.FC = () => {
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('blur', onBlur);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('totum-bio-prompt-start', handleBioPromptStart);
+      window.removeEventListener('totum-bio-prompt-end', handleBioPromptEnd);
       window.removeEventListener('keydown', onKeyDown, { capture: true });
       window.removeEventListener('keyup', onKeyDown, { capture: true });
       window.removeEventListener('beforeprint', onBeforePrint);
       window.removeEventListener('contextmenu', onContextMenu);
+      if (typeof window !== 'undefined' && window.__totumOnWindowFocus) {
+        window.__totumOnWindowFocus = undefined;
+      }
       if (screenshotTimeoutRef.current) {
         clearTimeout(screenshotTimeoutRef.current);
       }
     };
   }, [screenProtection?.active, clearClipboard]);
 
+  const isPromptingBio =
+    bioPromptActive ||
+    isBiometricPromptActive() ||
+    (typeof window !== 'undefined' && Boolean(window.__totumBioPromptActive));
+
   const isShieldActive =
-    isPrivacyShieldTest ||
-    (Boolean(screenProtection?.active) &&
-      (!isWindowFocused || isTabHidden || screenshotDetected));
+    !isPromptingBio &&
+    (isPrivacyShieldTest ||
+      (Boolean(screenProtection?.active) &&
+        (!isWindowFocused || isTabHidden || screenshotDetected)));
 
   // Apply CSS class to document.body when screen shield is actively obscuring
   useEffect(() => {
@@ -135,11 +187,15 @@ export const PrivacyShieldOverlay: React.FC = () => {
     e?.stopPropagation();
     dismissPrivacyShieldTest();
     setScreenshotDetected(false);
+    setIsWindowFocused(true);
+    setIsTabHidden(false);
     if (screenshotTimeoutRef.current) {
       clearTimeout(screenshotTimeoutRef.current);
       screenshotTimeoutRef.current = null;
     }
-    window.focus();
+    if (typeof window !== 'undefined') {
+      window.focus();
+    }
   };
 
   return (
