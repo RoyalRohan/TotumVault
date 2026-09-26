@@ -13,9 +13,6 @@
     "fs:write-all",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
-    "clipboard-manager:allow-clear",
-    "updater:default",
-    "process:default",
-    "process:allow-restart"
+    "clipboard-manager:allow-clear"
   ]
 }

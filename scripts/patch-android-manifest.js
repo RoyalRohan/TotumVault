@@ -87,7 +87,7 @@ const mainActivityPaths = [
   path.resolve(__dirname, '../src-tauri/gen/android/app/src/main/kotlin/com/royalrohan/veylock/MainActivity.kt')
 ];
 
-const kotlinBridgeCode = `
+const kotlinImports = `
 import android.os.Bundle
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -105,7 +105,9 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import org.json.JSONObject
+`;
 
+const kotlinBridgeCode = `
 class AndroidBiometricsBridge(private val activity: MainActivity, private val webView: WebView) {
     private val keyAlias = "TotumVault_Biometric_Key"
     private val keyStoreType = "AndroidKeyStore"
@@ -153,7 +155,7 @@ class AndroidBiometricsBridge(private val activity: MainActivity, private val we
             val ks = getKeyStore()
             val file = getBioFile()
             return file.exists() && ks.containsAlias(keyAlias)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
             return false
         }
     }
@@ -169,7 +171,7 @@ class AndroidBiometricsBridge(private val activity: MainActivity, private val we
             if (file.exists()) {
                 file.delete()
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {}
     }
 
     @JavascriptInterface
@@ -357,6 +359,14 @@ for (const actPath of mainActivityPaths) {
         actContent = actContent.replace(
           /class MainActivity\s*:\s*[^{]+{/,
           `$&\n${webViewHook}`
+        );
+      }
+
+      // Insert Kotlin imports at top after package statement
+      if (/package\s+[^\n]*\r?\n/.test(actContent)) {
+        actContent = actContent.replace(
+          /package\s+[^\n]*\r?\n/,
+          `$&\n${kotlinImports.trim()}\n`
         );
       }
 
