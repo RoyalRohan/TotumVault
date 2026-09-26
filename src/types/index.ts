@@ -343,5 +343,7 @@ export interface UpdateInfo {
   assetName?: string;
   assetDownloadUrl?: string;
   assetSize?: number;
+  updateObject?: any;
+  isDesktopUpdater?: boolean;
 }
 

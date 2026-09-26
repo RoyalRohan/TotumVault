@@ -38,3 +38,5 @@ src/mock/
 *.test.ts
 test_*.mjs
 test_*.js
+*.key
+*.key.pub

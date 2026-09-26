@@ -133,7 +133,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
                       ) : (
                         <Fingerprint className="w-5 h-5 text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />
                       )}
-                      <span>Unlock with Biometrics</span>
+                      <span>Biometric Unlock</span>
                       {biometricFailedAttempts > 0 && (
                         <span className="text-xs text-rose-500 font-mono">({3 - biometricFailedAttempts} left)</span>
                       )}

@@ -18,6 +18,19 @@ import {
   VaultHealthReport,
   VaultStatus,
 } from '../types';
+import {
+  readText as tauriReadText,
+  writeText as tauriWriteText,
+  clear as tauriClear,
+} from '@tauri-apps/plugin-clipboard-manager';
+import {
+  isAndroidBiometricsAvailable,
+  checkAndroidBiometricHardware,
+  isAndroidBiometricEnrolled,
+  androidEncryptSecret,
+  androidDecryptSecret,
+  androidClearEnrolledKey,
+} from '../utils/androidBiometrics';
 import { checkAppUpdate } from '../utils/updater';
 
 export interface ExportResult {
@@ -86,11 +99,13 @@ interface VaultContextType {
   isCheckingUpdate: boolean;
   checkForUpdates: (manual?: boolean) => Promise<UpdateInfo | null>;
   dismissUpdate: () => void;
+  skipUpdateVersion: (version: string) => void;
+  lastUpdateChecked: string;
 
   // Clipboard Settings & Actions
   clipboardClearSeconds: number;
   setClipboardClearSeconds: (secs: number) => void;
-  clearClipboard: (notify?: boolean) => Promise<boolean>;
+  clearClipboard: (notify?: boolean, force?: boolean) => Promise<boolean>;
 
   // Privacy Screen Shield Test
   isPrivacyShieldTest: boolean;
@@ -194,11 +209,19 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Auto Updates State
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
+  const [lastUpdateChecked, setLastUpdateChecked] = useState<string>(() => {
+    return localStorage.getItem('totumvault_last_update_check') || '';
+  });
 
-  // Smart Clipboard Settings & State
+  const skipUpdateVersion = useCallback((version: string) => {
+    localStorage.setItem('totumvault_skipped_version', version);
+    setUpdateInfo(null);
+  }, []);
+
+  // Smart Clipboard Settings & State (default: 30s)
   const [clipboardClearSeconds, setClipboardClearSecondsState] = useState<number>(() => {
     const saved = localStorage.getItem('totumvault_clipboard_clear_seconds');
-    return saved !== null ? parseInt(saved, 10) : 60;
+    return saved !== null ? parseInt(saved, 10) : 30;
   });
   const setClipboardClearSeconds = useCallback((secs: number) => {
     setClipboardClearSecondsState(secs);
@@ -319,20 +342,64 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const lastActivityRef = useRef<number>(Date.now());
   const lastBackendTouchRef = useRef<number>(Date.now());
 
-  const clearClipboard = useCallback(async (notify = false): Promise<boolean> => {
+  const clearClipboard = useCallback(async (notify = false, force = false): Promise<boolean> => {
+    // If not forced (e.g. timeout fired or vault locked), check if clipboard still contains TotumVault copied secret
+    if (!force && lastCopiedTextRef.current !== null) {
+      let currentClipboardText: string | null = null;
+      try {
+        currentClipboardText = await tauriReadText();
+      } catch {
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
+          try {
+            currentClipboardText = await navigator.clipboard.readText();
+          } catch {
+            // Unfocused or permission blocked in web
+          }
+        }
+      }
+
+      // If we read current clipboard and it does NOT match what TotumVault copied:
+      // Another application or user copied something else meanwhile.
+      // NEVER overwrite or clear that newer clipboard content!
+      if (currentClipboardText !== null && currentClipboardText !== lastCopiedTextRef.current) {
+        lastCopiedTextRef.current = null;
+        clipboardClearTimeRef.current = null;
+        clipboardPendingFlushRef.current = false;
+        if (clipboardTimeoutRef.current) {
+          clearTimeout(clipboardTimeoutRef.current);
+          clipboardTimeoutRef.current = null;
+        }
+        return false;
+      }
+    }
+
     let success = false;
 
-    // 1. Try Rust native backend command (clears OS clipboard across all applications in Tauri)
+    // 1. Primary implementation: Native Tauri clipboard plugin
     try {
-      await invoke('clear_clipboard');
-      if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+      if (lastCopiedTextRef.current !== null && !force) {
+        const cleared = await invoke<boolean>('clear_clipboard_if_matches', {
+          expected: lastCopiedTextRef.current,
+        });
+        if (cleared) {
+          success = true;
+        } else {
+          // Rust backend detected clipboard content changed
+          lastCopiedTextRef.current = null;
+          clipboardClearTimeRef.current = null;
+          clipboardPendingFlushRef.current = false;
+          return false;
+        }
+      } else {
+        await tauriClear();
+        await invoke('clear_clipboard');
         success = true;
       }
     } catch {
       // Ignored if outside Tauri
     }
 
-    // 2. Try standard navigator.clipboard.writeText('')
+    // 2. Clear via standard Web API
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText('');
@@ -378,15 +445,13 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
       return true;
     } else {
-      // If browser blocked clipboard modification due to background/unfocused state,
-      // mark as pending so the very next user focus or interaction wipes it cleanly!
       clipboardPendingFlushRef.current = true;
       return false;
     }
   }, [showToast]);
 
   const lockVault = useCallback(async () => {
-    await clearClipboard(false);
+    await clearClipboard(false, false);
     try {
       await invoke('lock_vault');
     } catch (err: any) {
@@ -407,9 +472,18 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const copyToClipboard = useCallback(async (text: string, label: string) => {
     if (!text) return;
     try {
-      // 1. Write text to clipboard
       let copied = false;
-      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+
+      // 1. Primary implementation: Native Tauri clipboard plugin
+      try {
+        await tauriWriteText(text);
+        copied = true;
+      } catch {
+        // Fallback to web clipboard
+      }
+
+      // 2. Web Clipboard API fallback
+      if (!copied && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         try {
           await navigator.clipboard.writeText(text);
           copied = true;
@@ -429,27 +503,23 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         document.body.removeChild(textarea);
       }
 
+      // Store in memory ONLY (never persisted to localStorage/sessionStorage/logs)
       lastCopiedTextRef.current = text;
       clipboardPendingFlushRef.current = false;
 
-      // 2. Schedule OS-level wipe in Rust backend if clear timer is active
-      if (clipboardClearSeconds > 0) {
-        invoke('schedule_clipboard_wipe', { clearAfterSecs: clipboardClearSeconds }).catch(() => {});
-      }
-
-      // 3. Reset existing timeout
+      // Reset existing timeout
       if (clipboardTimeoutRef.current) {
         clearTimeout(clipboardTimeoutRef.current);
         clipboardTimeoutRef.current = null;
       }
 
-      // 4. Set auto-clear timer
+      // Set auto-clear timer
       if (clipboardClearSeconds > 0) {
         showToast(`${label} copied! Auto-clears in ${clipboardClearSeconds}s.`, 'success');
         clipboardClearTimeRef.current = Date.now() + clipboardClearSeconds * 1000;
 
         clipboardTimeoutRef.current = setTimeout(async () => {
-          await clearClipboard(true);
+          await clearClipboard(true, false);
         }, clipboardClearSeconds * 1000);
       } else {
         showToast(`${label} copied to clipboard`, 'success');
@@ -510,15 +580,22 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const setupBiometric = useCallback(async (masterPassword: string): Promise<boolean> => {
     try {
       const token = await invoke<string>('setup_biometric_unlock', { masterPassword });
-      sessionStorage.setItem('totumvault_bio_token', token);
-      localStorage.setItem('totumvault_bio_token', token);
+
+      if (isAndroidBiometricsAvailable()) {
+        // Real native Android Keystore BIOMETRIC_STRONG encryption
+        await androidEncryptSecret(token);
+      } else {
+        // Desktop / browser session-scoped storage (never persistent localStorage)
+        sessionStorage.setItem('totumvault_bio_token', token);
+      }
+
       setIsBiometricEnabled(true);
       setIsBiometricSupported(true);
       setBiometricFailedAttempts(0);
       showToast('Biometric unlock configured successfully', 'success');
       return true;
     } catch (err: any) {
-      showToast(err.toString(), 'error');
+      showToast(err?.message || err.toString(), 'error');
       return false;
     }
   }, [showToast]);
@@ -530,15 +607,52 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     try {
-      const token = sessionStorage.getItem('totumvault_bio_token') || localStorage.getItem('totumvault_bio_token') || '';
+      let token = '';
+
+      if (isAndroidBiometricsAvailable()) {
+        try {
+          token = await androidDecryptSecret();
+        } catch (bioErr: any) {
+          const msg = bioErr?.message || bioErr?.toString() || '';
+          if (msg === 'USER_CANCELED') {
+            // User chose "Use Master Password" or canceled prompt - return without error toast
+            return false;
+          }
+          if (msg === 'LOCKOUT') {
+            setBiometricFailedAttempts(3);
+            showToast('Biometric lockout (3 failed attempts). Master password required.', 'error');
+            return false;
+          }
+          if (msg === 'INVALIDATED') {
+            androidClearEnrolledKey();
+            setIsBiometricEnabled(false);
+            showToast('Biometrics changed in Android Settings. Unlock with master password to re-enroll.', 'error');
+            return false;
+          }
+          const nextAttempts = biometricFailedAttempts + 1;
+          setBiometricFailedAttempts(nextAttempts);
+          if (nextAttempts >= 3) {
+            showToast('Biometric lockout (3 failed attempts). Master password required.', 'error');
+          } else {
+            showToast(`Biometric verification failed (${nextAttempts}/3 attempts)`, 'warning');
+          }
+          return false;
+        }
+      } else {
+        token = sessionStorage.getItem('totumvault_bio_token') || '';
+        if (!token) {
+          showToast('Biometric unlock not available for this session. Please unlock with master password.', 'info');
+          return false;
+        }
+      }
+
       if (!token) {
-        showToast('Biometric enrollment data not found. Please unlock with your master password.', 'error');
+        showToast('Biometric authentication failed. Master password required.', 'error');
         return false;
       }
 
       const success = await invoke<boolean>('unlock_vault_biometric', { biometricToken: token });
       if (success) {
-        sessionStorage.setItem('totumvault_bio_token', token);
         setBiometricFailedAttempts(0);
         showToast('Vault unlocked with biometrics', 'success');
         await refreshStatus();
@@ -556,13 +670,16 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (err: any) {
       const nextAttempts = biometricFailedAttempts + 1;
       setBiometricFailedAttempts(nextAttempts);
-      showToast(`Biometric error: ${err}`, 'error');
+      showToast(`Biometric error: ${err?.message || err}`, 'error');
       return false;
     }
   }, [biometricFailedAttempts, isBiometricLockedOut, refreshStatus, showToast]);
 
   const disableBiometric = useCallback(async () => {
     try {
+      if (isAndroidBiometricsAvailable()) {
+        androidClearEnrolledKey();
+      }
       await invoke('disable_biometric_unlock');
       sessionStorage.removeItem('totumvault_bio_token');
       localStorage.removeItem('totumvault_bio_token');
@@ -595,16 +712,36 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsCheckingUpdate(true);
     try {
       const info = await checkAppUpdate();
-      setUpdateInfo(info);
+      const nowStr = new Date().toLocaleString();
+      setLastUpdateChecked(nowStr);
+      localStorage.setItem('totumvault_last_update_check', nowStr);
+
+      const skippedVersion = localStorage.getItem('totumvault_skipped_version');
+      const dismissedSession = sessionStorage.getItem('totumvault_dismissed_update_session');
+
       if (info.hasUpdate) {
-        showToast(`Update available: TotumVault v${info.latestVersion}!`, 'info');
-      } else if (manual) {
-        showToast(`TotumVault is up to date (v${info.currentVersion})`, 'success');
+        if (!manual && info.latestVersion === skippedVersion) {
+          setUpdateInfo(null);
+          return info;
+        }
+        if (!manual && info.latestVersion === dismissedSession) {
+          setUpdateInfo(null);
+          return info;
+        }
+        setUpdateInfo(info);
+        if (manual) {
+          showToast(`Update available: TotumVault v${info.latestVersion}!`, 'info');
+        }
+      } else {
+        setUpdateInfo(null);
+        if (manual) {
+          showToast(`TotumVault is up to date (v${info.currentVersion})`, 'success');
+        }
       }
       return info;
     } catch (err: any) {
       if (manual) {
-        showToast(err.message || 'Failed to check updates', 'error');
+        showToast(err?.message || 'Unable to check for updates (offline / network error)', 'error');
       }
       return null;
     } finally {
@@ -620,55 +757,46 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     const checkBiometricHardwareAvailability = async () => {
       let isAvailable = false;
-      const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
-      const isAndroid = ua.includes('android');
 
-      // 1. Query native backend capability if available
-      try {
-        const capability = await invoke<BiometricCapability>('check_biometric_capability');
-        if (capability?.supported || capability?.platform === 'android') {
+      // 1. Android native Keystore / BiometricManager bridge
+      if (isAndroidBiometricsAvailable()) {
+        const hwStatus = checkAndroidBiometricHardware();
+        if (hwStatus === 'SUCCESS') {
+          isAvailable = true;
+        } else if (hwStatus === 'NONE_ENROLLED') {
+          isAvailable = false;
+        }
+        if (isAndroidBiometricEnrolled()) {
+          setIsBiometricEnabled(true);
           isAvailable = true;
         }
-      } catch {
-        // Fallback to client detection
-      }
-
-      // 2. Android device detection: Android phones with fingerprint / biometric hardware
-      if (isAndroid) {
-        isAvailable = true;
-      }
-
-      // 3. Check native Android bridge if present
-      if (typeof (window as any).AndroidBiometrics?.isHardwareAvailable === 'function') {
+      } else {
+        // 2. Query native backend capability on desktop / fallback
         try {
-          if ((window as any).AndroidBiometrics.isHardwareAvailable()) {
+          const capability = await invoke<BiometricCapability>('check_biometric_capability');
+          if (capability?.supported) {
             isAvailable = true;
           }
         } catch {
-          // ignore
+          // Fallback
         }
-      }
 
-      // 4. Query platform authenticator availability (standard WebAuthn/FIDO2 supported in Android WebView)
-      if (
-        !isAvailable &&
-        typeof window !== 'undefined' &&
-        window.PublicKeyCredential &&
-        typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function'
-      ) {
-        try {
-          const webAuthnAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-          if (webAuthnAvailable) {
-            isAvailable = true;
+        // 3. Platform authenticator availability
+        if (
+          !isAvailable &&
+          typeof window !== 'undefined' &&
+          window.PublicKeyCredential &&
+          typeof window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function'
+        ) {
+          try {
+            const webAuthnAvailable = await window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+            if (webAuthnAvailable) {
+              isAvailable = true;
+            }
+          } catch {
+            // ignore
           }
-        } catch {
-          // ignore
         }
-      }
-
-      // 5. If biometric was previously configured in the vault or stored locally, it is supported
-      if (localStorage.getItem('totumvault_bio_token')) {
-        isAvailable = true;
       }
 
       setIsBiometricSupported(isAvailable);
@@ -682,11 +810,29 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .then((st) => setScreenProtectionState(st))
       .catch(() => {});
 
-    const checkStartup = localStorage.getItem('totumvault_check_updates_on_startup');
-    if (checkStartup !== 'false') {
+    const checkStartup =
+      localStorage.getItem('totumvault_auto_update_check') !== 'false' &&
+      localStorage.getItem('totumvault_check_updates_on_startup') !== 'false';
+    if (checkStartup) {
       checkForUpdates(false);
     }
   }, [checkForUpdates]);
+
+  // Automatic biometric prompt on launch/resume when vault is locked and biometrics enabled
+  const autoBioPromptTriggeredRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (
+      status.exists &&
+      !status.unlocked &&
+      isBiometricEnabled &&
+      isBiometricSupported &&
+      !isBiometricLockedOut &&
+      !autoBioPromptTriggeredRef.current
+    ) {
+      autoBioPromptTriggeredRef.current = true;
+      unlockWithBiometric().catch(() => {});
+    }
+  }, [status.exists, status.unlocked, isBiometricEnabled, isBiometricSupported, isBiometricLockedOut, unlockWithBiometric]);
 
 
   const saveEntry = useCallback(async (entry: DecryptedEntry, isFavoriteToggle = false) => {
@@ -1158,6 +1304,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isCheckingUpdate,
         checkForUpdates,
         dismissUpdate,
+        skipUpdateVersion,
+        lastUpdateChecked,
         clipboardClearSeconds,
         setClipboardClearSeconds,
         clearClipboard,

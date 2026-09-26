@@ -839,16 +839,26 @@ pub fn set_screen_protection(
 }
 
 #[tauri::command]
-pub fn clear_clipboard() -> Result<(), String> {
+pub fn clear_clipboard(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    let _ = app.clipboard().clear();
     crate::clipboard::manager::clear_os_clipboard();
     Ok(())
 }
 
 #[tauri::command]
-pub fn schedule_clipboard_wipe(clear_after_secs: u64) -> Result<(), String> {
-    crate::clipboard::manager::schedule_clipboard_wipe(clear_after_secs);
-    Ok(())
+pub fn clear_clipboard_if_matches(app: tauri::AppHandle, expected: String) -> Result<bool, String> {
+    use tauri_plugin_clipboard_manager::ClipboardExt;
+    if let Ok(current) = app.clipboard().read_text() {
+        if current == expected {
+            let _ = app.clipboard().clear();
+            crate::clipboard::manager::clear_os_clipboard();
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
+
 
 #[cfg(test)]
 mod tests {

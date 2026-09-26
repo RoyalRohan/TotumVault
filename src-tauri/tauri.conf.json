@@ -24,7 +24,14 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "rpm", "appimage", "nsis", "dmg"],
+    "createUpdaterArtifacts": true,
+    "targets": [
+      "deb",
+      "rpm",
+      "appimage",
+      "nsis",
+      "dmg"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",
@@ -34,5 +41,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/RoyalRohan/TotumVault/releases/latest/download/latest.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc4Rjg0MEQxQUU2MjhBNUIKUldSYmltS3UwVUQ0ZUpSbXJuTWV3SHZEQlBmVGdFeWVjM1hGQXRPVzVsN2JwYmNXSFJmSGZWalQK"
+    }
   }
 }

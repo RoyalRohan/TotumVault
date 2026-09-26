@@ -41,6 +41,7 @@ export const SettingsModal: React.FC = () => {
     updateInfo,
     isCheckingUpdate,
     checkForUpdates,
+    lastUpdateChecked,
   } = useVault();
   const { theme, setTheme, resolvedTheme, font, setFont } = useTheme();
 
@@ -276,18 +277,22 @@ export const SettingsModal: React.FC = () => {
                 </label>
               </div>
               <span className="text-[11px] font-mono text-purple-700 dark:text-purple-400 font-semibold bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-500/30">
-                {clipboardClearSeconds === 0 ? 'Manual Clear' : `Timer: ${clipboardClearSeconds}s`}
+                {clipboardClearSeconds === 0
+                  ? 'Never'
+                  : clipboardClearSeconds === 120
+                  ? 'Timer: 2m'
+                  : `Timer: ${clipboardClearSeconds}s`}
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-              Automatically purges copied passwords from the OS clipboard. Smart clear validates content before erasing, and clipboard is immediately cleared when the vault locks.
+              Automatically clears copied secrets only if the clipboard still contains the exact value TotumVault copied. If another application copied something else meanwhile, that newer value is preserved. Immediately purges matching secret when vault locks.
             </p>
             <div className="grid grid-cols-5 gap-2 pt-1 text-xs">
               {[
-                { label: '5s', secs: 5 },
                 { label: '15s', secs: 15 },
                 { label: '30s', secs: 30 },
                 { label: '60s', secs: 60 },
+                { label: '2m', secs: 120 },
                 { label: 'Never', secs: 0 },
               ].map((item) => {
                 const isSelected = clipboardClearSeconds === item.secs;
@@ -579,7 +584,7 @@ export const SettingsModal: React.FC = () => {
               <div className="flex items-center gap-1.5">
                 <RefreshCw className={`w-3.5 h-3.5 text-purple-600 dark:text-purple-400 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
                 <label className="text-xs font-bold uppercase tracking-wider text-theme-text-muted block">
-                  Application • Updates
+                  Application & Updates
                 </label>
               </div>
               <span className="text-[11px] font-mono text-slate-600 dark:text-theme-text-muted font-semibold bg-slate-100 dark:bg-theme-surface px-2 py-0.5 rounded border border-slate-200 dark:border-theme-border">
@@ -589,7 +594,7 @@ export const SettingsModal: React.FC = () => {
 
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-                Keep TotumVault secure with cryptographic updates and platform fixes.
+                Keep TotumVault secure with signed cryptographic updates and platform fixes.
               </p>
               <button
                 type="button"
@@ -598,23 +603,41 @@ export const SettingsModal: React.FC = () => {
                 className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-purple-300 dark:border-purple-500/40 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 cursor-pointer shrink-0 transition-colors flex items-center gap-1.5 disabled:opacity-50"
               >
                 <RefreshCw className={`w-3 h-3 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
-                <span>{isCheckingUpdate ? 'Checking...' : 'Check for Updates'}</span>
+                <span>{isCheckingUpdate ? 'Checking...' : 'Check for Updates Now'}</span>
               </button>
             </div>
 
-            {/* Check on startup option */}
-            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-700 dark:text-theme-text-muted">
-              <input
-                type="checkbox"
-                checked={checkOnStartup}
-                onChange={(e) => {
-                  setCheckOnStartup(e.target.checked);
-                  localStorage.setItem('totumvault_check_updates_on_startup', e.target.checked ? 'true' : 'false');
-                }}
-                className="rounded border-slate-300 dark:border-theme-border text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer"
-              />
-              <span>Automatically check for updates on startup</span>
-            </label>
+            {/* Check on startup option & Last Checked timestamp */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 text-xs text-slate-700 dark:text-theme-text-muted">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={checkOnStartup}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setCheckOnStartup(checked);
+                    localStorage.setItem('totumvault_auto_update_check', checked ? 'true' : 'false');
+                    localStorage.setItem('totumvault_check_updates_on_startup', checked ? 'true' : 'false');
+                  }}
+                  className="rounded border-slate-300 dark:border-theme-border text-purple-600 focus:ring-purple-500 w-4 h-4 cursor-pointer"
+                />
+                <span>Check for updates automatically on startup</span>
+              </label>
+
+              {lastUpdateChecked && (
+                <span className="text-[11px] text-slate-500 dark:text-theme-text-muted">
+                  Last checked: {lastUpdateChecked}
+                </span>
+              )}
+            </div>
+
+            {/* Status indicator when checking */}
+            {isCheckingUpdate && (
+              <div className="p-2.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-500/30 text-xs text-purple-800 dark:text-purple-300 flex items-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 animate-spin text-purple-600 dark:text-purple-400 shrink-0" />
+                <span>Checking for updates from official TotumVault repository...</span>
+              </div>
+            )}
 
             {/* Update available card */}
             {updateInfo && updateInfo.hasUpdate && (

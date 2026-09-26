@@ -18,6 +18,7 @@ import { DocumentLibrary } from './components/documents/DocumentLibrary';
 import { DocumentScannerModal } from './components/documents/DocumentScannerModal';
 import { DocumentViewerModal } from './components/documents/DocumentViewerModal';
 import { PrivacyShieldOverlay } from './components/PrivacyShieldOverlay';
+import { UpdateDialog } from './components/UpdateDialog';
 
 const MainAppContent: React.FC = () => {
   const {
@@ -33,6 +34,7 @@ const MainAppContent: React.FC = () => {
     closeScanner,
     updateInfo,
     dismissUpdate,
+    skipUpdateVersion,
   } = useVault();
   const [isSetupOpen, setIsSetupOpen] = useState(false);
 
@@ -40,40 +42,11 @@ const MainAppContent: React.FC = () => {
     return (
       <>
         {updateInfo?.hasUpdate && (
-          <div className="fixed top-0 left-0 right-0 bg-purple-600 dark:bg-purple-900/95 text-white text-xs px-4 py-2.5 flex items-center justify-between gap-3 z-50 shadow-md border-b border-purple-500/30">
-            <div className="flex items-center gap-2 truncate">
-              <span className="flex h-2 w-2 relative shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-200 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-              </span>
-              <span className="font-semibold truncate">
-                TotumVault v{updateInfo.latestVersion} is available!
-              </span>
-              {updateInfo.assetName && (
-                <span className="hidden sm:inline text-purple-200 truncate">
-                  ({updateInfo.assetName})
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <a
-                href={updateInfo.assetDownloadUrl || updateInfo.htmlUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="px-2.5 py-1 bg-white text-purple-900 font-semibold rounded-lg hover:bg-purple-50 transition-colors shadow-2xs"
-              >
-                Update Now
-              </a>
-              <button
-                type="button"
-                onClick={dismissUpdate}
-                className="p-1 hover:bg-purple-700/50 rounded text-purple-200 hover:text-white transition-colors cursor-pointer"
-                title="Dismiss"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
+          <UpdateDialog
+            updateInfo={updateInfo}
+            onClose={dismissUpdate}
+            onSkipVersion={skipUpdateVersion}
+          />
         )}
         <LockScreen onOpenSetup={() => setIsSetupOpen(true)} />
         <SetupVaultModal isOpen={isSetupOpen} onClose={() => setIsSetupOpen(false)} />
@@ -90,40 +63,11 @@ const MainAppContent: React.FC = () => {
       {/* Main Workspace Area */}
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden min-w-0">
         {updateInfo?.hasUpdate && (
-          <div className="bg-purple-600 dark:bg-purple-900/95 text-white text-xs px-4 py-2.5 flex items-center justify-between gap-3 shrink-0 shadow-sm border-b border-purple-500/30 z-20">
-            <div className="flex items-center gap-2 truncate">
-              <span className="flex h-2 w-2 relative shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-200 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
-              </span>
-              <span className="font-semibold truncate">
-                TotumVault v{updateInfo.latestVersion} is available!
-              </span>
-              {updateInfo.assetName && (
-                <span className="hidden sm:inline text-purple-200 truncate">
-                  ({updateInfo.assetName})
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <a
-                href={updateInfo.assetDownloadUrl || updateInfo.htmlUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="px-2.5 py-1 bg-white text-purple-900 font-semibold rounded-lg hover:bg-purple-50 transition-colors shadow-2xs"
-              >
-                Update Now
-              </a>
-              <button
-                type="button"
-                onClick={dismissUpdate}
-                className="p-1 hover:bg-purple-700/50 rounded text-purple-200 hover:text-white transition-colors cursor-pointer"
-                title="Dismiss"
-              >
-                ✕
-              </button>
-            </div>
-          </div>
+          <UpdateDialog
+            updateInfo={updateInfo}
+            onClose={dismissUpdate}
+            onSkipVersion={skipUpdateVersion}
+          />
         )}
         <Header />
 
