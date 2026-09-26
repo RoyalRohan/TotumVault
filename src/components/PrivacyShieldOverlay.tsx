@@ -10,10 +10,103 @@ export const PrivacyShieldOverlay: React.FC = () => {
   const [screenshotDetected, setScreenshotDetected] = useState<boolean>(false);
   const [bioPromptActive, setBioPromptActive] = useState<boolean>(false);
   const screenshotTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRightClickTimeRef = useRef<number>(0);
+  const isTouchingRef = useRef<boolean>(false);
+  const lastTouchTimeRef = useRef<number>(0);
+  const touchWatchdogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const onFocus = () => {
       setIsWindowFocused(true);
+    };
+
+    // Safety watchdog: automatically clears isTouchingRef if touchcancel/touchend was dropped by the OS
+    const resetTouchWatchdog = () => {
+      if (touchWatchdogTimerRef.current) {
+        clearTimeout(touchWatchdogTimerRef.current);
+      }
+      touchWatchdogTimerRef.current = setTimeout(() => {
+        isTouchingRef.current = false;
+        touchWatchdogTimerRef.current = null;
+      }, 5000);
+    };
+
+    const clearTouchWatchdog = () => {
+      if (touchWatchdogTimerRef.current) {
+        clearTimeout(touchWatchdogTimerRef.current);
+        touchWatchdogTimerRef.current = null;
+      }
+    };
+
+    const onTouchStart = () => {
+      isTouchingRef.current = true;
+      lastTouchTimeRef.current = Date.now();
+      setIsWindowFocused(true);
+      resetTouchWatchdog();
+    };
+
+    const onTouchMove = () => {
+      lastTouchTimeRef.current = Date.now();
+      if (isTouchingRef.current) {
+        resetTouchWatchdog();
+      }
+    };
+
+    const onTouchEnd = () => {
+      isTouchingRef.current = false;
+      lastTouchTimeRef.current = Date.now();
+      clearTouchWatchdog();
+    };
+
+    const onTouchCancel = () => {
+      isTouchingRef.current = false;
+      lastTouchTimeRef.current = Date.now();
+      clearTouchWatchdog();
+    };
+
+    const onPointerDown = (e: MouseEvent | PointerEvent) => {
+      if ('pointerType' in e && e.pointerType === 'touch') {
+        isTouchingRef.current = true;
+        lastTouchTimeRef.current = Date.now();
+        resetTouchWatchdog();
+      }
+      if (e.button === 2) {
+        lastRightClickTimeRef.current = Date.now();
+      }
+      setIsWindowFocused(true);
+    };
+
+    const onPointerUp = (e: MouseEvent | PointerEvent) => {
+      if ('pointerType' in e && e.pointerType === 'touch') {
+        isTouchingRef.current = false;
+        lastTouchTimeRef.current = Date.now();
+        clearTouchWatchdog();
+      }
+    };
+
+    const onPointerCancel = (e: MouseEvent | PointerEvent) => {
+      if ('pointerType' in e && e.pointerType === 'touch') {
+        isTouchingRef.current = false;
+        lastTouchTimeRef.current = Date.now();
+        clearTouchWatchdog();
+      }
+    };
+
+    const isRecentInteraction = (): boolean => {
+      // 1. User is actively touching/holding the screen
+      if (isTouchingRef.current) {
+        return true;
+      }
+      const now = Date.now();
+      // 2. Touch ended within bounded grace period (2500ms) for Android magnifier / ActionMode / focus restoration
+      if (now - lastTouchTimeRef.current < 2500) {
+        return true;
+      }
+      // 3. Desktop right-click / context menu within bounded grace period (2500ms)
+      if (now - lastRightClickTimeRef.current < 2500) {
+        return true;
+      }
+      return false;
     };
 
     const onBlur = () => {
@@ -22,12 +115,24 @@ export const PrivacyShieldOverlay: React.FC = () => {
       if (isBiometricPromptActive() || (typeof window !== 'undefined' && Boolean(window.__totumBioPromptActive))) {
         return;
       }
+      // If a touch session is active or a touch/right-click occurred recently,
+      // ignore transient focus loss (e.g. mobile magnifier, Android ActionMode, or context menu popup)
+      if (isRecentInteraction()) {
+        return;
+      }
+      // If the document still reports active focus, do not treat as window blur
+      if (typeof document !== 'undefined' && document.hasFocus && document.hasFocus()) {
+        return;
+      }
       setIsWindowFocused(false);
     };
 
     const onVisibilityChange = () => {
-      // Avoid false-positive hidden state during biometric prompt display
+      // Avoid false-positive hidden state during biometric prompt display or active touch/right-click
       if (isBiometricPromptActive() || (typeof window !== 'undefined' && Boolean(window.__totumBioPromptActive))) {
+        return;
+      }
+      if (isRecentInteraction()) {
         return;
       }
       setIsTabHidden(document.visibilityState === 'hidden');
@@ -56,7 +161,9 @@ export const PrivacyShieldOverlay: React.FC = () => {
           setIsWindowFocused(true);
           setIsTabHidden(false);
         } else if (!isBiometricPromptActive() && !window.__totumBioPromptActive) {
-          setIsWindowFocused(false);
+          if (!isRecentInteraction()) {
+            setIsWindowFocused(false);
+          }
         }
       };
     }
@@ -82,7 +189,7 @@ export const PrivacyShieldOverlay: React.FC = () => {
       const keyCode = e.keyCode;
 
       // 1. Dedicated PrintScreen / Print keys (Linux GNOME, X11, Wayland, Windows)
-      if (key === 'PrintScreen' || code === 'PrintScreen' || key === 'Print' || keyCode === 44) {
+      if (key === 'PrintScreen' || code === 'PrintScreen' || key === 'Print' || key === 'Snapshot' || keyCode === 44) {
         e.preventDefault?.();
         triggerScreenshotShield();
         return;
@@ -115,17 +222,29 @@ export const PrivacyShieldOverlay: React.FC = () => {
     };
 
     const onContextMenu = (e: MouseEvent) => {
-      // If screen protection is active, prevent default browser context menu
-      // which contains "Take Screenshot" in Firefox and Chromium
+      const now = Date.now();
+      lastRightClickTimeRef.current = now;
+      lastTouchTimeRef.current = now;
+      setIsWindowFocused(true);
+
+      // Prevent default browser context menu when screen protection is active
+      // to avoid exposing browser-level tools, but NEVER trigger the privacy shield!
       if (screenProtection?.active) {
         e.preventDefault();
-        triggerScreenshotShield();
       }
     };
 
     window.addEventListener('focus', onFocus);
     window.addEventListener('blur', onBlur);
     document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pointerdown', onPointerDown, { capture: true, passive: true });
+    window.addEventListener('pointerup', onPointerUp, { capture: true, passive: true });
+    window.addEventListener('pointercancel', onPointerCancel, { capture: true, passive: true });
+    window.addEventListener('mousedown', onPointerDown, { capture: true, passive: true });
+    window.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
+    window.addEventListener('touchmove', onTouchMove, { capture: true, passive: true });
+    window.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
+    window.addEventListener('touchcancel', onTouchCancel, { capture: true, passive: true });
     window.addEventListener('totum-bio-prompt-start', handleBioPromptStart);
     window.addEventListener('totum-bio-prompt-end', handleBioPromptEnd);
     window.addEventListener('keydown', onKeyDown, { capture: true });
@@ -143,6 +262,14 @@ export const PrivacyShieldOverlay: React.FC = () => {
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('blur', onBlur);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pointerdown', onPointerDown, { capture: true });
+      window.removeEventListener('pointerup', onPointerUp, { capture: true });
+      window.removeEventListener('pointercancel', onPointerCancel, { capture: true });
+      window.removeEventListener('mousedown', onPointerDown, { capture: true });
+      window.removeEventListener('touchstart', onTouchStart, { capture: true });
+      window.removeEventListener('touchmove', onTouchMove, { capture: true });
+      window.removeEventListener('touchend', onTouchEnd, { capture: true });
+      window.removeEventListener('touchcancel', onTouchCancel, { capture: true });
       window.removeEventListener('totum-bio-prompt-start', handleBioPromptStart);
       window.removeEventListener('totum-bio-prompt-end', handleBioPromptEnd);
       window.removeEventListener('keydown', onKeyDown, { capture: true });
@@ -152,6 +279,7 @@ export const PrivacyShieldOverlay: React.FC = () => {
       if (typeof window !== 'undefined' && window.__totumOnWindowFocus) {
         window.__totumOnWindowFocus = undefined;
       }
+      clearTouchWatchdog();
       if (screenshotTimeoutRef.current) {
         clearTimeout(screenshotTimeoutRef.current);
       }

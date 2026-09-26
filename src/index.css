@@ -220,6 +220,9 @@
     font-family: var(--app-font-family);
     letter-spacing: -0.01em;
     user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
     overflow: hidden;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -227,6 +230,11 @@
 
   button, input, select, textarea {
     font-family: inherit;
+  }
+
+  input, textarea {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   code, kbd, samp, pre, .font-mono {
