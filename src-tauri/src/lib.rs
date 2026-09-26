@@ -92,6 +92,7 @@ pub fn run() {
             commands::is_biometric_enabled,
             commands::check_biometric_capability,
             commands::set_screen_protection,
+            commands::copy_secret,
             commands::clear_clipboard,
             commands::clear_clipboard_if_matches,
         ])
