@@ -842,8 +842,7 @@ pub fn set_screen_protection(
 pub fn clear_clipboard(app: tauri::AppHandle) -> Result<(), String> {
     use tauri_plugin_clipboard_manager::ClipboardExt;
     let _ = app.clipboard().clear();
-    crate::clipboard::manager::clear_os_clipboard();
-    Ok(())
+    crate::clipboard::manager::clear_os_clipboard()
 }
 
 #[tauri::command]
@@ -852,11 +851,18 @@ pub fn clear_clipboard_if_matches(app: tauri::AppHandle, expected: String) -> Re
     if let Ok(current) = app.clipboard().read_text() {
         if current == expected {
             let _ = app.clipboard().clear();
-            crate::clipboard::manager::clear_os_clipboard();
+            let _ = crate::clipboard::manager::clear_os_clipboard();
             return Ok(true);
         }
     }
     Ok(false)
+}
+
+#[tauri::command]
+pub fn copy_secret(text: String) -> Result<(), String> {
+    use zeroize::Zeroizing;
+    let secure_text = Zeroizing::new(text);
+    crate::clipboard::manager::copy_secret_to_clipboard(secure_text)
 }
 
 

@@ -20,8 +20,6 @@ import {
 } from '../types';
 import {
   readText as tauriReadText,
-  writeText as tauriWriteText,
-  clear as tauriClear,
 } from '@tauri-apps/plugin-clipboard-manager';
 import {
   isAndroidBiometricsAvailable,
@@ -392,11 +390,13 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return false;
         }
       } else {
-        await tauriClear();
         await invoke('clear_clipboard');
         success = true;
       }
-    } catch {
+    } catch (e: any) {
+      if (e && typeof e === 'string' && e.includes('Wayland focus')) {
+        showToast('Clipboard cannot be cleared automatically in background on Wayland', 'warning');
+      }
       // Ignored if outside Tauri
     }
 
@@ -475,11 +475,12 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       let copied = false;
 
-      // 1. Primary implementation: Native Tauri clipboard plugin
+      // 1. Primary implementation: Secure native Tauri clipboard command
       try {
-        await tauriWriteText(text);
+        await invoke('copy_secret', { text });
         copied = true;
-      } catch {
+      } catch (e) {
+        console.error('Failed to copy secret securely via native rust:', e);
         // Fallback to web clipboard
       }
 
