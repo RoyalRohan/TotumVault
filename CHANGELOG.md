@@ -4,6 +4,35 @@ All notable changes to TotumVault are documented here.
 
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [1.3.2] — 2026-09-26
+
+### Added
+
+- **Production Cryptographic Automatic Updates**:
+  - Integrated official Tauri 2 in-process updater with Ed25519 Minisign cryptographic signature verification for desktop platforms (Windows, macOS, Linux).
+  - Configured `createUpdaterArtifacts` and automated multi-platform release signing in GitHub Actions workflow.
+  - Interactive dashboard update modal (`UpdateDialog`) with download progress tracking, automatic application restart, and version-skip support.
+  - Architecture-aware Android APK update installer matching `arm64-v8a`, `armeabi-v7a`, and universal APKs.
+  - Dedicated "Application & Updates" section in Settings with startup check preference toggle and manual check status.
+- **Hardware-Backed Android Biometric Unlock**:
+  - Native `AndroidKeyStore` AES-256-GCM hardware key encryption bound to `BIOMETRIC_STRONG` policy.
+  - Key invalidation upon new biometric enrollment (`setInvalidatedByBiometricEnrollment`).
+  - Strictly no PIN, pattern, or device credential fallback.
+  - Enforced 3-attempt biometric lockout falling back to master password.
+  - Automatic biometric unlock prompt on app launch for locked vaults.
+- **Secure Smart Clipboard Auto-Clear**:
+  - Smart overwrite protection: clears the clipboard on timeout expiry or vault lock only if the content still matches the copied secret.
+  - Avoids overwriting newer data copied from other applications.
+  - Added configurable timeout settings (15s, 30s default, 60s, 2m, Never).
+  - Immediate purge on vault lock and screen capture events.
+  - In-memory tracking with zero persistent plaintext storage or logging.
+
+### Security
+
+- **Tauri Updater Signing Key Rotation**:
+  - Generated and deployed a new high-entropy, passphrase-protected Minisign updater keypair.
+  - Isolated private signing credentials strictly to protected GitHub Actions repository secrets.
+
 ## [1.3.1] — 2026-09-25
 
 ### Fixed
