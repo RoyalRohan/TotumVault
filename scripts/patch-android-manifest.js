@@ -87,25 +87,25 @@ const mainActivityPaths = [
   path.resolve(__dirname, '../src-tauri/gen/android/app/src/main/kotlin/com/royalrohan/veylock/MainActivity.kt')
 ];
 
-const kotlinImports = `
-import android.os.Bundle
-import android.webkit.JavascriptInterface
-import android.webkit.WebView
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
-import androidx.core.content.ContextCompat
-import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import java.security.KeyStore
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.spec.GCMParameterSpec
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
-import android.security.keystore.KeyPermanentlyInvalidatedException
-import org.json.JSONObject
-`;
+const kotlinImports = [
+  'android.os.Bundle',
+  'android.webkit.JavascriptInterface',
+  'android.webkit.WebView',
+  'androidx.biometric.BiometricManager',
+  'androidx.biometric.BiometricPrompt',
+  'androidx.core.content.ContextCompat',
+  'java.io.File',
+  'java.io.FileInputStream',
+  'java.io.FileOutputStream',
+  'java.security.KeyStore',
+  'javax.crypto.Cipher',
+  'javax.crypto.KeyGenerator',
+  'javax.crypto.spec.GCMParameterSpec',
+  'android.security.keystore.KeyGenParameterSpec',
+  'android.security.keystore.KeyProperties',
+  'android.security.keystore.KeyPermanentlyInvalidatedException',
+  'org.json.JSONObject'
+];
 
 const kotlinBridgeCode = `
 class AndroidBiometricsBridge(private val activity: MainActivity, private val webView: WebView) {
@@ -362,12 +362,43 @@ for (const actPath of mainActivityPaths) {
         );
       }
 
-      // Insert Kotlin imports at top after package statement
-      if (/package\s+[^\n]*\r?\n/.test(actContent)) {
-        actContent = actContent.replace(
-          /package\s+[^\n]*\r?\n/,
-          `$&\n${kotlinImports.trim()}\n`
-        );
+      // Insert Kotlin imports without duplicate or ambiguous conflicts
+      const existingImportLines = actContent.match(/^\s*import\s+[^\r\n]+/gm) || [];
+      const existingImportedNames = new Set();
+      for (const line of existingImportLines) {
+        const match = line.match(/^\s*import\s+(?:static\s+)?([^\s;]+)/);
+        if (match) {
+          const fullName = match[1];
+          existingImportedNames.add(fullName);
+          const simpleName = fullName.split('.').pop();
+          if (simpleName && simpleName !== '*') {
+            existingImportedNames.add(simpleName);
+          }
+        }
+      }
+
+      const importsToAdd = kotlinImports.filter(imp => {
+        const simpleName = imp.split('.').pop();
+        return !existingImportedNames.has(imp) && !existingImportedNames.has(simpleName);
+      });
+
+      if (importsToAdd.length > 0) {
+        const importBlock = importsToAdd.map(imp => `import ${imp}`).join('\n');
+        if (existingImportLines.length > 0) {
+          const lastImport = existingImportLines[existingImportLines.length - 1];
+          const lastIndex = actContent.lastIndexOf(lastImport);
+          if (lastIndex !== -1) {
+            actContent =
+              actContent.slice(0, lastIndex + lastImport.length) +
+              '\n' + importBlock +
+              actContent.slice(lastIndex + lastImport.length);
+          }
+        } else if (/package\s+[^\n]*\r?\n/.test(actContent)) {
+          actContent = actContent.replace(
+            /package\s+[^\n]*\r?\n/,
+            `$&\n${importBlock}\n`
+          );
+        }
       }
 
       // Append bridge class definition
