@@ -318,7 +318,7 @@ export const SettingsModal: React.FC = () => {
               </span>
               <button
                 type="button"
-                onClick={() => clearClipboard(true)}
+                onClick={() => clearClipboard(true, true)}
                 className="py-1 px-2.5 rounded-lg bg-slate-100 dark:bg-theme-surface hover:bg-slate-200 dark:hover:bg-theme-hover border border-slate-200 dark:border-theme-border text-xs text-slate-700 dark:text-theme-text font-medium transition-all cursor-pointer"
               >
                 Clear Clipboard Now

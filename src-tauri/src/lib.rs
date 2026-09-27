@@ -43,8 +43,11 @@ pub fn run() {
 
             let manager = VaultManager::new(app_dir);
             let shared_manager: SharedVaultManager = Arc::new(Mutex::new(manager));
-
             app.manage(shared_manager);
+
+            let clipboard_manager = Arc::new(clipboard::service::ClipboardManager::new(app.handle().clone()));
+            app.manage(clipboard_manager);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -97,6 +100,11 @@ pub fn run() {
             commands::set_screen_protection,
             commands::clear_clipboard,
             commands::clear_clipboard_if_matches,
+            commands::copy_to_clipboard_secure,
+            commands::track_clipboard_session,
+            commands::clear_clipboard_now,
+            commands::cancel_clipboard_timer,
+            commands::get_clipboard_status,
         ])
 
         .run(tauri::generate_context!())

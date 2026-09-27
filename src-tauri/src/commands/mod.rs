@@ -7,6 +7,7 @@ use uuid::Uuid;
 use crate::totp::generator::{generate_totp_code as calc_totp, validate_totp_secret};
 use crate::vault::health::evaluate_vault_health;
 use crate::vault::manager::SharedVaultManager;
+use crate::clipboard::service::{ClipboardSessionStatus, SharedClipboardManager};
 use crate::security::{apply_screen_protection, ScreenProtectionStatus};
 use crate::vault::models::{
     DecryptedEntry, DocumentDetail, DocumentMetadata, ImportCommitOptions, ImportPreview,
@@ -61,9 +62,14 @@ pub fn unlock_vault(
 }
 
 #[tauri::command]
-pub fn lock_vault(state: State<'_, SharedVaultManager>) -> Result<(), String> {
+pub fn lock_vault(
+    _app: tauri::AppHandle,
+    state: State<'_, SharedVaultManager>,
+    clipboard_mgr: State<'_, SharedClipboardManager>,
+) -> Result<(), String> {
     let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
     manager.lock_vault();
+    let _ = clipboard_mgr.clear_on_lock();
     Ok(())
 }
 
@@ -867,24 +873,61 @@ pub fn set_screen_protection(
 }
 
 #[tauri::command]
-pub fn clear_clipboard(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri_plugin_clipboard_manager::ClipboardExt;
-    let _ = app.clipboard().clear();
-    crate::clipboard::manager::clear_os_clipboard();
+pub fn clear_clipboard(
+    clipboard_mgr: State<'_, SharedClipboardManager>,
+) -> Result<(), String> {
+    let _ = clipboard_mgr.clear_now(true);
     Ok(())
 }
 
 #[tauri::command]
-pub fn clear_clipboard_if_matches(app: tauri::AppHandle, expected: String) -> Result<bool, String> {
-    use tauri_plugin_clipboard_manager::ClipboardExt;
-    if let Ok(current) = app.clipboard().read_text() {
-        if current == expected {
-            let _ = app.clipboard().clear();
-            crate::clipboard::manager::clear_os_clipboard();
-            return Ok(true);
-        }
-    }
-    Ok(false)
+pub fn clear_clipboard_if_matches(
+    clipboard_mgr: State<'_, SharedClipboardManager>,
+    _expected: Option<String>,
+) -> Result<bool, String> {
+    // Backward-compatible endpoint: uses native HMAC session verification
+    // instead of serializing raw secrets over IPC.
+    clipboard_mgr.clear_now(false)
+}
+
+#[tauri::command]
+pub fn copy_to_clipboard_secure(
+    clipboard_mgr: State<'_, SharedClipboardManager>,
+    text: String,
+    timeout_secs: u64,
+) -> Result<u64, String> {
+    clipboard_mgr.copy_and_track(&text, timeout_secs)
+}
+
+#[tauri::command]
+pub fn track_clipboard_session(
+    clipboard_mgr: State<'_, SharedClipboardManager>,
+    text: String,
+    timeout_secs: u64,
+) -> Result<u64, String> {
+    clipboard_mgr.track_session(&text, timeout_secs)
+}
+
+#[tauri::command]
+pub fn clear_clipboard_now(
+    clipboard_mgr: State<'_, SharedClipboardManager>,
+    force: Option<bool>,
+) -> Result<bool, String> {
+    clipboard_mgr.clear_now(force.unwrap_or(false))
+}
+
+#[tauri::command]
+pub fn cancel_clipboard_timer(
+    clipboard_mgr: State<'_, SharedClipboardManager>,
+) -> Result<(), String> {
+    clipboard_mgr.cancel_timer()
+}
+
+#[tauri::command]
+pub fn get_clipboard_status(
+    clipboard_mgr: State<'_, SharedClipboardManager>,
+) -> Result<ClipboardSessionStatus, String> {
+    clipboard_mgr.get_status()
 }
 
 

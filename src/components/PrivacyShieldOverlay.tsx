@@ -33,7 +33,7 @@ export const PrivacyShieldOverlay: React.FC = () => {
     const triggerScreenshotShield = () => {
       setScreenshotDetected(true);
       // Immediately wipe clipboard on screenshot attempt so credentials cannot be captured or leaked
-      clearClipboard(false);
+      clearClipboard(false, true);
 
       if (screenshotTimeoutRef.current) {
         clearTimeout(screenshotTimeoutRef.current);

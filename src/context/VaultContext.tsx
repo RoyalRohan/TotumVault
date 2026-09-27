@@ -19,7 +19,6 @@ import {
   VaultStatus,
 } from '../types';
 import {
-  readText as tauriReadText,
   writeText as tauriWriteText,
   clear as tauriClear,
 } from '@tauri-apps/plugin-clipboard-manager';
@@ -230,6 +229,9 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const setClipboardClearSeconds = useCallback((secs: number) => {
     setClipboardClearSecondsState(secs);
     localStorage.setItem('totumvault_clipboard_clear_seconds', secs.toString());
+    if (secs === 0) {
+      invoke('cancel_clipboard_timer').catch(() => {});
+    }
   }, []);
 
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
@@ -339,119 +341,67 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [showToast, refreshStatus]);
 
-  const clipboardTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const clipboardClearTimeRef = useRef<number | null>(null);
-  const clipboardPendingFlushRef = useRef<boolean>(false);
-  const lastCopiedTextRef = useRef<string | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
   const lastBackendTouchRef = useRef<number>(Date.now());
 
   const clearClipboard = useCallback(async (notify = false, force = false): Promise<boolean> => {
-    // If not forced (e.g. timeout fired or vault locked), check if clipboard still contains TotumVault copied secret
-    if (!force && lastCopiedTextRef.current !== null) {
-      let currentClipboardText: string | null = null;
-      try {
-        currentClipboardText = await tauriReadText();
-      } catch {
-        if (typeof navigator !== 'undefined' && navigator.clipboard?.readText) {
-          try {
-            currentClipboardText = await navigator.clipboard.readText();
-          } catch {
-            // Unfocused or permission blocked in web
-          }
-        }
-      }
-
-      // If we read current clipboard and it does NOT match what TotumVault copied:
-      // Another application or user copied something else meanwhile.
-      // NEVER overwrite or clear that newer clipboard content!
-      if (currentClipboardText !== null && currentClipboardText !== lastCopiedTextRef.current) {
-        lastCopiedTextRef.current = null;
-        clipboardClearTimeRef.current = null;
-        clipboardPendingFlushRef.current = false;
-        if (clipboardTimeoutRef.current) {
-          clearTimeout(clipboardTimeoutRef.current);
-          clipboardTimeoutRef.current = null;
-        }
-        return false;
-      }
-    }
-
     let success = false;
 
-    // 1. Primary implementation: Native Tauri clipboard plugin
+    // 1. Primary implementation: Native Tauri clipboard manager with HMAC equality verification
     try {
-      if (lastCopiedTextRef.current !== null && !force) {
-        const cleared = await invoke<boolean>('clear_clipboard_if_matches', {
-          expected: lastCopiedTextRef.current,
-        });
-        if (cleared) {
-          success = true;
-        } else {
-          // Rust backend detected clipboard content changed
-          lastCopiedTextRef.current = null;
-          clipboardClearTimeRef.current = null;
-          clipboardPendingFlushRef.current = false;
-          return false;
-        }
-      } else {
-        await tauriClear();
-        await invoke('clear_clipboard');
+      const cleared = await invoke<boolean>('clear_clipboard_now', { force });
+      if (cleared) {
         success = true;
       }
     } catch {
-      // Ignored if outside Tauri
+      // Fallback outside Tauri
+      try {
+        if (force) {
+          await tauriClear();
+          success = true;
+        }
+      } catch {
+        // ignore
+      }
     }
 
-    // 2. Clear via standard Web API
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    // 2. Web API fallback
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText && (force || success)) {
       try {
         await navigator.clipboard.writeText('');
         success = true;
       } catch {
-        // May fail if unfocused in browser
+        // ignore
       }
     }
 
-    // 3. Fallback DOM execCommand with empty string (ensures clipboard is truly emptied, not replaced with a space)
-    try {
-      const textarea = document.createElement('textarea');
-      textarea.value = '';
-      textarea.style.position = 'fixed';
-      textarea.style.left = '-9999px';
-      textarea.style.top = '-9999px';
-      textarea.style.opacity = '0';
-      textarea.setAttribute('aria-hidden', 'true');
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      const ok = document.execCommand('copy');
-      document.body.removeChild(textarea);
-      if (ok) {
-        success = true;
+    // 3. Fallback DOM execCommand with empty string if forced
+    if (force && !success) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = '';
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '-9999px';
+        textarea.style.opacity = '0';
+        textarea.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (ok) {
+          success = true;
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
 
-    if (success) {
-      clipboardClearTimeRef.current = null;
-      clipboardPendingFlushRef.current = false;
-      lastCopiedTextRef.current = null;
-
-      if (clipboardTimeoutRef.current) {
-        clearTimeout(clipboardTimeoutRef.current);
-        clipboardTimeoutRef.current = null;
-      }
-
-      if (notify) {
-        showToast('Clipboard automatically cleared for security', 'info');
-      }
-      return true;
-    } else {
-      clipboardPendingFlushRef.current = true;
-      return false;
+    if (success && notify) {
+      showToast('Clipboard automatically cleared for security', 'info');
     }
+    return success;
   }, [showToast]);
 
   const lockVault = useCallback(async () => {
@@ -478,12 +428,30 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       let copied = false;
 
-      // 1. Primary implementation: Native Tauri clipboard plugin
+      // 1. Primary implementation: Native Tauri secure clipboard pipeline
+      // Writes text and registers cryptographic HMAC session in native Rust
       try {
-        await tauriWriteText(text);
+        await invoke('copy_to_clipboard_secure', {
+          text,
+          timeoutSecs: clipboardClearSeconds,
+        });
         copied = true;
       } catch {
-        // Fallback to web clipboard
+        // Fallback: Official Tauri plugin writeText then track session
+        try {
+          await tauriWriteText(text);
+          copied = true;
+          try {
+            await invoke('track_clipboard_session', {
+              text,
+              timeoutSecs: clipboardClearSeconds,
+            });
+          } catch {
+            // Outside Tauri
+          }
+        } catch {
+          // Web fallback below
+        }
       }
 
       // 2. Web Clipboard API fallback
@@ -496,6 +464,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
+      // 3. Fallback DOM execCommand
       if (!copied) {
         const textarea = document.createElement('textarea');
         textarea.value = text;
@@ -505,33 +474,18 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         textarea.select();
         document.execCommand('copy');
         document.body.removeChild(textarea);
+        copied = true;
       }
 
-      // Store in memory ONLY (never persisted to localStorage/sessionStorage/logs)
-      lastCopiedTextRef.current = text;
-      clipboardPendingFlushRef.current = false;
-
-      // Reset existing timeout
-      if (clipboardTimeoutRef.current) {
-        clearTimeout(clipboardTimeoutRef.current);
-        clipboardTimeoutRef.current = null;
-      }
-
-      // Set auto-clear timer
       if (clipboardClearSeconds > 0) {
         showToast(`${label} copied! Auto-clears in ${clipboardClearSeconds}s.`, 'success');
-        clipboardClearTimeRef.current = Date.now() + clipboardClearSeconds * 1000;
-
-        clipboardTimeoutRef.current = setTimeout(async () => {
-          await clearClipboard(true, false);
-        }, clipboardClearSeconds * 1000);
       } else {
         showToast(`${label} copied to clipboard`, 'success');
       }
     } catch {
       showToast('Failed to copy to clipboard', 'error');
     }
-  }, [showToast, clipboardClearSeconds, clearClipboard]);
+  }, [showToast, clipboardClearSeconds]);
 
   // Folder Operations
   const createFolder = useCallback(async (name: string, parentId?: string | null): Promise<LoginFolder | null> => {
@@ -1203,47 +1157,13 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [selectedEntryId, entries]);
 
-  // Real-time clipboard auto-clear interval (every 1s)
+  // Track user activity to determine idle time & report backend session activity
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (
-        clipboardPendingFlushRef.current ||
-        (clipboardClearTimeRef.current && Date.now() >= clipboardClearTimeRef.current)
-      ) {
-        clearClipboard(true);
-      }
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [clearClipboard]);
-
-  // Track user activity to determine idle time & flush overdue clipboard upon window return
-  useEffect(() => {
-    const checkAndFlushOverdueClipboard = () => {
-      if (
-        clipboardPendingFlushRef.current ||
-        (clipboardClearTimeRef.current && Date.now() >= clipboardClearTimeRef.current)
-      ) {
-        clearClipboard(true);
-      }
-    };
-
     const handleActivity = () => {
       lastActivityRef.current = Date.now();
       if (status.unlocked && Date.now() - lastBackendTouchRef.current > 25000) {
         lastBackendTouchRef.current = Date.now();
         invoke('touch_user_activity').catch(() => {});
-      }
-      checkAndFlushOverdueClipboard();
-    };
-
-    const handleFocus = () => {
-      handleActivity();
-      checkAndFlushOverdueClipboard();
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        checkAndFlushOverdueClipboard();
       }
     };
 
@@ -1252,8 +1172,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     window.addEventListener('pointerdown', handleActivity, { passive: true });
     window.addEventListener('keydown', handleActivity, { passive: true });
     window.addEventListener('touchstart', handleActivity, { passive: true });
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener('mousemove', handleActivity);
@@ -1261,10 +1179,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       window.removeEventListener('pointerdown', handleActivity);
       window.removeEventListener('keydown', handleActivity);
       window.removeEventListener('touchstart', handleActivity);
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [status.unlocked, clearClipboard]);
+  }, [status.unlocked]);
 
   // Periodic heartbeat to enforce auto-lock
   useEffect(() => {
