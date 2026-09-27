@@ -337,16 +337,30 @@ export const SettingsModal: React.FC = () => {
               </div>
               <span
                 className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded border ${
-                  screenProtection?.active
+                  screenProtection?.status_code === 'active'
+                    ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-500/30'
+                    : screenProtection?.status_code === 'partial'
+                    ? 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-500/30'
+                    : screenProtection?.status_code === 'unsupported'
+                    ? 'text-slate-600 dark:text-theme-text-muted bg-slate-100 dark:bg-theme-surface border-slate-200 dark:border-theme-border'
+                    : screenProtection?.active
                     ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-500/30'
                     : 'text-slate-600 dark:text-theme-text-muted bg-slate-100 dark:bg-theme-surface border-slate-200 dark:border-theme-border'
                 }`}
               >
-                {screenProtection?.active ? 'Active' : 'Disabled'}
+                {screenProtection?.status_code === 'active'
+                  ? 'Active'
+                  : screenProtection?.status_code === 'partial'
+                  ? 'Partial (Legacy)'
+                  : screenProtection?.status_code === 'unsupported'
+                  ? 'Unsupported'
+                  : screenProtection?.active
+                  ? 'Active'
+                  : 'Disabled'}
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-              Prevents screenshots, screen recordings, window mirroring, and OS app-switcher capture on supported platforms. Window is automatically blurred when unfocused.
+              Excludes application windows from supported OS screenshot, screen recording, and window capture APIs (e.g. OBS, Snipping Tool). Content remains visible to you during normal multitasking.
             </p>
 
             <div className="p-3 rounded-xl bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border flex items-center justify-between gap-3">
@@ -368,12 +382,19 @@ export const SettingsModal: React.FC = () => {
                 type="button"
                 onClick={() => setScreenProtection(!screenProtection?.active)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shrink-0 ${
-                  screenProtection?.active
+                  screenProtection?.status_code === 'unsupported'
+                    ? 'bg-slate-100 dark:bg-theme-hover border-slate-300 dark:border-theme-border text-slate-500 dark:text-theme-text-muted opacity-80 cursor-not-allowed'
+                    : screenProtection?.active
                     ? 'bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700 shadow-xs'
                     : 'bg-slate-100 dark:bg-theme-hover border-slate-300 dark:border-theme-border text-slate-700 dark:text-theme-text hover:bg-slate-200'
                 }`}
+                disabled={screenProtection?.status_code === 'unsupported'}
               >
-                {screenProtection?.active ? 'Protected' : 'Enable'}
+                {screenProtection?.status_code === 'unsupported'
+                  ? 'Unsupported'
+                  : screenProtection?.active
+                  ? 'Protected'
+                  : 'Enable'}
               </button>
             </div>
 

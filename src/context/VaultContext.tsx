@@ -195,7 +195,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       platform: 'protected',
       active,
       description: active
-        ? 'Privacy screen protection active. Window obscures on blur, screenshot key capture, and print attempts.'
+        ? 'Privacy screen protection active. Window is excluded from OS screen capture where supported.'
         : 'Privacy screen protection disabled.',
     };
   });

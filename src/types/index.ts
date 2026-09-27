@@ -321,6 +321,8 @@ export interface ScreenProtectionStatus {
   platform: string;
   active: boolean;
   description: string;
+  native_exclusion?: boolean;
+  status_code?: 'active' | 'partial' | 'unsupported' | 'failed' | 'disabled';
 }
 
 export interface BiometricCapability {
