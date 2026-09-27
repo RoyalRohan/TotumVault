@@ -31,6 +31,7 @@ export interface EntryBase {
   created_at: string;
   updated_at: string;
   last_used_at?: string;
+  sort_order?: number | null;
 }
 
 export interface LoginFolder {
@@ -38,7 +39,8 @@ export interface LoginFolder {
   name: string;
   parent_id?: string | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
+  sort_order?: number | null;
 }
 
 export interface LoginEntry extends EntryBase {
@@ -129,6 +131,7 @@ export interface DecryptedEntry {
   category: string;
   favorite: boolean;
   folder_id?: string | null;
+  sort_order?: number | null;
   tags: string[];
   custom_fields: CustomField[];
   totp_secret?: string;

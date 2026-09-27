@@ -47,6 +47,9 @@ export const Sidebar: React.FC = () => {
     createFolder,
     renameFolder,
     deleteFolder,
+    moveFolder,
+    reorderFolders,
+    moveEntryToFolder,
   } = useVault();
 
   const [isLoginsExpanded, setIsLoginsExpanded] = useState<boolean>(true);
@@ -59,6 +62,279 @@ export const Sidebar: React.FC = () => {
 
   const [deletingFolder, setDeletingFolder] = useState<LoginFolder | null>(null);
   const [deleteContents, setDeleteContents] = useState<boolean>(false);
+
+  // Expanded folders state with localStorage persistence
+  const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('totumvault_expanded_folders');
+      if (saved !== null) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) return new Set(arr);
+      }
+    } catch {
+      // ignore
+    }
+    return new Set<string>();
+  });
+
+  const isExpandedInitializedRef = React.useRef<boolean>(false);
+  React.useEffect(() => {
+    if (!isExpandedInitializedRef.current && folders.length > 0) {
+      isExpandedInitializedRef.current = true;
+      if (localStorage.getItem('totumvault_expanded_folders') === null) {
+        // Expand all folders by default on initial view
+        setExpandedFolderIds(new Set(folders.map((f) => f.id)));
+      }
+    }
+  }, [folders]);
+
+  const toggleFolderExpanded = (folderId: string) => {
+    setExpandedFolderIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      try {
+        localStorage.setItem('totumvault_expanded_folders', JSON.stringify(Array.from(next)));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  // Drag and drop state for folders
+  const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
+  const [draggedItemType, setDraggedItemType] = useState<'folder' | 'login' | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    folderId: string;
+    position: 'before' | 'inside' | 'after';
+    isValid: boolean;
+  } | null>(null);
+  const [isOverUnfiled, setIsOverUnfiled] = useState<boolean>(false);
+  const [isOverRootDrop, setIsOverRootDrop] = useState<boolean>(false);
+  const [isOverLoginsNav, setIsOverLoginsNav] = useState<boolean>(false);
+  const hoverExpandTimerRef = React.useRef<{ folderId: string; timer: any } | null>(null);
+
+  // Helper: check if candidate is descendant of ancestor (cycle prevention)
+  const isDescendantFolder = (candidateChildId: string, ancestorId: string): boolean => {
+    let currentId: string | null = candidateChildId;
+    const visited = new Set<string>();
+    while (currentId) {
+      if (visited.has(currentId)) break;
+      visited.add(currentId);
+      const f = folders.find((folder) => folder.id === currentId);
+      if (!f || !f.parent_id) break;
+      if (f.parent_id === ancestorId) return true;
+      currentId = f.parent_id;
+    }
+    return false;
+  };
+
+  const canDropFolderInto = (draggedId: string, targetId: string): boolean => {
+    if (draggedId === targetId) return false;
+    if (isDescendantFolder(targetId, draggedId)) return false;
+    return true;
+  };
+
+  const canDropFolderAdjacent = (draggedId: string, targetFolder: LoginFolder): boolean => {
+    if (draggedId === targetFolder.id) return false;
+    if (targetFolder.parent_id) {
+      if (targetFolder.parent_id === draggedId) return false;
+      if (isDescendantFolder(targetFolder.parent_id, draggedId)) return false;
+    }
+    return true;
+  };
+
+  const sortFolders = (a: LoginFolder, b: LoginFolder) => {
+    const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+    const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  };
+
+  const handleFolderDragStart = (e: React.DragEvent<HTMLDivElement>, folder: LoginFolder) => {
+    const payload = JSON.stringify({ type: 'folder', id: folder.id });
+    e.dataTransfer.setData('application/json', payload);
+    e.dataTransfer.setData('text/plain', payload);
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedFolderId(folder.id);
+    setDraggedItemType('folder');
+  };
+
+  const handleFolderDragEnd = () => {
+    setDraggedFolderId(null);
+    setDraggedItemType(null);
+    setDropTarget(null);
+    setIsOverUnfiled(false);
+    setIsOverRootDrop(false);
+    setIsOverLoginsNav(false);
+    if (hoverExpandTimerRef.current?.timer) {
+      clearTimeout(hoverExpandTimerRef.current.timer);
+      hoverExpandTimerRef.current = null;
+    }
+  };
+
+  const handleFolderDragOver = (
+    e: React.DragEvent<HTMLDivElement>,
+    folder: LoginFolder,
+    isMobile: boolean
+  ) => {
+    if (isMobile) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const height = rect.height;
+
+    if (draggedItemType === 'folder' || draggedFolderId) {
+      const draggedId = draggedFolderId;
+      if (!draggedId) {
+        e.dataTransfer.dropEffect = 'none';
+        return;
+      }
+
+      let pos: 'before' | 'inside' | 'after';
+      if (y < height * 0.25) {
+        pos = 'before';
+      } else if (y > height * 0.75) {
+        pos = 'after';
+      } else {
+        pos = 'inside';
+      }
+
+      let isValid = false;
+      if (pos === 'inside') {
+        isValid = canDropFolderInto(draggedId, folder.id);
+      } else {
+        isValid = canDropFolderAdjacent(draggedId, folder);
+      }
+
+      if (!isValid) {
+        e.dataTransfer.dropEffect = 'none';
+        setDropTarget({ folderId: folder.id, position: pos, isValid: false });
+        return;
+      }
+
+      e.dataTransfer.dropEffect = 'move';
+      setDropTarget({ folderId: folder.id, position: pos, isValid: true });
+
+      // Auto-expand on hover inside
+      if (pos === 'inside' && !expandedFolderIds.has(folder.id)) {
+        if (hoverExpandTimerRef.current?.folderId !== folder.id) {
+          if (hoverExpandTimerRef.current?.timer) {
+            clearTimeout(hoverExpandTimerRef.current.timer);
+          }
+          hoverExpandTimerRef.current = {
+            folderId: folder.id,
+            timer: setTimeout(() => {
+              setExpandedFolderIds((prev) => new Set(prev).add(folder.id));
+            }, 600),
+          };
+        }
+      } else {
+        if (hoverExpandTimerRef.current?.timer) {
+          clearTimeout(hoverExpandTimerRef.current.timer);
+          hoverExpandTimerRef.current = null;
+        }
+      }
+    } else {
+      // Login item being dragged over folder
+      e.dataTransfer.dropEffect = 'move';
+      setDropTarget({ folderId: folder.id, position: 'inside', isValid: true });
+
+      if (!expandedFolderIds.has(folder.id)) {
+        if (hoverExpandTimerRef.current?.folderId !== folder.id) {
+          if (hoverExpandTimerRef.current?.timer) {
+            clearTimeout(hoverExpandTimerRef.current.timer);
+          }
+          hoverExpandTimerRef.current = {
+            folderId: folder.id,
+            timer: setTimeout(() => {
+              setExpandedFolderIds((prev) => new Set(prev).add(folder.id));
+            }, 600),
+          };
+        }
+      }
+    }
+  };
+
+  const handleFolderDrop = async (
+    e: React.DragEvent<HTMLDivElement>,
+    targetFolder: LoginFolder,
+    isMobile: boolean
+  ) => {
+    if (isMobile) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (hoverExpandTimerRef.current?.timer) {
+      clearTimeout(hoverExpandTimerRef.current.timer);
+      hoverExpandTimerRef.current = null;
+    }
+
+    const currentDrop = dropTarget;
+    setDropTarget(null);
+    setDraggedFolderId(null);
+    setDraggedItemType(null);
+
+    try {
+      const raw = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+      if (!raw) return;
+      const data = JSON.parse(raw);
+
+      if (data.type === 'login' && data.id) {
+        await moveEntryToFolder(data.id, targetFolder.id);
+        setExpandedFolderIds((prev) => new Set(prev).add(targetFolder.id));
+      } else if (data.type === 'folder' && data.id) {
+        const draggedId = data.id;
+        if (draggedId === targetFolder.id) return;
+
+        const pos = currentDrop?.position || 'inside';
+
+        if (pos === 'inside') {
+          if (!canDropFolderInto(draggedId, targetFolder.id)) {
+            return;
+          }
+          await moveFolder(draggedId, targetFolder.id);
+          setExpandedFolderIds((prev) => new Set(prev).add(targetFolder.id));
+        } else {
+          if (!canDropFolderAdjacent(draggedId, targetFolder)) {
+            return;
+          }
+
+          const targetParentId = targetFolder.parent_id || null;
+          const draggedFolder = folders.find((f) => f.id === draggedId);
+          if (!draggedFolder) return;
+
+          if ((draggedFolder.parent_id || null) !== targetParentId) {
+            await moveFolder(draggedId, targetParentId);
+          }
+
+          const siblings = folders
+            .filter((f) => (f.parent_id || null) === targetParentId && f.id !== draggedId)
+            .sort(sortFolders);
+
+          const targetIdx = siblings.findIndex((f) => f.id === targetFolder.id);
+          if (targetIdx === -1) {
+            siblings.push(draggedFolder);
+          } else if (pos === 'before') {
+            siblings.splice(targetIdx, 0, draggedFolder);
+          } else {
+            siblings.splice(targetIdx + 1, 0, draggedFolder);
+          }
+
+          const orderedIds = siblings.map((f) => f.id);
+          await reorderFolders(orderedIds);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to handle folder drop:', err);
+    }
+  };
 
   const getCount = (cat: CategoryType) => {
     if (cat === 'all') return entries.length;
@@ -95,8 +371,8 @@ export const Sidebar: React.FC = () => {
     ? healthReport.weak_passwords + healthReport.reused_passwords
     : 0;
 
-  const renderFolderTree = (parentId: string | null = null, depth = 0) => {
-    const currentFolders = folders.filter((f) => (f.parent_id || null) === parentId);
+  const renderFolderTree = (parentId: string | null = null, depth = 0, isMobile: boolean = false) => {
+    const currentFolders = folders.filter((f) => (f.parent_id || null) === parentId).sort(sortFolders);
     if (currentFolders.length === 0) return null;
 
     return (
@@ -105,27 +381,74 @@ export const Sidebar: React.FC = () => {
           const folderEntries = entries.filter((e) => e.category === 'logins' && e.folder_id === folder.id);
           const isSelected = activeCategory === 'logins' && selectedFolderId === folder.id;
           const isRenaming = renamingFolderId === folder.id;
+          const hasChildren = folders.some((f) => f.parent_id === folder.id);
+          const isExpanded = expandedFolderIds.has(folder.id);
+
+          const isDropTarget = dropTarget?.folderId === folder.id;
+          const dropPos = isDropTarget ? dropTarget.position : null;
+          const isDropValid = isDropTarget ? dropTarget.isValid : true;
 
           return (
-            <div key={folder.id} className="group/folder">
+            <div key={folder.id} className="group/folder relative">
+              {/* Top insertion line for sibling reordering */}
+              {!isMobile && isDropTarget && dropPos === 'before' && isDropValid && (
+                <div className="absolute -top-0.5 left-2 right-2 h-0.5 bg-purple-500 rounded-full z-20 pointer-events-none shadow-xs" />
+              )}
+
               <div
-                className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
-                  isSelected
+                draggable={!isMobile && !isRenaming}
+                onDragStart={(e) => handleFolderDragStart(e, folder)}
+                onDragEnd={handleFolderDragEnd}
+                onDragOver={(e) => handleFolderDragOver(e, folder, isMobile)}
+                onDragLeave={() => {
+                  if (dropTarget?.folderId === folder.id) {
+                    setDropTarget(null);
+                  }
+                }}
+                onDrop={(e) => handleFolderDrop(e, folder, isMobile)}
+                className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer relative ${
+                  !isMobile && isDropTarget && dropPos === 'inside'
+                    ? isDropValid
+                      ? 'bg-purple-100 dark:bg-purple-900/50 ring-2 ring-purple-500 font-semibold text-purple-950 dark:text-purple-200'
+                      : 'bg-rose-100/60 dark:bg-rose-950/40 ring-2 ring-rose-500/70 cursor-not-allowed'
+                    : isSelected
                     ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-950 dark:text-purple-200 font-semibold border border-purple-300 dark:border-purple-500/30'
                     : 'text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100 dark:hover:bg-theme-hover border border-transparent'
-                }`}
-                style={{ paddingLeft: `${16 + depth * 12}px` }}
+                } ${!isMobile && draggedFolderId === folder.id ? 'opacity-40' : ''}`}
+                style={{ paddingLeft: `${8 + depth * 12}px` }}
                 onClick={() => {
                   setActiveCategory('logins');
                   setSelectedFolderId(folder.id);
                 }}
               >
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  {isSelected ? (
+                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                  {/* Expand/Collapse Chevron or alignment spacer */}
+                  {hasChildren ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFolderExpanded(folder.id);
+                      }}
+                      className="p-0.5 hover:text-purple-600 dark:hover:text-purple-400 text-slate-400 dark:text-slate-500 transition-colors rounded cursor-pointer shrink-0"
+                      title={isExpanded ? 'Collapse folder' : 'Expand folder'}
+                    >
+                      {isExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  ) : (
+                    <span className="w-4 h-4 shrink-0" />
+                  )}
+
+                  {isSelected || isExpanded ? (
                     <FolderOpen className="w-3.5 h-3.5 shrink-0 text-purple-600 dark:text-purple-400" />
                   ) : (
                     <Folder className="w-3.5 h-3.5 shrink-0 text-slate-400 dark:text-slate-500 group-hover/folder:text-slate-700 dark:group-hover/folder:text-slate-300" />
                   )}
+
                   {isRenaming ? (
                     <form
                       onSubmit={(e) => {
@@ -145,7 +468,7 @@ export const Sidebar: React.FC = () => {
                         onChange={(e) => setRenamingFolderName(e.target.value)}
                         className="bg-white dark:bg-black/50 border border-purple-500 rounded px-1.5 py-0.5 text-xs text-theme-text w-full focus:outline-hidden"
                       />
-                      <button type="submit" className="p-0.5 text-emerald-600 hover:text-emerald-700">
+                      <button type="submit" className="p-0.5 text-emerald-600 hover:text-emerald-700 cursor-pointer">
                         <Check className="w-3 h-3" />
                       </button>
                     </form>
@@ -187,7 +510,13 @@ export const Sidebar: React.FC = () => {
                 </div>
               </div>
 
-              {renderFolderTree(folder.id, depth + 1)}
+              {/* Bottom insertion line for sibling reordering */}
+              {!isMobile && isDropTarget && dropPos === 'after' && isDropValid && (
+                <div className="absolute -bottom-0.5 left-2 right-2 h-0.5 bg-purple-500 rounded-full z-20 pointer-events-none shadow-xs" />
+              )}
+
+              {/* Recursively render child folders only if expanded */}
+              {hasChildren && isExpanded && renderFolderTree(folder.id, depth + 1, isMobile)}
             </div>
           );
         })}
@@ -250,6 +579,35 @@ export const Sidebar: React.FC = () => {
           return (
             <div key={item.id} className="space-y-1">
               <div
+                onDragOver={(e) => {
+                  if (isMobile) return;
+                  if (draggedFolderId || draggedItemType) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    setIsOverLoginsNav(true);
+                  }
+                }}
+                onDragLeave={() => setIsOverLoginsNav(false)}
+                onDrop={async (e) => {
+                  if (isMobile) return;
+                  e.preventDefault();
+                  setIsOverLoginsNav(false);
+                  try {
+                    const raw = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+                    if (!raw) return;
+                    const data = JSON.parse(raw);
+                    if (data.type === 'login' && data.id) {
+                      await moveEntryToFolder(data.id, null);
+                    } else if (data.type === 'folder' && data.id) {
+                      const f = folders.find((itemF) => itemF.id === data.id);
+                      if (f && f.parent_id !== null) {
+                        await moveFolder(data.id, null);
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Drop to logins root nav failed:', err);
+                  }
+                }}
                 onClick={() => {
                   if (isLoginsItem && activeCategory === 'logins') {
                     setIsLoginsExpanded((prev) => !prev);
@@ -262,7 +620,9 @@ export const Sidebar: React.FC = () => {
                   }
                 }}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-all cursor-pointer group min-h-[44px] ${
-                  isActive && (item.id !== 'logins' || selectedFolderId === null)
+                  !isMobile && isLoginsItem && isOverLoginsNav
+                    ? 'ring-2 ring-purple-500 bg-purple-100 dark:bg-purple-950/60 font-semibold'
+                    : isActive && (item.id !== 'logins' || selectedFolderId === null)
                     ? 'bg-purple-100/90 dark:bg-purple-950/40 text-purple-950 dark:text-purple-200 shadow-xs border border-purple-300 dark:border-purple-500/40 font-semibold'
                     : 'text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-100/90 dark:hover:bg-theme-hover border border-transparent hover:border-slate-200 dark:hover:border-[#252a33] font-medium'
                 }`}
@@ -333,15 +693,46 @@ export const Sidebar: React.FC = () => {
               {/* Subfolders under Logins */}
               {isLoginsItem && isLoginsExpanded && (
                 <div className="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-200 dark:border-theme-border ml-5 mt-0.5 animate-fade-in">
-                  {/* Unfiled Category Link if folders exist and there are unfiled logins */}
-                  {folders.length > 0 && unfiledCount > 0 && (
+                  {/* Unfiled Category Link if folders exist */}
+                  {folders.length > 0 && (
                     <div
+                      onDragOver={(e) => {
+                        if (isMobile) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.dataTransfer.dropEffect = 'move';
+                        setIsOverUnfiled(true);
+                      }}
+                      onDragLeave={() => setIsOverUnfiled(false)}
+                      onDrop={async (e) => {
+                        if (isMobile) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsOverUnfiled(false);
+                        try {
+                          const raw = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+                          if (!raw) return;
+                          const data = JSON.parse(raw);
+                          if (data.type === 'login' && data.id) {
+                            await moveEntryToFolder(data.id, null);
+                          } else if (data.type === 'folder' && data.id) {
+                            const f = folders.find((itemF) => itemF.id === data.id);
+                            if (f && f.parent_id !== null) {
+                              await moveFolder(data.id, null);
+                            }
+                          }
+                        } catch (err) {
+                          console.error('Drop on unfiled failed:', err);
+                        }
+                      }}
                       onClick={() => {
                         setActiveCategory('logins');
                         setSelectedFolderId('__unfiled__');
                       }}
                       className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
-                        activeCategory === 'logins' && selectedFolderId === '__unfiled__'
+                        !isMobile && isOverUnfiled
+                          ? 'ring-2 ring-purple-500 bg-purple-100 dark:bg-purple-950/60 font-semibold'
+                          : activeCategory === 'logins' && selectedFolderId === '__unfiled__'
                           ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-950 dark:text-purple-200 font-semibold border border-purple-300 dark:border-purple-500/30'
                           : 'text-slate-600 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-theme-text hover:bg-slate-100 dark:hover:bg-theme-hover border border-transparent'
                       }`}
@@ -354,7 +745,47 @@ export const Sidebar: React.FC = () => {
                   )}
 
                   {/* Render Folder Tree */}
-                  {renderFolderTree(null, 0)}
+                  {renderFolderTree(null, 0, isMobile)}
+
+                  {/* Root drop zone when dragging nested folder */}
+                  {!isMobile && (draggedFolderId || draggedItemType) && (
+                    <div
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.dataTransfer.dropEffect = 'move';
+                        setIsOverRootDrop(true);
+                      }}
+                      onDragLeave={() => setIsOverRootDrop(false)}
+                      onDrop={async (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setIsOverRootDrop(false);
+                        try {
+                          const raw = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+                          if (!raw) return;
+                          const data = JSON.parse(raw);
+                          if (data.type === 'folder' && data.id) {
+                            const f = folders.find((itemF) => itemF.id === data.id);
+                            if (f && f.parent_id !== null) {
+                              await moveFolder(data.id, null);
+                            }
+                          } else if (data.type === 'login' && data.id) {
+                            await moveEntryToFolder(data.id, null);
+                          }
+                        } catch (err) {
+                          console.error('Drop to root failed:', err);
+                        }
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg border border-dashed text-[11px] text-center transition-all cursor-pointer ${
+                        isOverRootDrop
+                          ? 'border-purple-500 bg-purple-100 dark:bg-purple-950/50 text-purple-950 dark:text-purple-200 font-semibold'
+                          : 'border-slate-300 dark:border-theme-border text-slate-500 dark:text-theme-text-muted hover:border-purple-400'
+                      }`}
+                    >
+                      Drop here to move to Root
+                    </div>
+                  )}
 
                   {/* New Folder Form or Button */}
                   {isCreatingFolder ? (
@@ -362,7 +793,10 @@ export const Sidebar: React.FC = () => {
                       onSubmit={async (e) => {
                         e.preventDefault();
                         if (newFolderName.trim()) {
-                          await createFolder(newFolderName.trim(), newFolderParentId);
+                          const created = await createFolder(newFolderName.trim(), newFolderParentId);
+                          if (created && newFolderParentId) {
+                            setExpandedFolderIds((prev) => new Set(prev).add(newFolderParentId));
+                          }
                           setNewFolderName('');
                           setIsCreatingFolder(false);
                         }

@@ -81,6 +81,9 @@ interface VaultContextType {
   renameFolder: (id: string, name: string) => Promise<void>;
   deleteFolder: (id: string, deleteContents: boolean) => Promise<void>;
   moveEntryToFolder: (entryId: string, folderId: string | null) => Promise<void>;
+  moveFolder: (folderId: string, newParentId: string | null) => Promise<void>;
+  reorderFolders: (orderedIds: string[]) => Promise<void>;
+  reorderEntries: (orderedIds: string[]) => Promise<void>;
 
   // Biometrics
   isBiometricSupported: boolean;
@@ -568,14 +571,85 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [selectedFolderId, refreshFolders, refreshStatus, showToast]);
 
   const moveEntryToFolder = useCallback(async (entryId: string, folderId: string | null) => {
+    const prevEntries = [...entries];
+    setEntries((prev) =>
+      prev.map((e) => (e.id === entryId ? { ...e, folder_id: folderId } : e))
+    );
     try {
       await invoke('move_entry_to_folder', { entryId, folderId });
       await refreshStatus();
-      showToast('Entry moved', 'info');
+      showToast('Login moved', 'info');
     } catch (err: any) {
-      showToast(err.toString(), 'error');
+      setEntries(prevEntries);
+      showToast(err?.toString() || 'Failed to move login', 'error');
     }
-  }, [refreshStatus, showToast]);
+  }, [entries, refreshStatus, showToast]);
+
+  const moveFolder = useCallback(
+    async (folderId: string, newParentId: string | null) => {
+      const prevFolders = [...folders];
+      setFolders((prev) =>
+        prev.map((f) => (f.id === folderId ? { ...f, parent_id: newParentId } : f))
+      );
+      try {
+        await invoke('move_login_folder', { folderId, newParentId: newParentId || null });
+        await refreshFolders();
+        showToast('Folder moved', 'info');
+      } catch (err: any) {
+        setFolders(prevFolders);
+        showToast(err?.toString() || 'Failed to move folder', 'error');
+      }
+    },
+    [folders, refreshFolders, showToast]
+  );
+
+  const reorderFolders = useCallback(
+    async (orderedIds: string[]) => {
+      if (orderedIds.length === 0) return;
+      const prevFolders = [...folders];
+      setFolders((prev) => {
+        const orderMap = new Map(orderedIds.map((id, idx) => [id, idx]));
+        return prev.map((f) => {
+          if (orderMap.has(f.id)) {
+            return { ...f, sort_order: orderMap.get(f.id)! };
+          }
+          return f;
+        });
+      });
+      try {
+        await invoke('reorder_login_folders', { orderedIds });
+        await refreshFolders();
+      } catch (err: any) {
+        setFolders(prevFolders);
+        showToast(err?.toString() || 'Failed to reorder folders', 'error');
+      }
+    },
+    [folders, refreshFolders, showToast]
+  );
+
+  const reorderEntries = useCallback(
+    async (orderedIds: string[]) => {
+      if (orderedIds.length === 0) return;
+      const prevEntries = [...entries];
+      setEntries((prev) => {
+        const orderMap = new Map(orderedIds.map((id, idx) => [id, idx]));
+        return prev.map((e) => {
+          if (orderMap.has(e.id)) {
+            return { ...e, sort_order: orderMap.get(e.id)! };
+          }
+          return e;
+        });
+      });
+      try {
+        await invoke('reorder_login_entries', { orderedIds });
+        await refreshStatus();
+      } catch (err: any) {
+        setEntries(prevEntries);
+        showToast(err?.toString() || 'Failed to reorder entries', 'error');
+      }
+    },
+    [entries, refreshStatus, showToast]
+  );
 
   // Biometrics
   const setupBiometric = useCallback(async (masterPassword: string): Promise<boolean> => {
@@ -1321,6 +1395,9 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         renameFolder,
         deleteFolder,
         moveEntryToFolder,
+        moveFolder,
+        reorderFolders,
+        reorderEntries,
         isBiometricSupported,
         isBiometricEnabled,
         biometricFailedAttempts,

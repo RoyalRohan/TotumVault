@@ -63,6 +63,8 @@ pub struct DecryptedEntry {
     pub last_used_at: Option<String>,
     #[serde(default)]
     pub folder_id: Option<String>,
+    #[serde(default)]
+    pub sort_order: Option<i32>,
 
     // Authenticator extensions
     #[serde(default)]
@@ -141,6 +143,8 @@ pub struct DecryptedEntryHeader {
     pub updated_at: String,
     #[serde(default)]
     pub folder_id: Option<String>,
+    #[serde(default)]
+    pub sort_order: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -150,6 +154,8 @@ pub struct LoginFolder {
     #[serde(default)]
     pub parent_id: Option<String>,
     pub created_at: String,
+    #[serde(default)]
+    pub sort_order: Option<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

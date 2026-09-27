@@ -270,6 +270,7 @@ impl VaultManager {
             name: clean_name.to_string(),
             parent_id,
             created_at: Utc::now().to_rfc3339(),
+            sort_order: Some(folders.len() as i32),
         };
 
         folders.push(new_folder.clone());
@@ -335,10 +336,185 @@ impl VaultManager {
         Ok(())
     }
 
+    pub fn is_descendant_of(folders: &[LoginFolder], candidate_child_id: &str, ancestor_id: &str) -> bool {
+        let mut current = Some(candidate_child_id.to_string());
+        let mut visited = std::collections::HashSet::new();
+        while let Some(pid) = current {
+            if pid == ancestor_id {
+                return true;
+            }
+            if !visited.insert(pid.clone()) {
+                // Terminate safely if cyclic parent relationships exist in corrupt data
+                break;
+            }
+            current = folders
+                .iter()
+                .find(|f| f.id == pid)
+                .and_then(|f| f.parent_id.clone());
+        }
+        false
+    }
+
+    pub fn move_login_folder(&mut self, folder_id: &str, new_parent_id: Option<String>) -> Result<(), String> {
+        self.check_auto_lock();
+        if self.active_key.is_none() {
+            return Err("Vault is locked".to_string());
+        }
+
+        let mut folders = self.get_login_folders()?;
+        let folder_idx = folders
+            .iter()
+            .position(|f| f.id == folder_id)
+            .ok_or_else(|| "Folder not found".to_string())?;
+
+        let folder_name = folders[folder_idx].name.clone();
+
+        if let Some(ref target_pid) = new_parent_id {
+            if target_pid == folder_id {
+                return Err("Cannot move folder into itself".to_string());
+            }
+
+            // Target parent folder must exist
+            if !folders.iter().any(|f| &f.id == target_pid) {
+                return Err("Target parent folder does not exist".to_string());
+            }
+
+            // Target parent must not be a descendant of the folder being moved (cycle prevention)
+            if Self::is_descendant_of(&folders, target_pid, folder_id) {
+                return Err("Cannot move folder into its own descendant".to_string());
+            }
+
+            // Check duplicate folder name in target parent
+            if folders.iter().any(|f| f.id != folder_id && f.name.eq_ignore_ascii_case(&folder_name) && f.parent_id.as_deref() == Some(target_pid)) {
+                return Err(format!("A folder named '{}' already exists in the destination", folder_name));
+            }
+        } else {
+            // Target is root: check duplicate folder name at root
+            if folders.iter().any(|f| f.id != folder_id && f.name.eq_ignore_ascii_case(&folder_name) && f.parent_id.is_none()) {
+                return Err(format!("A folder named '{}' already exists at the root level", folder_name));
+            }
+        }
+
+        folders[folder_idx].parent_id = new_parent_id;
+        self.save_login_folders(&folders)?;
+        Ok(())
+    }
+
+    pub fn reorder_login_folders(&mut self, ordered_ids: Vec<String>) -> Result<(), String> {
+        self.check_auto_lock();
+        if self.active_key.is_none() {
+            return Err("Vault is locked".to_string());
+        }
+
+        if ordered_ids.is_empty() {
+            return Ok(());
+        }
+
+        // Verify IDs are unique
+        let mut seen = std::collections::HashSet::new();
+        for id in &ordered_ids {
+            if !seen.insert(id) {
+                return Err(format!("Duplicate folder ID in reorder list: {}", id));
+            }
+        }
+
+        let mut folders = self.get_login_folders()?;
+
+        // Verify all IDs exist and find their parent_id
+        let mut expected_parent_id: Option<Option<String>> = None;
+        for id in &ordered_ids {
+            let folder = folders
+                .iter()
+                .find(|f| &f.id == id)
+                .ok_or_else(|| format!("Folder with ID '{}' not found", id))?;
+
+            if let Some(ref expected) = expected_parent_id {
+                if &folder.parent_id != expected {
+                    return Err("All folders in reorder list must belong to the same parent scope".to_string());
+                }
+            } else {
+                expected_parent_id = Some(folder.parent_id.clone());
+            }
+        }
+
+        // Assign normalized sort_order: 0, 1, 2, ...
+        for (idx, id) in ordered_ids.iter().enumerate() {
+            if let Some(folder) = folders.iter_mut().find(|f| &f.id == id) {
+                folder.sort_order = Some(idx as i32);
+            }
+        }
+
+        self.save_login_folders(&folders)?;
+        Ok(())
+    }
+
+    pub fn reorder_login_entries(&mut self, ordered_ids: Vec<String>) -> Result<(), String> {
+        self.check_auto_lock();
+        if self.active_key.is_none() {
+            return Err("Vault is locked".to_string());
+        }
+
+        if ordered_ids.is_empty() {
+            return Ok(());
+        }
+
+        // Verify IDs are unique
+        let mut seen = std::collections::HashSet::new();
+        for id in &ordered_ids {
+            if !seen.insert(id) {
+                return Err(format!("Duplicate entry ID in reorder list: {}", id));
+            }
+        }
+
+        let mut entries = self.get_entries()?;
+
+        // Verify all IDs exist, are in logins category, and belong to the same folder scope
+        let mut expected_folder_id: Option<Option<String>> = None;
+        for id in &ordered_ids {
+            let entry = entries
+                .iter()
+                .find(|e| &e.id == id)
+                .ok_or_else(|| format!("Entry with ID '{}' not found", id))?;
+
+            if entry.category != "logins" {
+                return Err("Only Login entries can be reordered in the Login tree".to_string());
+            }
+
+            if let Some(ref expected) = expected_folder_id {
+                if &entry.folder_id != expected {
+                    return Err("All entries in reorder list must belong to the same folder scope".to_string());
+                }
+            } else {
+                expected_folder_id = Some(entry.folder_id.clone());
+            }
+        }
+
+        // Assign normalized sort_order: 0, 1, 2, ... and persist atomically
+        for (idx, id) in ordered_ids.iter().enumerate() {
+            if let Some(entry) = entries.iter_mut().find(|e| &e.id == id) {
+                entry.sort_order = Some(idx as i32);
+                self.save_entry(entry.clone())?;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn move_entry_to_folder(&mut self, entry_id: &str, folder_id: Option<String>) -> Result<(), String> {
+        if let Some(ref fid) = folder_id {
+            let folders = self.get_login_folders()?;
+            if !folders.iter().any(|f| &f.id == fid) {
+                return Err("Target folder does not exist".to_string());
+            }
+        }
+
         let entries = self.get_entries()?;
         let mut target_entry = entries.into_iter().find(|e| e.id == entry_id)
             .ok_or_else(|| "Entry not found".to_string())?;
+
+        if target_entry.category != "logins" {
+            return Err("Only Login entries can be moved to login folders".to_string());
+        }
 
         target_entry.folder_id = folder_id;
         self.save_entry(target_entry)?;
@@ -1540,6 +1716,102 @@ mod tests {
 
         mgr.change_master_password("Password123!", "NewPassword456!").unwrap();
         assert!(!mgr.is_biometric_enabled()); // Revoked on password change
+
+        let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_login_folders_drag_drop_and_reorder() {
+        let test_dir = get_test_dir("dnd_tree_test");
+        let mut mgr = VaultManager::new(test_dir.clone());
+        mgr.create_vault("Password123!").unwrap();
+
+        // 1. Create hierarchy: Root -> FolderA -> FolderB -> FolderC
+        let f_a = mgr.create_login_folder("FolderA", None).unwrap();
+        let f_b = mgr.create_login_folder("FolderB", Some(f_a.id.clone())).unwrap();
+        let f_c = mgr.create_login_folder("FolderC", Some(f_b.id.clone())).unwrap();
+        let f_d = mgr.create_login_folder("FolderD", None).unwrap();
+
+        // 2. Test self-drop rejection
+        assert!(mgr.move_login_folder(&f_a.id, Some(f_a.id.clone())).is_err());
+
+        // 3. Test descendant-drop rejection (cycle prevention)
+        assert!(mgr.move_login_folder(&f_a.id, Some(f_b.id.clone())).is_err());
+        assert!(mgr.move_login_folder(&f_a.id, Some(f_c.id.clone())).is_err());
+        assert!(mgr.move_login_folder(&f_b.id, Some(f_c.id.clone())).is_err());
+
+        // 4. Test valid move: FolderC -> Root
+        mgr.move_login_folder(&f_c.id, None).unwrap();
+        let folders = mgr.get_login_folders().unwrap();
+        assert_eq!(folders.iter().find(|f| f.id == f_c.id).unwrap().parent_id, None);
+
+        // 5. Test valid move: FolderC -> FolderA
+        mgr.move_login_folder(&f_c.id, Some(f_a.id.clone())).unwrap();
+        let folders = mgr.get_login_folders().unwrap();
+        assert_eq!(folders.iter().find(|f| f.id == f_c.id).unwrap().parent_id, Some(f_a.id.clone()));
+
+        // 6. Test invalid non-existent folder or parent
+        assert!(mgr.move_login_folder("non_existent_id", None).is_err());
+        assert!(mgr.move_login_folder(&f_c.id, Some("non_existent_parent".to_string())).is_err());
+
+        // 7. Test sibling folder reorder
+        let reordered_root_ids = vec![f_d.id.clone(), f_a.id.clone()];
+        mgr.reorder_login_folders(reordered_root_ids).unwrap();
+        let folders = mgr.get_login_folders().unwrap();
+        assert_eq!(folders.iter().find(|f| f.id == f_d.id).unwrap().sort_order, Some(0));
+        assert_eq!(folders.iter().find(|f| f.id == f_a.id).unwrap().sort_order, Some(1));
+
+        // 8. Test duplicate ID rejection in folder reorder
+        assert!(mgr.reorder_login_folders(vec![f_d.id.clone(), f_d.id.clone()]).is_err());
+
+        // 9. Test mixed-parent folder reorder rejection
+        assert!(mgr.reorder_login_folders(vec![f_d.id.clone(), f_b.id.clone()]).is_err());
+
+        // 10. Test Login entry creation & move to folder
+        let mut entry1 = DecryptedEntry::default();
+        entry1.title = "Login 1".to_string();
+        entry1.category = "logins".to_string();
+        let e1_id = mgr.save_entry(entry1).unwrap();
+
+        let mut entry2 = DecryptedEntry::default();
+        entry2.title = "Login 2".to_string();
+        entry2.category = "logins".to_string();
+        let e2_id = mgr.save_entry(entry2).unwrap();
+
+        // Move entry1 into FolderA
+        mgr.move_entry_to_folder(&e1_id, Some(f_a.id.clone())).unwrap();
+        let entries = mgr.get_entries().unwrap();
+        assert_eq!(entries.iter().find(|e| e.id == e1_id).unwrap().folder_id, Some(f_a.id.clone()));
+
+        // Move entry1 back to root (None)
+        mgr.move_entry_to_folder(&e1_id, None).unwrap();
+        let entries = mgr.get_entries().unwrap();
+        assert_eq!(entries.iter().find(|e| e.id == e1_id).unwrap().folder_id, None);
+
+        // Move both entry1 and entry2 to FolderA, then test entry reordering
+        mgr.move_entry_to_folder(&e1_id, Some(f_a.id.clone())).unwrap();
+        mgr.move_entry_to_folder(&e2_id, Some(f_a.id.clone())).unwrap();
+
+        let reordered_entry_ids = vec![e2_id.clone(), e1_id.clone()];
+        mgr.reorder_login_entries(reordered_entry_ids).unwrap();
+        let entries = mgr.get_entries().unwrap();
+        assert_eq!(entries.iter().find(|e| e.id == e2_id).unwrap().sort_order, Some(0));
+        assert_eq!(entries.iter().find(|e| e.id == e1_id).unwrap().sort_order, Some(1));
+
+        // 11. Test mixed-folder entry reorder rejection
+        mgr.move_entry_to_folder(&e2_id, None).unwrap(); // e2 is now root, e1 is in FolderA
+        assert!(mgr.reorder_login_entries(vec![e1_id.clone(), e2_id.clone()]).is_err());
+
+        // 12. Test duplicate ID rejection in entry reorder
+        assert!(mgr.reorder_login_entries(vec![e1_id.clone(), e1_id.clone()]).is_err());
+
+        // 13. Test non-logins category rejection
+        let mut note = DecryptedEntry::default();
+        note.title = "Secure Note".to_string();
+        note.category = "secure_notes".to_string();
+        let note_id = mgr.save_entry(note).unwrap();
+        assert!(mgr.reorder_login_entries(vec![note_id.clone()]).is_err());
+        assert!(mgr.move_entry_to_folder(&note_id, Some(f_a.id.clone())).is_err());
 
         let _ = fs::remove_dir_all(test_dir);
     }

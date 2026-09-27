@@ -750,6 +750,34 @@ pub fn move_entry_to_folder(
 }
 
 #[tauri::command]
+pub fn move_login_folder(
+    state: State<'_, SharedVaultManager>,
+    folder_id: String,
+    new_parent_id: Option<String>,
+) -> Result<(), String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    manager.move_login_folder(&folder_id, new_parent_id)
+}
+
+#[tauri::command]
+pub fn reorder_login_folders(
+    state: State<'_, SharedVaultManager>,
+    ordered_ids: Vec<String>,
+) -> Result<(), String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    manager.reorder_login_folders(ordered_ids)
+}
+
+#[tauri::command]
+pub fn reorder_login_entries(
+    state: State<'_, SharedVaultManager>,
+    ordered_ids: Vec<String>,
+) -> Result<(), String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    manager.reorder_login_entries(ordered_ids)
+}
+
+#[tauri::command]
 pub fn setup_biometric_unlock(
     state: State<'_, SharedVaultManager>,
     master_password: String,

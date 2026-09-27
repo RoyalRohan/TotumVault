@@ -30,7 +30,17 @@ export const EntryList: React.FC = () => {
     folders,
     selectedFolderId,
     setSelectedFolderId,
+    moveEntryToFolder,
+    reorderEntries,
   } = useVault();
+
+  const isDesktop = typeof window !== 'undefined' && window.matchMedia('(pointer: fine)').matches;
+
+  const [draggedEntryId, setDraggedEntryId] = React.useState<string | null>(null);
+  const [entryDropTarget, setEntryDropTarget] = React.useState<{
+    entryId: string;
+    position: 'before' | 'after';
+  } | null>(null);
 
   // Filter entries based on active category, folder & search query
   const filteredEntries = entries.filter((item) => {
@@ -74,6 +84,18 @@ export const EntryList: React.FC = () => {
       item.tags?.some((t) => t.toLowerCase().includes(q))
     );
   });
+
+  const displayEntries = React.useMemo(() => {
+    if (activeCategory !== 'logins') return filteredEntries;
+    return [...filteredEntries].sort((a, b) => {
+      const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+      const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+      if (orderA !== orderB) return orderA - orderB;
+      const dateA = a.updated_at || a.created_at || '';
+      const dateB = b.updated_at || b.created_at || '';
+      return dateB.localeCompare(dateA);
+    });
+  }, [filteredEntries, activeCategory]);
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
@@ -207,16 +229,113 @@ export const EntryList: React.FC = () => {
 
   const renderEntryItem = (item: DecryptedEntry) => {
     const isSelected = selectedEntryId === item.id;
+    const isDragOver = activeCategory === 'logins' && isDesktop && entryDropTarget?.entryId === item.id;
+    const isDropBefore = isDragOver && entryDropTarget?.position === 'before';
+    const isDropAfter = isDragOver && entryDropTarget?.position === 'after';
+
     return (
       <div
         key={item.id}
+        draggable={activeCategory === 'logins' && isDesktop}
+        onDragStart={(e) => {
+          if (activeCategory !== 'logins' || !isDesktop) return;
+          const payload = JSON.stringify({ type: 'login', id: item.id });
+          e.dataTransfer.setData('application/json', payload);
+          e.dataTransfer.setData('text/plain', payload);
+          e.dataTransfer.effectAllowed = 'move';
+          setDraggedEntryId(item.id);
+        }}
+        onDragEnd={() => {
+          setDraggedEntryId(null);
+          setEntryDropTarget(null);
+        }}
+        onDragOver={(e) => {
+          if (activeCategory !== 'logins' || !isDesktop || !draggedEntryId || draggedEntryId === item.id) {
+            return;
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          e.dataTransfer.dropEffect = 'move';
+
+          const rect = e.currentTarget.getBoundingClientRect();
+          const y = e.clientY - rect.top;
+          const position = y < rect.height / 2 ? 'before' : 'after';
+          setEntryDropTarget({ entryId: item.id, position });
+        }}
+        onDragLeave={() => {
+          if (entryDropTarget?.entryId === item.id) {
+            setEntryDropTarget(null);
+          }
+        }}
+        onDrop={async (e) => {
+          if (activeCategory !== 'logins' || !isDesktop) return;
+          e.preventDefault();
+          e.stopPropagation();
+
+          const target = entryDropTarget;
+          setEntryDropTarget(null);
+          setDraggedEntryId(null);
+
+          try {
+            const raw = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+            if (!raw) return;
+            const data = JSON.parse(raw);
+            if (data.type !== 'login' || !data.id || data.id === item.id) return;
+
+            const draggedId = data.id;
+            const draggedEntry = entries.find((en) => en.id === draggedId);
+            if (!draggedEntry) return;
+
+            const targetFolderId = item.folder_id || null;
+            const sourceFolderId = draggedEntry.folder_id || null;
+
+            if (sourceFolderId !== targetFolderId) {
+              await moveEntryToFolder(draggedId, targetFolderId);
+            }
+
+            // Reorder within targetFolderId scope
+            const scopeEntries = entries
+              .filter((en) => en.category === 'logins' && (en.folder_id || null) === targetFolderId && en.id !== draggedId)
+              .sort((a, b) => {
+                const orderA = a.sort_order ?? Number.MAX_SAFE_INTEGER;
+                const orderB = b.sort_order ?? Number.MAX_SAFE_INTEGER;
+                if (orderA !== orderB) return orderA - orderB;
+                const dateA = a.updated_at || a.created_at || '';
+                const dateB = b.updated_at || b.created_at || '';
+                return dateB.localeCompare(dateA);
+              });
+
+            const targetIndex = scopeEntries.findIndex((en) => en.id === item.id);
+            const insertIndex = target?.position === 'before' ? targetIndex : targetIndex + 1;
+            if (targetIndex === -1) {
+              scopeEntries.push(draggedEntry);
+            } else {
+              scopeEntries.splice(insertIndex, 0, draggedEntry);
+            }
+
+            const orderedIds = scopeEntries.map((en) => en.id);
+            await reorderEntries(orderedIds);
+          } catch (err) {
+            console.error('Failed to reorder login entry:', err);
+          }
+        }}
         onClick={() => setSelectedEntryId(item.id)}
         className={`p-3.5 sm:p-4 cursor-pointer transition-all flex items-center justify-between group relative min-h-[68px] ${
+          draggedEntryId === item.id ? 'opacity-40' : ''
+        } ${
           isSelected
             ? 'bg-purple-50/90 dark:bg-purple-600/10 text-theme-text border-l-3 border-purple-600 dark:border-purple-400 shadow-2xs'
             : 'hover:bg-slate-100/80 dark:hover:bg-theme-hover text-theme-text-muted'
         }`}
       >
+        {/* Reorder insertion indicator lines */}
+        {isDropBefore && (
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-purple-500 z-20 pointer-events-none shadow-xs" />
+        )}
+        {isDropAfter && (
+          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-500 z-20 pointer-events-none shadow-xs" />
+        )}
+
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div
             className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-2xs transition-transform group-hover:scale-105 ${
@@ -410,7 +529,7 @@ export const EntryList: React.FC = () => {
             ))}
           </div>
         ) : (
-          filteredEntries.map((item) => renderEntryItem(item))
+          displayEntries.map((item) => renderEntryItem(item))
         )}
       </div>
     </div>
