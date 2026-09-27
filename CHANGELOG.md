@@ -20,12 +20,24 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   - Strictly no PIN, pattern, or device credential fallback.
   - Enforced 3-attempt biometric lockout falling back to master password.
   - Automatic biometric unlock prompt on app launch for locked vaults.
-- **Secure Smart Clipboard Auto-Clear**:
-  - Smart overwrite protection: clears the clipboard on timeout expiry or vault lock only if the content still matches the copied secret.
-  - Avoids overwriting newer data copied from other applications.
-  - Added configurable timeout settings (15s, 30s default, 60s, 2m, Never).
-  - Immediate purge on vault lock and screen capture events.
-  - In-memory tracking with zero persistent plaintext storage or logging.
+- **VS Code-Style Hierarchical Login Tree**:
+  - Interactive hierarchical drag-and-drop tree system exclusively for the "Logins" category.
+  - Supports dragging entries into nested subfolders or root/unfiled, dragging folders to re-parent or re-order, visual drop position indicators, and expand/collapse state persistence.
+  - Zero side effects on Documents, Cards, Notes, Licenses, Servers, or Authenticator categories.
+- **Desktop Native Window Capture Protection Redesign**:
+  - Redesigned desktop screen protection from intrusive focus-loss blur to native OS window display exclusion (`SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)` on Windows, `FLAG_SECURE` on Android).
+  - Users can now use TotumVault normally alongside recording tools (OBS Studio, Discord, Teams), while recording software captures an excluded blank window surface.
+  - Added `get_screen_protection_status` IPC command providing honest, platform-aware protection capability reporting.
+- **Mobile Long-Press & Context Menu Safety**:
+  - Resolved false-positive privacy blackout triggered during mobile long-press/tap-and-hold (native text-selection magnifier or action mode) and desktop right-clicks.
+  - Precision pointer event session tracking (`pointerType === 'touch'`) distinguishes internal interaction focus shifts from external window blurring.
+- **Production Concurrency-Safe Clipboard Auto-Clear**:
+  - Re-architected clipboard auto-clear with atomic operation mutex serialization (`op_mutex`) and monotonic generation reservation (`pending_generation`), eliminating race conditions between expiring timers and newer copies.
+  - Integrated dedicated single-worker reader (`totum-clipboard-reader`) with bounded 1500ms timeout, preventing thread leaks or compositor lockups.
+  - Ephemeral HMAC-SHA256 fingerprinting with `ZeroizeOnDrop` ensuring zero plaintext secret retention in memory.
+  - Smart overwrite protection: clears the clipboard on timeout expiry or vault lock only if the content still matches the copied secret, preserving external clipboard data.
+  - Bounded OS auxiliary cleaners with child process reaping and a 300ms watchdog deadline to eliminate zombie processes.
+  - Configurable timeout settings (15s, 30s default, 60s, 120s, Never) and immediate purge on vault lock or screenshot detection.
 
 ### Security
 

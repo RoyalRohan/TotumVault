@@ -56,9 +56,15 @@ The documented architecture places React/TypeScript on one side of the IPC bound
 
 ### T6 — Clipboard leakage
 
-**Threat:** A copied secret remains in the OS clipboard indefinitely.
+**Threat:** A copied secret remains in the OS clipboard indefinitely or an auto-clear operation destroys newer external user data or races with rapid copy operations.
 
-**Mitigation:** TotumVault uses a timed clipboard-clearing countdown (configurable, 30s default) that wipes the system clipboard automatically.
+**Mitigation:** TotumVault implements synchronized native clipboard tracking. Copied secrets are tracked using ephemeral HMAC-SHA256 fingerprints without storing raw secret text in memory. Timed auto-clearing (configurable, 30s default) and lock clearing wipe the system clipboard only if the content still matches the fingerprinted secret. If another application copied text meanwhile, that newer data is preserved. All operations are serialized under an atomic operation mutex with monotonic generation reservation, ensuring older timers never erase newer copies.
+
+### T7 — Screen recording and unauthorized window capture
+
+**Threat:** Background recording software, streaming tools (OBS Studio, Discord, Teams), or screen-scraping utilities capture sensitive credentials displayed in the active window.
+
+**Mitigation:** Hardware display affinity (`WDA_EXCLUDEFROMCAPTURE` on Windows, `FLAG_SECURE` on Android) excludes the window surface from OS capture buffers while keeping the window clear and legible for the user. Proactive screenshot shortcut interception (`PrintScreen`, `Win+Shift+S`, `Ctrl+Shift+S`, `Cmd+Shift+3/4/5`) immediately obscures the window with frosted glass and flushes the clipboard.
 
 ## 3. Out-of-scope environmental threats
 
@@ -74,6 +80,10 @@ Decrypted credentials and document images necessarily exist in memory while the 
 
 Deleting a database record does not guarantee physical sanitization of underlying SSD or flash cells. Storage controllers and OS file systems determine how blocks are reclaimed.
 
+### U4 — Third-party clipboard history and cloud synchronization
+
+External clipboard history managers (e.g., Windows Clipboard History `Win+V`, KDE Klipper, Maccy, GPaste) and OS cloud clipboard sync daemons record clipboard changes at the OS level. While TotumVault clears the active system clipboard buffer and sends best-effort signals to OS utilities, it cannot guarantee deletion from external historical databases or cloud caches.
+
 ## 4. Cryptographic summary
 
 | Function | Primitive | Parameters |
@@ -83,4 +93,5 @@ Deleting a database record does not guarantee physical sanitization of underlyin
 | Document encryption | AES-256-GCM | Encrypted binary image blobs and thumbnails with independent nonces |
 | Randomness | OS CSPRNG | `rand::rngs::OsRng` |
 | TOTP | HMAC-SHA1 / HMAC-SHA256 | RFC 6238, Base32 validation, 6/8 digits, 30/60s period |
+| Clipboard tracking | HMAC-SHA256 | Ephemeral 32-byte OsRng key, constant-time eq, `ZeroizeOnDrop` |
 | Memory sanitization | `zeroize` / State purge | Key buffers zeroized on lock; decrypted image buffers purged |

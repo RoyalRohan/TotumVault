@@ -35,12 +35,17 @@ The current implementation is designed to protect against, among other things:
 - accidental deletion or overwriting during import through pre-inspection, conflict detection, explicit confirmation, and transactional snapshot rollback;
 - storing the master password directly on disk;
 - residual key material and decrypted image bytes after the vault is locked through systematic memory zeroization;
-- accidental long-term clipboard exposure through multi-tier background OS wiping, non-collapsed range sanitization, and return-to-window gesture flushing;
-- casual shoulder-surfing, app-switcher previews, and desktop screenshots through active frosted window shielding (`blur(36px)`), screenshot key interception, print blocking, and platform display affinity (`WDA_EXCLUDEFROMCAPTURE`, Wayland isolation, `FLAG_SECURE`).
+- accidental long-term clipboard exposure through synchronized native background wiping, race-free operation serialization, ephemeral HMAC-SHA256 equality verification, and non-destructive auto-clear that purges copied secrets on timeout or vault lock only when the clipboard still matches what TotumVault copied (preserving external data);
+- casual shoulder-surfing, app-switcher previews, and unauthorized desktop window recording through native hardware display affinity (`WDA_EXCLUDEFROMCAPTURE` on Windows, native compositor window isolation on Wayland, `FLAG_SECURE` on Android), proactive screenshot hotkey interception (`PrintScreen`, `Win+Shift+S`, `Ctrl+Shift+S`, `Cmd+Shift+3/4/5`), and print blocking.
 
 ## What TotumVault cannot guarantee
 
-TotumVault cannot protect a user from a fully compromised operating system, kernel-level malware, hardware keyloggers, or physical attacks against an unlocked device. The project threat model explicitly treats these as environmental limits. While the Privacy Screen Shield proactively blocks shortcuts, app-switcher views, and external capture utilities that blur the window, kernel-level or elevated OS drivers can bypass display affinities on certain platforms.
+TotumVault cannot protect a user from a fully compromised operating system, kernel-level malware, hardware keyloggers, or physical attacks against an unlocked device. The project threat model explicitly treats these as environmental limits.
+
+Additionally, TotumVault maintains honest, platform-grounded security boundaries:
+
+- **Third-Party Clipboard Managers & History**: TotumVault clears the current system clipboard when it can verify that the clipboard still contains the TotumVault-copied value. External clipboard history managers (e.g., Windows Clipboard History `Win+V`, KDE Klipper, Maccy, GPaste) and OS cloud clipboard sync daemons record clipboard changes at the OS level. While TotumVault clears the active system clipboard buffer and issues best-effort signals to OS utilities, it cannot guarantee deletion from external historical databases.
+- **Window Capture Limitations**: Native window capture exclusion relies on underlying OS window managers. On Windows (`WDA_EXCLUDEFROMCAPTURE`) and Android (`FLAG_SECURE`), window exclusion is hardware-enforced. On Linux, Wayland provides protocol-level client isolation, whereas legacy X11 lacks native window capture exclusion primitives. On macOS, modern capture tools using ScreenCaptureKit are bounded by OS permission models. TotumVault reports its native exclusion status honestly via backend classification.
 
 No password or document manager should be presented as invulnerable. Security claims should be evaluated against the actual release, source code, platform, and threat model.
 
