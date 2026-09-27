@@ -13,6 +13,9 @@ import {
   SearchX,
   Folder,
   X,
+  MoreVertical,
+  Edit2,
+  Trash2,
 } from 'lucide-react';
 import { useVault } from '../context/VaultContext';
 import { DecryptedEntry } from '../types';
@@ -30,6 +33,8 @@ export const EntryList: React.FC = () => {
     folders,
     selectedFolderId,
     setSelectedFolderId,
+    promptDeleteFolder,
+    promptRenameFolder,
     moveEntryToFolder,
     reorderEntries,
   } = useVault();
@@ -41,6 +46,11 @@ export const EntryList: React.FC = () => {
     entryId: string;
     position: 'before' | 'after';
   } | null>(null);
+  const [isFolderMenuOpen, setIsFolderMenuOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsFolderMenuOpen(false);
+  }, [selectedFolderId]);
 
   // Filter entries based on active category, folder & search query
   const filteredEntries = entries.filter((item) => {
@@ -450,23 +460,75 @@ export const EntryList: React.FC = () => {
 
       {/* Folder Breadcrumb Filter Header if filtered by folder */}
       {activeCategory === 'logins' && selectedFolderId && (
-        <div className="px-4 py-2 bg-purple-50 dark:bg-purple-950/20 border-b border-purple-200 dark:border-purple-800/30 flex items-center justify-between text-xs animate-fade-in">
-          <div className="flex items-center gap-1.5 text-purple-950 dark:text-purple-200">
+        <div className="px-4 py-2 bg-purple-50 dark:bg-purple-950/20 border-b border-purple-200 dark:border-purple-800/30 flex items-center justify-between text-xs animate-fade-in relative">
+          <div className="flex items-center gap-1.5 text-purple-950 dark:text-purple-200 min-w-0 flex-1 mr-2">
             <Folder className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
-            <span className="font-semibold">
+            <span className="font-semibold truncate">
               {selectedFolderId === '__unfiled__'
                 ? 'Unfiled Logins'
                 : folders.find((f) => f.id === selectedFolderId)?.name || 'Folder'}
             </span>
           </div>
-          <button
-            onClick={() => setSelectedFolderId(null)}
-            className="text-purple-700 dark:text-purple-300 hover:text-purple-950 dark:hover:text-white flex items-center gap-1 font-medium cursor-pointer"
-            title="View all logins"
-          >
-            <X className="w-3 h-3" />
-            <span>All Logins</span>
-          </button>
+
+          <div className="flex items-center gap-1 shrink-0">
+            {selectedFolderId !== '__unfiled__' && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsFolderMenuOpen((prev) => !prev)}
+                  title="Folder options"
+                  aria-label="Folder options"
+                  className="w-8 h-8 min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg text-purple-700 dark:text-purple-300 hover:text-purple-950 dark:hover:text-white hover:bg-purple-100 dark:hover:bg-purple-900/40 cursor-pointer transition-colors"
+                >
+                  <MoreVertical className="w-3.5 h-3.5" />
+                </button>
+
+                {isFolderMenuOpen && (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute right-0 top-full mt-1 z-30 bg-theme-surface border border-theme-border rounded-xl shadow-xl p-1 min-w-[140px] space-y-0.5 animate-scale-up"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFolderMenuOpen(false);
+                        const f = folders.find((item) => item.id === selectedFolderId);
+                        if (f) promptRenameFolder(f);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-theme-text hover:bg-theme-hover rounded-lg cursor-pointer transition-colors min-h-[36px]"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                      <span>Rename</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsFolderMenuOpen(false);
+                        const f = folders.find((item) => item.id === selectedFolderId);
+                        if (f) promptDeleteFolder(f);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg cursor-pointer transition-colors min-h-[36px]"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                setIsFolderMenuOpen(false);
+                setSelectedFolderId(null);
+              }}
+              className="text-purple-700 dark:text-purple-300 hover:text-purple-950 dark:hover:text-white flex items-center gap-1 font-medium cursor-pointer px-2 py-1 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors min-h-[32px]"
+              title="View all logins"
+            >
+              <X className="w-3 h-3" />
+              <span>All Logins</span>
+            </button>
+          </div>
         </div>
       )}
 

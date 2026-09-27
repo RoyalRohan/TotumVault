@@ -84,6 +84,16 @@ interface VaultContextType {
   reorderFolders: (orderedIds: string[]) => Promise<void>;
   reorderEntries: (orderedIds: string[]) => Promise<void>;
 
+  // Authoritative Folder Management State & Dialog Handlers
+  deletingFolder: LoginFolder | null;
+  promptDeleteFolder: (folder: LoginFolder) => void;
+  cancelDeleteFolder: () => void;
+  confirmDeleteFolder: (deleteContents: boolean) => Promise<void>;
+  renamingFolder: LoginFolder | null;
+  promptRenameFolder: (folder: LoginFolder) => void;
+  cancelRenameFolder: () => void;
+  confirmRenameFolder: (newName: string) => Promise<void>;
+
   // Biometrics
   isBiometricSupported: boolean;
   isBiometricEnabled: boolean;
@@ -174,6 +184,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Login Folders State
   const [folders, setFolders] = useState<LoginFolder[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [deletingFolder, setDeletingFolder] = useState<LoginFolder | null>(null);
+  const [renamingFolder, setRenamingFolder] = useState<LoginFolder | null>(null);
 
   // Biometrics State
   const [isBiometricSupported, setIsBiometricSupported] = useState<boolean>(() => {
@@ -513,16 +525,51 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const deleteFolder = useCallback(async (id: string, deleteContents: boolean) => {
     try {
       await invoke('delete_login_folder', { id, deleteContents });
-      if (selectedFolderId === id) {
-        setSelectedFolderId(null);
-      }
-      await refreshFolders();
+      const updatedFolders = await invoke<LoginFolder[]>('get_login_folders').catch(() => []);
+      setFolders(updatedFolders);
+      setSelectedFolderId((prev) => {
+        if (!prev || prev === '__unfiled__') return prev;
+        const stillExists = updatedFolders.some((f) => f.id === prev);
+        return stillExists ? prev : null;
+      });
       await refreshStatus();
       showToast(deleteContents ? 'Folder and entries deleted' : 'Folder deleted (entries unfiled)', 'info');
     } catch (err: any) {
       showToast(err.toString(), 'error');
     }
-  }, [selectedFolderId, refreshFolders, refreshStatus, showToast]);
+  }, [refreshStatus, showToast]);
+
+  const promptDeleteFolder = useCallback((folder: LoginFolder) => {
+    setDeletingFolder(folder);
+  }, []);
+
+  const cancelDeleteFolder = useCallback(() => {
+    setDeletingFolder(null);
+  }, []);
+
+  const confirmDeleteFolder = useCallback(async (deleteContents: boolean) => {
+    if (!deletingFolder) return;
+    const targetId = deletingFolder.id;
+    setDeletingFolder(null);
+    await deleteFolder(targetId, deleteContents);
+  }, [deletingFolder, deleteFolder]);
+
+  const promptRenameFolder = useCallback((folder: LoginFolder) => {
+    setRenamingFolder(folder);
+  }, []);
+
+  const cancelRenameFolder = useCallback(() => {
+    setRenamingFolder(null);
+  }, []);
+
+  const confirmRenameFolder = useCallback(async (newName: string) => {
+    if (!renamingFolder) return;
+    const targetId = renamingFolder.id;
+    setRenamingFolder(null);
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    await renameFolder(targetId, trimmed);
+  }, [renamingFolder, renameFolder]);
 
   const moveEntryToFolder = useCallback(async (entryId: string, folderId: string | null) => {
     const prevEntries = [...entries];
@@ -1314,6 +1361,14 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         moveFolder,
         reorderFolders,
         reorderEntries,
+        deletingFolder,
+        promptDeleteFolder,
+        cancelDeleteFolder,
+        confirmDeleteFolder,
+        renamingFolder,
+        promptRenameFolder,
+        cancelRenameFolder,
+        confirmRenameFolder,
         isBiometricSupported,
         isBiometricEnabled,
         biometricFailedAttempts,

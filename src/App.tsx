@@ -19,6 +19,7 @@ import { DocumentScannerModal } from './components/documents/DocumentScannerModa
 import { DocumentViewerModal } from './components/documents/DocumentViewerModal';
 import { PrivacyShieldOverlay } from './components/PrivacyShieldOverlay';
 import { UpdateDialog } from './components/UpdateDialog';
+import { FolderModals } from './components/FolderModals';
 
 const MainAppContent: React.FC = () => {
   const {
@@ -111,6 +112,7 @@ const MainAppContent: React.FC = () => {
       <PasswordGeneratorModal />
       <SettingsModal />
       <ImportExportModal />
+      <FolderModals />
 
       {/* Secure Document Vault Modals */}
       <DocumentScannerModal

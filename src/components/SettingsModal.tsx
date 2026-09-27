@@ -285,7 +285,7 @@ export const SettingsModal: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-              Automatically clears copied secrets only if the clipboard still contains the exact value TotumVault copied. If another application copied something else meanwhile, that newer value is preserved. Immediately purges matching secret when vault locks.
+              Automatically clears copied vault secrets after the selected time. Only clears the clipboard when it still contains the copied vault secret.
             </p>
             <div className="grid grid-cols-5 gap-2 pt-1 text-xs">
               {[
@@ -360,7 +360,7 @@ export const SettingsModal: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-              Excludes application windows from supported OS screenshot, screen recording, and window capture APIs (e.g. OBS, Snipping Tool). Content remains visible to you during normal multitasking.
+              Protects the vault window from supported screenshot and screen-capture APIs.
             </p>
 
             <div className="p-3 rounded-xl bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border flex items-center justify-between gap-3">
@@ -374,7 +374,7 @@ export const SettingsModal: React.FC = () => {
                   )}
                 </div>
                 <p className="text-[11px] text-slate-500 dark:text-theme-text-muted">
-                  {screenProtection?.description || 'Enforce hardware capture blocking on the active window.'}
+                  Block screen capture and recordings on supported platforms.
                 </p>
               </div>
 
@@ -432,7 +432,7 @@ export const SettingsModal: React.FC = () => {
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-              Securely unlock TotumVault using Class 3 strong biometrics (BIOMETRIC_STRONG). Enforces a 3-attempt app lockout policy and native Keystore binding. Never allows device PIN/pattern as a fallback.
+              Use strong device biometrics to unlock TotumVault without entering the master password.
             </p>
 
             {isBiometricSupported ? (
@@ -440,12 +440,12 @@ export const SettingsModal: React.FC = () => {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <span className="text-xs font-semibold text-slate-900 dark:text-theme-text block">
-                      Biometric Sensor Authentication
+                      Biometric Authentication
                     </span>
                     <span className="text-[11px] text-slate-500 dark:text-theme-text-muted block">
                       {isBiometricEnabled
-                        ? 'Strong biometric authenticator is registered to unlock this vault.'
-                        : 'Enroll your biometric authenticator using your master password.'}
+                        ? 'Biometrics configured to unlock this vault.'
+                        : 'Enroll device biometrics using your master password.'}
                     </span>
                   </div>
 
@@ -515,7 +515,7 @@ export const SettingsModal: React.FC = () => {
               <div className="p-3 rounded-xl bg-slate-50 dark:bg-theme-surface/50 border border-slate-200/80 dark:border-theme-border text-xs text-slate-500 dark:text-theme-text-muted flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
                 <span>
-                  Hardware biometric authentication (BIOMETRIC_STRONG) is not available or enrolled on this platform/device. Master password authentication is strictly enforced.
+                  Biometric authentication is not available on this device. Master password is required when biometrics are unavailable.
                 </span>
               </div>
             )}
@@ -609,13 +609,13 @@ export const SettingsModal: React.FC = () => {
                 </label>
               </div>
               <span className="text-[11px] font-mono text-slate-600 dark:text-theme-text-muted font-semibold bg-slate-100 dark:bg-theme-surface px-2 py-0.5 rounded border border-slate-200 dark:border-theme-border">
-                Current: v{updateInfo?.currentVersion || '1.3.2'}
+                Version: v{updateInfo?.currentVersion || '1.3.2'}
               </span>
             </div>
 
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-                Keep TotumVault secure with signed cryptographic updates and platform fixes.
+                Keep TotumVault updated with the latest security and stability improvements.
               </p>
               <button
                 type="button"
@@ -656,7 +656,7 @@ export const SettingsModal: React.FC = () => {
             {isCheckingUpdate && (
               <div className="p-2.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-500/30 text-xs text-purple-800 dark:text-purple-300 flex items-center gap-2">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-purple-600 dark:text-purple-400 shrink-0" />
-                <span>Checking for updates from official TotumVault repository...</span>
+                <span>Checking for updates...</span>
               </div>
             )}
 

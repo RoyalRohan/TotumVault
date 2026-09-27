@@ -23,6 +23,7 @@ import {
   Edit2,
   Trash2,
   Check,
+  MoreVertical,
 } from 'lucide-react';
 import { useVault } from '../context/VaultContext';
 import { CategoryType, LoginFolder } from '../types';
@@ -46,7 +47,8 @@ export const Sidebar: React.FC = () => {
     setSelectedFolderId,
     createFolder,
     renameFolder,
-    deleteFolder,
+    promptDeleteFolder,
+    promptRenameFolder,
     moveFolder,
     reorderFolders,
     moveEntryToFolder,
@@ -59,9 +61,7 @@ export const Sidebar: React.FC = () => {
 
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renamingFolderName, setRenamingFolderName] = useState<string>('');
-
-  const [deletingFolder, setDeletingFolder] = useState<LoginFolder | null>(null);
-  const [deleteContents, setDeleteContents] = useState<boolean>(false);
+  const [mobileFolderMenuId, setMobileFolderMenuId] = useState<string | null>(null);
 
   // Expanded folders state with localStorage persistence
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => {
@@ -478,31 +478,79 @@ export const Sidebar: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0 ml-1">
-                  {!isRenaming && (
-                    <div className="opacity-0 group-hover/folder:opacity-100 flex items-center transition-opacity">
+                  {isMobile ? (
+                    <div className="relative flex items-center">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setRenamingFolderId(folder.id);
-                          setRenamingFolderName(folder.name);
+                          setMobileFolderMenuId((prev) => (prev === folder.id ? null : folder.id));
                         }}
-                        title="Rename folder"
-                        className="p-1 hover:text-purple-600 dark:hover:text-purple-400 rounded cursor-pointer"
+                        title="Folder options"
+                        aria-label="Folder options"
+                        className="w-8 h-8 min-w-[32px] min-h-[32px] flex items-center justify-center rounded-lg text-slate-500 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-theme-surface cursor-pointer transition-colors"
                       >
-                        <Edit2 className="w-2.5 h-2.5" />
+                        <MoreVertical className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeletingFolder(folder);
-                          setDeleteContents(false);
-                        }}
-                        title="Delete folder"
-                        className="p-1 hover:text-rose-600 rounded cursor-pointer"
-                      >
-                        <Trash2 className="w-2.5 h-2.5" />
-                      </button>
+
+                      {mobileFolderMenuId === folder.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 top-full mt-1 z-30 bg-theme-surface border border-theme-border rounded-xl shadow-xl p-1 min-w-[140px] space-y-0.5 animate-scale-up"
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMobileFolderMenuId(null);
+                              promptRenameFolder(folder);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-theme-text hover:bg-theme-hover rounded-lg cursor-pointer transition-colors min-h-[36px]"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                            <span>Rename</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMobileFolderMenuId(null);
+                              promptDeleteFolder(folder);
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg cursor-pointer transition-colors min-h-[36px]"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />
+                            <span>Delete</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
+                  ) : (
+                    !isRenaming && (
+                      <div className="opacity-0 group-hover/folder:opacity-100 flex items-center transition-opacity">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRenamingFolderId(folder.id);
+                            setRenamingFolderName(folder.name);
+                          }}
+                          title="Rename folder"
+                          className="p-1 hover:text-purple-600 dark:hover:text-purple-400 rounded cursor-pointer"
+                        >
+                          <Edit2 className="w-2.5 h-2.5" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            promptDeleteFolder(folder);
+                          }}
+                          title="Delete folder"
+                          className="p-1 hover:text-rose-600 rounded cursor-pointer"
+                        >
+                          <Trash2 className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    )
                   )}
                   <span className="text-[11px] px-1.5 py-0.2 rounded-full font-mono bg-slate-200/60 dark:bg-theme-border/60 text-slate-700 dark:text-slate-300 font-medium">
                     {folderEntries.length}
@@ -907,61 +955,6 @@ export const Sidebar: React.FC = () => {
           />
           <div className="relative w-72 max-w-[85vw] h-full bg-theme-surface border-r border-theme-border shadow-2xl flex flex-col z-10 animate-scale-up">
             {renderSidebarBody(true)}
-          </div>
-        </div>
-      )}
-
-      {/* Folder Deletion Confirmation Modal */}
-      {deletingFolder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-theme-surface border border-theme-border rounded-2xl max-w-sm w-full p-5 shadow-2xl space-y-4 animate-scale-up">
-            <h3 className="font-bold text-sm text-theme-text">Delete Folder &ldquo;{deletingFolder.name}&rdquo;</h3>
-            <p className="text-xs text-theme-text-muted">
-              What would you like to do with the logins inside this folder and its subfolders?
-            </p>
-            <div className="space-y-2 pt-1">
-              <label className="flex items-center gap-2 text-xs text-theme-text cursor-pointer">
-                <input
-                  type="radio"
-                  name="del_opt"
-                  checked={!deleteContents}
-                  onChange={() => setDeleteContents(false)}
-                  className="accent-purple-600"
-                />
-                <span><strong>Keep Logins</strong> (Move to Unfiled)</span>
-              </label>
-              <label className="flex items-center gap-2 text-xs text-rose-600 dark:text-rose-400 cursor-pointer">
-                <input
-                  type="radio"
-                  name="del_opt"
-                  checked={deleteContents}
-                  onChange={() => setDeleteContents(true)}
-                  className="accent-rose-600"
-                />
-                <span><strong>Delete All Logins</strong> (Remove permanently)</span>
-              </label>
-            </div>
-            <div className="flex justify-end gap-2 pt-3 border-t border-theme-border">
-              <button
-                type="button"
-                onClick={() => setDeletingFolder(null)}
-                className="px-3 py-1.5 text-xs text-theme-text-muted hover:text-theme-text rounded-lg border border-theme-border cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  await deleteFolder(deletingFolder.id, deleteContents);
-                  setDeletingFolder(null);
-                }}
-                className={`px-3 py-1.5 text-xs text-white rounded-lg font-medium shadow-xs cursor-pointer ${
-                  deleteContents ? 'bg-rose-600 hover:bg-rose-700' : 'bg-purple-600 hover:bg-purple-700'
-                }`}
-              >
-                Confirm Delete
-              </button>
-            </div>
           </div>
         </div>
       )}
