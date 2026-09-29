@@ -22,6 +22,7 @@ import {
   ScreenProtectionStatus,
   BiometricCapability,
   UpdateInfo,
+  AppVersionInfo,
   VaultHealthReport,
   VaultStatus,
 } from '../types';
@@ -123,6 +124,7 @@ interface VaultContextType {
   setScreenProtection: (enabled: boolean) => Promise<void>;
 
   // Auto Updates
+  appVersion: AppVersionInfo | null;
   updateInfo: UpdateInfo | null;
   isCheckingUpdate: boolean;
   checkForUpdates: (manual?: boolean) => Promise<UpdateInfo | null>;
@@ -254,11 +256,18 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   // Auto Updates State
+  const [appVersion, setAppVersion] = useState<AppVersionInfo | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
   const [lastUpdateChecked, setLastUpdateChecked] = useState<string>(() => {
     return localStorage.getItem('totumvault_last_update_check') || '';
   });
+
+  useEffect(() => {
+    invoke<AppVersionInfo>('get_app_version')
+      .then((ver) => setAppVersion(ver))
+      .catch((err) => console.warn('Could not load app version:', err));
+  }, []);
 
   const skipUpdateVersion = useCallback((version: string) => {
     localStorage.setItem('totumvault_skipped_version', version);
@@ -1547,6 +1556,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         disableBiometric,
         screenProtection,
         setScreenProtection,
+        appVersion,
         updateInfo,
         isCheckingUpdate,
         checkForUpdates,

@@ -4,6 +4,42 @@ All notable changes to TotumVault are documented here.
 
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [1.3.4] — 2026-09-29
+
+### Added
+
+- **Dual Calendar System (Gregorian AD + Nepali Bikram Sambat BS)**:
+  - Integrated accurate, offline bidirectional conversion between Gregorian (AD) and Nepali Bikram Sambat (BS) calendars.
+  - Responsive BS Calendar date picker modal featuring smooth month and year navigation.
+  - Document & Bills expiry and renewal tracking integrated with dual AD/BS date presentation.
+  - Calendar preference setting allowing users to select default calendar format across the vault.
+- **Complete Production Preferences Redesign**:
+  - Re-architected settings modal into 7 dedicated categories: General, Appearance, Security, Privacy & Network, Documents & Expiry, Data Management, and Updates.
+  - Responsive desktop sidebar navigation with instant section switching and status badges.
+  - Mobile-optimized segmented tab navigation with compact overview and bottom vault status.
+  - Strictly single-source update toggle eliminating duplicate controls.
+  - Dynamic authoritative app version resolution bound directly to `get_app_version()`.
+
+### Improved
+
+- **Version Consistency & UI Integrity**:
+  - Eliminated hardcoded version fallback strings across all settings and navigation components.
+  - Guaranteed truthful version reporting backed by Cargo and runtime metadata.
+
+## [1.3.3] — 2026-09-29
+
+### Added
+
+- **Application-Level Air-Gap Mode**:
+  - Strict network policy isolation service blocking outbound network requests when air-gap mode is active.
+- **Document Renewal & Expiry Reminders**:
+  - Local document expiry alerts (5, 4, 3, 2, 1 days before, expiry day, and day after) with zero cloud dependency.
+
+### Fixed
+
+- **Secure Clipboard Concurrency**:
+  - Hardened auto-clear timers and generation tracking for atomic clipboard purging.
+
 ## [1.3.2] — 2026-09-26
 
 ### Added

@@ -19,25 +19,28 @@ export function compareSemver(current: string, latest: string): number {
   return 0; // identical
 }
 
+export async function getAppVersionInfo(): Promise<AppVersionInfo> {
+  try {
+    return await invoke<AppVersionInfo>('get_app_version');
+  } catch {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
+    let os = 'linux';
+    if (ua.includes('android')) os = 'android';
+    else if (ua.includes('win')) os = 'windows';
+    else if (ua.includes('mac')) os = 'macos';
+    return {
+      version: '',
+      os,
+      arch: 'x86_64',
+    };
+  }
+}
+
 export async function checkAppUpdate(): Promise<UpdateInfo> {
   // 0. Verify backend network policy before initiating any network activity
   await requireNetworkAccess('updater:check');
 
-  let appVersion: AppVersionInfo = {
-    version: '1.3.2',
-    os: 'linux',
-    arch: 'x86_64',
-  };
-
-  try {
-    appVersion = await invoke<AppVersionInfo>('get_app_version');
-  } catch {
-    const ua = typeof navigator !== 'undefined' ? navigator.userAgent.toLowerCase() : '';
-    if (ua.includes('android')) appVersion.os = 'android';
-    else if (ua.includes('win')) appVersion.os = 'windows';
-    else if (ua.includes('mac')) appVersion.os = 'macos';
-  }
-
+  const appVersion = await getAppVersionInfo();
   const isAndroid = appVersion.os.toLowerCase().includes('android');
 
   // 1. On Desktop platforms, first try official Tauri 2 Updater with cryptographic signature verification
