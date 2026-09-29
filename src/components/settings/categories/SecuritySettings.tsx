@@ -89,20 +89,12 @@ export const SecuritySettings: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Category Header */}
-      <div>
-        <h3 className="text-base font-semibold text-slate-900 dark:text-theme-text">Security</h3>
-        <p className="text-xs text-slate-500 dark:text-theme-text-muted mt-0.5">
-          Configure vault auto-lock, credentials, biometric unlock, clipboard security, and screen shield.
-        </p>
-      </div>
-
       {/* Subsection 1: Vault Security */}
       <div className="space-y-4">
         <div className="flex items-center gap-1.5">
           <Lock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted">
-            Vault Security & Inactivity Lock
+          <h4 className="text-sm font-bold text-slate-900 dark:text-theme-text">
+            Vault Security
           </h4>
         </div>
 
@@ -110,15 +102,12 @@ export const SecuritySettings: React.FC = () => {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-800 dark:text-theme-text">
-              Auto-Lock Timer
+              Auto-Lock
             </span>
             <span className="text-[11px] font-mono text-purple-700 dark:text-purple-400 font-semibold bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-500/30">
-              {status.auto_lock_minutes === 0 ? 'Never' : `${status.auto_lock_minutes}m inactivity`}
+              {status.auto_lock_minutes === 0 ? 'Never' : `${status.auto_lock_minutes}m`}
             </span>
           </div>
-          <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-            Automatically lock vault after a period of user inactivity to prevent unauthorized access.
-          </p>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 pt-1 text-xs">
             {[1, 5, 10, 15, 30, 0].map((mins) => {
               const isSelected = status.auto_lock_minutes === mins;
@@ -144,14 +133,14 @@ export const SecuritySettings: React.FC = () => {
         <form onSubmit={handleChangePassword} className="space-y-3 pt-3 border-t border-slate-200/80 dark:border-theme-border">
           <div className="flex items-center gap-1.5">
             <KeyRound className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span className="text-xs font-semibold text-slate-800 dark:text-theme-text">
+            <h4 className="text-xs font-bold text-slate-800 dark:text-theme-text">
               Change Master Password
-            </span>
+            </h4>
           </div>
 
           <div>
             <label className="text-xs font-bold text-slate-600 dark:text-theme-text-muted block mb-1">
-              Current Master Password
+              Current Password
             </label>
             <div className="relative">
               <input
@@ -174,7 +163,7 @@ export const SecuritySettings: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-xs font-bold text-slate-600 dark:text-theme-text-muted block mb-1">
-                New Master Password
+                New Password
               </label>
               <div className="relative">
                 <input
@@ -245,7 +234,7 @@ export const SecuritySettings: React.FC = () => {
             disabled={isChanging || !oldPass || !newPass}
             className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-xs font-semibold transition-colors shadow-xs disabled:opacity-50 cursor-pointer min-h-[42px]"
           >
-            {isChanging ? 'Updating Password...' : 'Update Master Password'}
+            {isChanging ? 'Updating Password...' : 'Change Password'}
           </button>
         </form>
       </div>
@@ -255,7 +244,7 @@ export const SecuritySettings: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <Fingerprint className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-theme-text">
               Biometric Unlock
             </h4>
           </div>
@@ -266,26 +255,16 @@ export const SecuritySettings: React.FC = () => {
                 : 'text-slate-600 dark:text-theme-text-muted bg-slate-100 dark:bg-theme-surface border-slate-200 dark:border-theme-border'
             }`}
           >
-            {isBiometricEnabled ? 'Configured' : isBiometricSupported ? 'Supported' : 'Unavailable'}
+            {isBiometricEnabled ? 'Ready' : isBiometricSupported ? 'Not Set Up' : 'Unavailable'}
           </span>
         </div>
-        <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-          Use strong device biometrics to unlock TotumVault without entering the master password each time.
-        </p>
 
         {isBiometricSupported ? (
           <div className="p-3.5 rounded-xl bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <div>
-                <span className="text-xs font-semibold text-slate-900 dark:text-theme-text block">
-                  Biometric Authentication
-                </span>
-                <span className="text-[11px] text-slate-500 dark:text-theme-text-muted block mt-0.5">
-                  {isBiometricEnabled
-                    ? 'Biometrics configured to unlock this vault.'
-                    : 'Enroll device biometrics using your master password.'}
-                </span>
-              </div>
+              <span className="text-xs font-semibold text-slate-900 dark:text-theme-text">
+                Biometric Authentication
+              </span>
 
               {isBiometricEnabled ? (
                 <button
@@ -305,7 +284,7 @@ export const SecuritySettings: React.FC = () => {
                   }}
                   className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer shrink-0 transition-colors shadow-xs min-h-[38px]"
                 >
-                  Setup Biometrics
+                  Set Up
                 </button>
               ) : null}
             </div>
@@ -313,7 +292,7 @@ export const SecuritySettings: React.FC = () => {
             {isEnrollingBio && (
               <form onSubmit={handleEnrollBio} className="pt-2 border-t border-slate-200 dark:border-theme-border space-y-2.5">
                 <label className="text-xs font-bold text-slate-700 dark:text-theme-text block">
-                  Confirm Master Password to Enroll Biometrics
+                  Confirm Master Password
                 </label>
                 <input
                   type="password"
@@ -352,9 +331,7 @@ export const SecuritySettings: React.FC = () => {
         ) : (
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-theme-surface/50 border border-slate-200/80 dark:border-theme-border text-xs text-slate-500 dark:text-theme-text-muted flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-            <span>
-              Biometric authentication is not available on this device. Master password is required when biometrics are unavailable.
-            </span>
+            <span>Biometrics are not supported on this device.</span>
           </div>
         )}
       </div>
@@ -364,54 +341,59 @@ export const SecuritySettings: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <ClipboardCheck className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted">
-              Clipboard Security & Auto-Clear
+            <h4 className="text-sm font-bold text-slate-900 dark:text-theme-text">
+              Clipboard Security
             </h4>
           </div>
           <span className="text-[11px] font-mono text-purple-700 dark:text-purple-400 font-semibold bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-500/30">
             {clipboardClearSeconds === 0
               ? 'Never'
               : clipboardClearSeconds === 120
-              ? 'Timer: 2m'
-              : `Timer: ${clipboardClearSeconds}s`}
+              ? '2m'
+              : `${clipboardClearSeconds}s`}
           </span>
         </div>
-        <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-          Automatically clears copied vault secrets after the selected time. Only clears the clipboard when it still contains the copied vault secret.
+
+        <div className="space-y-2">
+          <span className="text-xs font-semibold text-slate-800 dark:text-theme-text block">
+            Clipboard Auto-Clear
+          </span>
+          <div className="grid grid-cols-5 gap-2 text-xs">
+            {[
+              { label: '15s', secs: 15 },
+              { label: '30s', secs: 30 },
+              { label: '60s', secs: 60 },
+              { label: '2m', secs: 120 },
+              { label: 'Never', secs: 0 },
+            ].map((item) => {
+              const isSelected = clipboardClearSeconds === item.secs;
+              return (
+                <button
+                  key={item.secs}
+                  type="button"
+                  onClick={() => setClipboardClearSeconds(item.secs)}
+                  className={`py-2 px-2 rounded-xl font-semibold border transition-all cursor-pointer text-center min-h-[40px] ${
+                    isSelected
+                      ? 'bg-purple-100 dark:bg-purple-600/15 text-purple-900 dark:text-purple-300 border-purple-400 dark:border-purple-500/40 shadow-xs'
+                      : 'bg-white dark:bg-theme-surface border-slate-200/90 dark:border-theme-border text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-50 dark:hover:bg-theme-hover'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-500 dark:text-theme-text-muted">
+          Only TotumVault-copied secrets are cleared.
         </p>
-        <div className="grid grid-cols-5 gap-2 pt-1 text-xs">
-          {[
-            { label: '15s', secs: 15 },
-            { label: '30s', secs: 30 },
-            { label: '60s', secs: 60 },
-            { label: '2m', secs: 120 },
-            { label: 'Never', secs: 0 },
-          ].map((item) => {
-            const isSelected = clipboardClearSeconds === item.secs;
-            return (
-              <button
-                key={item.secs}
-                type="button"
-                onClick={() => setClipboardClearSeconds(item.secs)}
-                className={`py-2 px-2 rounded-xl font-semibold border transition-all cursor-pointer text-center min-h-[40px] ${
-                  isSelected
-                    ? 'bg-purple-100 dark:bg-purple-600/15 text-purple-900 dark:text-purple-300 border-purple-400 dark:border-purple-500/40 shadow-xs'
-                    : 'bg-white dark:bg-theme-surface border-slate-200/90 dark:border-theme-border text-slate-700 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text hover:bg-slate-50 dark:hover:bg-theme-hover'
-                }`}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-        <div className="flex items-center justify-between pt-1">
-          <span className="text-[11px] text-slate-500 dark:text-theme-text-muted">
-            Purge clipboard immediately:
-          </span>
+
+        <div className="pt-1">
           <button
             type="button"
             onClick={() => clearClipboard(true, true)}
-            className="py-1 px-2.5 rounded-lg bg-slate-100 dark:bg-theme-surface hover:bg-slate-200 dark:hover:bg-theme-hover border border-slate-200 dark:border-theme-border text-xs text-slate-700 dark:text-theme-text font-medium transition-all cursor-pointer min-h-[36px]"
+            className="w-full sm:w-auto py-2 px-3 rounded-xl bg-slate-100 dark:bg-theme-surface hover:bg-slate-200 dark:hover:bg-theme-hover border border-slate-200 dark:border-theme-border text-xs text-slate-700 dark:text-theme-text font-semibold transition-all cursor-pointer min-h-[38px]"
           >
             Clear Clipboard Now
           </button>
@@ -423,7 +405,7 @@ export const SecuritySettings: React.FC = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <CameraOff className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted">
+            <h4 className="text-sm font-bold text-slate-900 dark:text-theme-text">
               Screen Protection
             </h4>
           </div>
@@ -443,7 +425,7 @@ export const SecuritySettings: React.FC = () => {
             {screenProtection?.status_code === 'active'
               ? 'Active'
               : screenProtection?.status_code === 'partial'
-              ? 'Partial (Legacy)'
+              ? 'Partial'
               : screenProtection?.status_code === 'unsupported'
               ? 'Unsupported'
               : screenProtection?.active
@@ -451,29 +433,21 @@ export const SecuritySettings: React.FC = () => {
               : 'Disabled'}
           </span>
         </div>
-        <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-          Protects the vault window from supported screenshot and screen-capture APIs.
-        </p>
 
         <div className="p-3.5 rounded-xl bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border flex items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <div className="text-xs font-semibold text-slate-900 dark:text-theme-text flex items-center gap-2">
-              <span>Hardware Screen Shield</span>
-              {screenProtection?.platform && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-theme-bg border border-slate-200 dark:border-theme-border text-slate-600 dark:text-theme-text-muted uppercase font-mono">
-                  {screenProtection.platform}
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-slate-500 dark:text-theme-text-muted">
-              Block screen capture and recordings on supported platforms.
-            </p>
+          <div className="text-xs font-semibold text-slate-900 dark:text-theme-text flex items-center gap-2">
+            <span>Screen Shield</span>
+            {screenProtection?.platform && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-theme-bg border border-slate-200 dark:border-theme-border text-slate-600 dark:text-theme-text-muted uppercase font-mono">
+                {screenProtection.platform}
+              </span>
+            )}
           </div>
 
           <button
             type="button"
             onClick={() => setScreenProtection(!screenProtection?.active)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shrink-0 min-h-[38px] ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer shrink-0 min-h-[38px] ${
               screenProtection?.status_code === 'unsupported'
                 ? 'bg-slate-100 dark:bg-theme-hover border-slate-300 dark:border-theme-border text-slate-500 dark:text-theme-text-muted opacity-80 cursor-not-allowed'
                 : screenProtection?.active
@@ -490,14 +464,11 @@ export const SecuritySettings: React.FC = () => {
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <span className="text-[11px] text-slate-500 dark:text-theme-text-muted">
-            Preview screen shield overlay & blur:
-          </span>
+        <div className="pt-1">
           <button
             type="button"
             onClick={triggerPrivacyShieldTest}
-            className="py-1 px-2.5 rounded-lg bg-slate-100 dark:bg-theme-surface hover:bg-slate-200 dark:hover:bg-theme-hover border border-slate-200 dark:border-theme-border text-xs text-slate-700 dark:text-theme-text font-medium transition-all cursor-pointer whitespace-nowrap min-h-[36px]"
+            className="w-full sm:w-auto py-2 px-3 rounded-xl bg-slate-100 dark:bg-theme-surface hover:bg-slate-200 dark:hover:bg-theme-hover border border-slate-200 dark:border-theme-border text-xs text-slate-700 dark:text-theme-text font-semibold transition-all cursor-pointer whitespace-nowrap min-h-[38px]"
           >
             Test Screen Shield
           </button>

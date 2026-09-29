@@ -49,9 +49,6 @@ export const SettingsMobileNav: React.FC<SettingsMobileNavProps> = ({
             <h2 className="text-base font-bold text-slate-900 dark:text-theme-text leading-tight">
               Preferences
             </h2>
-            <p className="text-xs text-slate-500 dark:text-theme-text-muted">
-              Choose a category to configure
-            </p>
           </div>
         </div>
 
@@ -74,20 +71,15 @@ export const SettingsMobileNav: React.FC<SettingsMobileNavProps> = ({
               key={cat.id}
               type="button"
               onClick={() => onSelectCategory(cat.id)}
-              className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-white dark:bg-theme-surface border border-slate-200/80 dark:border-theme-border hover:bg-purple-50/50 dark:hover:bg-theme-hover text-left transition-all cursor-pointer min-h-[52px] group shadow-2xs"
+              className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-white dark:bg-theme-surface border border-slate-200/80 dark:border-theme-border hover:bg-purple-50/50 dark:hover:bg-theme-hover text-left transition-all cursor-pointer min-h-[48px] group shadow-2xs"
             >
               <div className="flex items-center gap-3 min-w-0 pr-2">
                 <div className="p-2 rounded-xl bg-slate-100 dark:bg-theme-bg text-slate-600 dark:text-purple-400 group-hover:bg-purple-100 dark:group-hover:bg-purple-950/60 group-hover:text-purple-700 transition-colors shrink-0">
                   <Icon className="w-4 h-4" />
                 </div>
-                <div className="min-w-0">
-                  <span className="text-sm font-semibold text-slate-900 dark:text-theme-text block leading-tight">
-                    {cat.label}
-                  </span>
-                  <span className="text-[11px] text-slate-500 dark:text-theme-text-muted truncate block mt-0.5">
-                    {cat.description}
-                  </span>
-                </div>
+                <span className="text-sm font-semibold text-slate-900 dark:text-theme-text truncate">
+                  {cat.label}
+                </span>
               </div>
 
               <ChevronRight className="w-4 h-4 text-slate-400 dark:text-theme-text-muted group-hover:text-purple-600 dark:group-hover:text-purple-400 shrink-0 transition-colors" />

@@ -45,7 +45,6 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
           </div>
           <div>
             <h2 className="text-sm font-bold text-slate-900 dark:text-theme-text leading-tight">Preferences</h2>
-            <p className="text-[11px] text-slate-500 dark:text-theme-text-muted">TotumVault Settings</p>
           </div>
         </div>
       </div>

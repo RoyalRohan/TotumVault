@@ -80,9 +80,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <h2 className="text-base font-bold text-slate-900 dark:text-theme-text leading-tight truncate">
                   {activeCategoryMeta.label}
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-theme-text-muted truncate mt-0.5">
-                  {activeCategoryMeta.description}
-                </p>
               </div>
 
               <button

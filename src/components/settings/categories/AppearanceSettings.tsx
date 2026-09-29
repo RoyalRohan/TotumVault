@@ -1,34 +1,18 @@
 import React from 'react';
-import { Moon, Sun, Laptop, Type, Check, Sparkles } from 'lucide-react';
+import { Moon, Sun, Laptop, Type, Check } from 'lucide-react';
 import { useTheme, APP_FONTS } from '../../../context/ThemeContext';
 
 export const AppearanceSettings: React.FC = () => {
-  const { theme, setTheme, resolvedTheme, font, setFont } = useTheme();
+  const { theme, setTheme, font, setFont } = useTheme();
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Category Header */}
-      <div>
-        <h3 className="text-base font-semibold text-slate-900 dark:text-theme-text">Appearance</h3>
-        <p className="text-xs text-slate-500 dark:text-theme-text-muted mt-0.5">
-          Customize interface themes, typography systems, and visual presentation.
-        </p>
-      </div>
-
-      {/* Theme Subsection */}
+      {/* Theme Section */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted block">
-            Theme
-          </label>
-          <span className="text-xs font-mono text-purple-700 dark:text-purple-400 capitalize bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-500/30">
-            Active: {resolvedTheme}
-          </span>
-        </div>
-        <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-          Choose your interface theme or let TotumVault match your operating system appearance.
-        </p>
-        <div className="grid grid-cols-3 gap-2.5 pt-1 text-xs">
+        <h4 className="text-sm font-bold text-slate-900 dark:text-theme-text">
+          Theme
+        </h4>
+        <div className="grid grid-cols-3 gap-2.5 text-xs">
           <button
             type="button"
             onClick={() => setTheme('dark')}
@@ -70,24 +54,16 @@ export const AppearanceSettings: React.FC = () => {
         </div>
       </div>
 
-      {/* Fonts Subsection */}
+      {/* Font Section */}
       <div className="space-y-3 pt-5 border-t border-slate-200/80 dark:border-theme-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Type className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted block">
-              Typography
-            </label>
-          </div>
-          <span className="text-[11px] font-mono text-purple-700 dark:text-purple-400 font-semibold bg-purple-50 dark:bg-purple-950/40 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-500/30">
-            Offline Bundled
-          </span>
+        <div className="flex items-center gap-1.5">
+          <Type className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+          <h4 className="text-sm font-bold text-slate-900 dark:text-theme-text">
+            Font
+          </h4>
         </div>
-        <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-          Select an embedded font system for vault navigation, credentials, forms, and documents.
-        </p>
 
-        <div className="space-y-2 pt-1">
+        <div className="space-y-2">
           {APP_FONTS.map((item) => {
             const isSelected = font === item.id;
             return (
@@ -127,22 +103,6 @@ export const AppearanceSettings: React.FC = () => {
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* Interface Subsection */}
-      <div className="space-y-3 pt-5 border-t border-slate-200/80 dark:border-theme-border">
-        <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted block">
-          Interface
-        </label>
-        <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-theme-surface/70 border border-slate-200/80 dark:border-theme-border space-y-1">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-900 dark:text-theme-text">
-            <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span>High-Contrast & GPU Acceleration</span>
-          </div>
-          <p className="text-[11px] text-slate-500 dark:text-theme-text-muted leading-relaxed">
-            TotumVault utilizes hardware acceleration and optimal contrast ratios across dark and light modes. Font rendering is strictly local with zero external web font requests.
-          </p>
         </div>
       </div>
     </div>

@@ -27,14 +27,6 @@ export const DocumentSettings: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Category Header */}
-      <div>
-        <h3 className="text-base font-semibold text-slate-900 dark:text-theme-text">Documents</h3>
-        <p className="text-xs text-slate-500 dark:text-theme-text-muted mt-0.5">
-          Configure document renewal alerts, expiration milestones, and dual calendar localization.
-        </p>
-      </div>
-
       {/* Subsection 1: Renewal & Expiry Reminders */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -42,14 +34,9 @@ export const DocumentSettings: React.FC = () => {
             <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
               <Bell className="w-4 h-4" />
             </div>
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted">
-                Renewal & Expiry Reminders
-              </h4>
-              <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-                Local operating system notifications for document and bill expirations.
-              </p>
-            </div>
+            <h4 className="text-sm font-bold text-slate-900 dark:text-theme-text">
+              Renewal & Expiry Reminders
+            </h4>
           </div>
 
           <label className="relative inline-flex items-center cursor-pointer">
@@ -68,12 +55,9 @@ export const DocumentSettings: React.FC = () => {
             <div className="text-xs text-slate-600 dark:text-theme-text-muted space-y-0.5">
               <div className="flex items-center gap-1.5 font-medium">
                 <Clock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                <span>Scheduled Delivery: </span>
-                <span className="font-semibold text-slate-900 dark:text-theme-text">09:00 local time daily</span>
+                <span>Next notification: </span>
+                <span className="font-semibold text-slate-900 dark:text-theme-text">09:00 local time</span>
               </div>
-              <p className="text-[11px] text-slate-500 dark:text-theme-text-muted">
-                Milestones: 5 days prior, daily until expiry, and once post-expiry.
-              </p>
               {reminderSyncMsg && (
                 <span className="block text-[11px] text-emerald-600 dark:text-emerald-400 font-medium pt-1">
                   {reminderSyncMsg}
@@ -94,7 +78,7 @@ export const DocumentSettings: React.FC = () => {
               }}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-theme-border hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-700 dark:text-theme-text cursor-pointer transition-colors shrink-0 min-h-[36px]"
             >
-              {isSyncingReminders ? 'Checking...' : 'Check Reminders Now'}
+              {isSyncingReminders ? 'Checking...' : 'Check Now'}
             </button>
           </div>
         )}
@@ -102,80 +86,56 @@ export const DocumentSettings: React.FC = () => {
 
       {/* Subsection 2: Calendar & Localization */}
       <div className="space-y-4 pt-5 border-t border-slate-200/80 dark:border-theme-border">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted">
-              Calendar & Localization
-            </h4>
-          </div>
-          <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-500/30">
-            Gregorian (AD) + Bikram Sambat (BS)
-          </span>
+        <div className="flex items-center gap-1.5">
+          <Calendar className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+          <h4 className="text-sm font-bold text-slate-900 dark:text-theme-text">
+            Calendar & Localization
+          </h4>
         </div>
-
-        <p className="text-xs text-slate-600 dark:text-theme-text-muted">
-          Configure how dates are displayed across documents, bills, and expiration tracking. All data is securely stored in standard canonical format and operates 100% offline.
-        </p>
 
         {/* Calendar Mode Selector */}
         <div className="space-y-2">
           <span className="text-xs font-semibold text-slate-900 dark:text-theme-text block">
-            Calendar Display Mode
+            Calendar
           </span>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => setCalendarPreference('dual')}
-              className={`p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[64px] ${
+              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between min-h-[48px] ${
                 calendarPreference === 'dual'
                   ? 'border-purple-500 bg-purple-50/80 dark:bg-purple-950/30 text-slate-900 dark:text-theme-text ring-1 ring-purple-500/30'
                   : 'border-slate-200/90 dark:border-theme-border bg-white dark:bg-theme-surface hover:bg-slate-50 dark:hover:bg-theme-hover text-slate-700 dark:text-theme-text-muted'
               }`}
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold">Dual (AD + BS)</span>
-                {calendarPreference === 'dual' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
-              </div>
-              <span className="text-[10px] text-slate-500 dark:text-theme-text-muted block leading-tight">
-                Show both calendars together (recommended)
-              </span>
+              <span className="text-xs font-bold">Dual (AD + BS)</span>
+              {calendarPreference === 'dual' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
             </button>
 
             <button
               type="button"
               onClick={() => setCalendarPreference('bs')}
-              className={`p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[64px] ${
+              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between min-h-[48px] ${
                 calendarPreference === 'bs'
                   ? 'border-purple-500 bg-purple-50/80 dark:bg-purple-950/30 text-slate-900 dark:text-theme-text ring-1 ring-purple-500/30'
                   : 'border-slate-200/90 dark:border-theme-border bg-white dark:bg-theme-surface hover:bg-slate-50 dark:hover:bg-theme-hover text-slate-700 dark:text-theme-text-muted'
               }`}
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold">BS Only (नेपाली)</span>
-                {calendarPreference === 'bs' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
-              </div>
-              <span className="text-[10px] text-slate-500 dark:text-theme-text-muted block leading-tight">
-                Nepali Bikram Sambat calendar
-              </span>
+              <span className="text-xs font-bold">BS Only (नेपाली)</span>
+              {calendarPreference === 'bs' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
             </button>
 
             <button
               type="button"
               onClick={() => setCalendarPreference('ad')}
-              className={`p-3 rounded-xl border text-left transition-all cursor-pointer min-h-[64px] ${
+              className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between min-h-[48px] ${
                 calendarPreference === 'ad'
                   ? 'border-purple-500 bg-purple-50/80 dark:bg-purple-950/30 text-slate-900 dark:text-theme-text ring-1 ring-purple-500/30'
                   : 'border-slate-200/90 dark:border-theme-border bg-white dark:bg-theme-surface hover:bg-slate-50 dark:hover:bg-theme-hover text-slate-700 dark:text-theme-text-muted'
               }`}
             >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-bold">AD Only</span>
-                {calendarPreference === 'ad' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
-              </div>
-              <span className="text-[10px] text-slate-500 dark:text-theme-text-muted block leading-tight">
-                Gregorian international calendar
-              </span>
+              <span className="text-xs font-bold">AD Only</span>
+              {calendarPreference === 'ad' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
             </button>
           </div>
         </div>
@@ -183,7 +143,7 @@ export const DocumentSettings: React.FC = () => {
         {/* Numeral System Selector */}
         <div className="space-y-2 pt-1">
           <span className="text-xs font-semibold text-slate-900 dark:text-theme-text block">
-            Bikram Sambat Numeral System
+            Numerals
           </span>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
@@ -195,10 +155,7 @@ export const DocumentSettings: React.FC = () => {
                   : 'border-slate-200/90 dark:border-theme-border bg-white dark:bg-theme-surface hover:bg-slate-50 dark:hover:bg-theme-hover text-slate-700 dark:text-theme-text-muted'
               }`}
             >
-              <div>
-                <span className="text-xs font-bold block">English Digits</span>
-                <span className="text-[10px] text-slate-500 dark:text-theme-text-muted">1, 2, 3, 2083</span>
-              </div>
+              <span className="text-xs font-bold">English Digits</span>
               {numeralPreference === 'en' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
             </button>
 
@@ -211,10 +168,7 @@ export const DocumentSettings: React.FC = () => {
                   : 'border-slate-200/90 dark:border-theme-border bg-white dark:bg-theme-surface hover:bg-slate-50 dark:hover:bg-theme-hover text-slate-700 dark:text-theme-text-muted'
               }`}
             >
-              <div>
-                <span className="text-xs font-bold block">Nepali Numerals (नेपाली अंक)</span>
-                <span className="text-[10px] text-slate-500 dark:text-theme-text-muted">१, २, ३, २०८३</span>
-              </div>
+              <span className="text-xs font-bold">Nepali Numerals (नेपाली अंक)</span>
               {numeralPreference === 'ne' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
             </button>
           </div>
@@ -222,21 +176,16 @@ export const DocumentSettings: React.FC = () => {
 
         {/* Live Today Preview */}
         {todayInfo && (
-          <div className="p-3.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
-            <div>
-              <span className="text-slate-500 dark:text-theme-text-muted text-[10px] uppercase font-bold block">
-                Live Preview (Today):
-              </span>
-              <span className="font-semibold text-purple-700 dark:text-purple-300 text-xs">
-                {calendarPreference === 'dual'
-                  ? todayInfo.formattedDual
-                  : calendarPreference === 'bs'
-                  ? todayInfo.formattedBs
-                  : todayInfo.formattedAd}
-              </span>
-            </div>
-            <span className="text-[10px] text-slate-500 dark:text-theme-text-muted font-mono">
-              Coverage: 1975 – 2099 BS (Offline)
+          <div className="p-3.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-500/20 flex items-center justify-between text-xs">
+            <span className="text-slate-500 dark:text-theme-text-muted text-xs font-semibold">
+              Today:
+            </span>
+            <span className="font-semibold text-purple-700 dark:text-purple-300 text-xs">
+              {calendarPreference === 'dual'
+                ? todayInfo.formattedDual
+                : calendarPreference === 'bs'
+                ? todayInfo.formattedBs
+                : todayInfo.formattedAd}
             </span>
           </div>
         )}

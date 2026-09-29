@@ -25,22 +25,9 @@ export const UpdatesSettings: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Category Header */}
-      <div>
-        <h3 className="text-base font-semibold text-slate-900 dark:text-theme-text">Updates</h3>
-        <p className="text-xs text-slate-500 dark:text-theme-text-muted mt-0.5">
-          Software release tracking, automatic update checks, and release notes.
-        </p>
-      </div>
-
       {/* Subsection 1: Current Version */}
       <div className="p-4 rounded-xl bg-slate-50 dark:bg-theme-surface/70 border border-slate-200/80 dark:border-theme-border flex items-center justify-between">
-        <div>
-          <span className="text-xs font-bold text-slate-900 dark:text-theme-text block">Current Version</span>
-          <span className="text-[11px] text-slate-500 dark:text-theme-text-muted block">
-            Authoritative dynamic release build
-          </span>
-        </div>
+        <span className="text-xs font-bold text-slate-900 dark:text-theme-text">Current Version</span>
         <span className="text-xs font-mono text-purple-700 dark:text-purple-400 font-bold bg-white dark:bg-theme-surface px-3 py-1 rounded-lg border border-purple-200 dark:border-theme-border">
           {currentVersion}
         </span>
@@ -48,18 +35,13 @@ export const UpdatesSettings: React.FC = () => {
 
       {/* Subsection 2: Automatic Updates */}
       <div className="space-y-3 pt-5 border-t border-slate-200/80 dark:border-theme-border">
-        <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted block">
+        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted block">
           Automatic Updates
-        </label>
+        </h4>
         <div className="p-3.5 rounded-xl bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border flex items-center justify-between">
-          <div className="space-y-0.5">
-            <span className="text-xs font-semibold text-slate-900 dark:text-theme-text block">
-              Check for updates automatically on startup
-            </span>
-            <span className="text-[11px] text-slate-500 dark:text-theme-text-muted block">
-              Silently checks for new releases when TotumVault launches (unless Air-Gap Mode is enabled).
-            </span>
-          </div>
+          <span className="text-xs font-semibold text-slate-900 dark:text-theme-text">
+            Check for updates on startup
+          </span>
 
           <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-3">
             <input
@@ -81,9 +63,9 @@ export const UpdatesSettings: React.FC = () => {
       {/* Subsection 3: Update Check */}
       <div className="space-y-3 pt-5 border-t border-slate-200/80 dark:border-theme-border">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted block">
+          <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted block">
             Update Check
-          </label>
+          </h4>
           {lastUpdateChecked && (
             <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-theme-text-muted">
               <Clock className="w-3 h-3" />
@@ -96,19 +78,14 @@ export const UpdatesSettings: React.FC = () => {
         {airGapMode && (
           <div className="p-3 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-500/40 text-xs text-purple-900 dark:text-purple-300 flex items-center gap-2.5">
             <WifiOff className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
-            <div>
-              <span className="font-semibold block">Air-Gap Mode is enabled.</span>
-              <span className="text-[11px] text-purple-800 dark:text-purple-300">
-                Update checks are unavailable while Air-Gap Mode is enabled. Outbound network access is blocked.
-              </span>
-            </div>
+            <span>Updates unavailable while Air-Gap Mode is enabled.</span>
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border">
-          <p className="text-xs text-slate-600 dark:text-theme-text-muted leading-relaxed">
-            Verify the latest security improvements, stability enhancements, and features from the official GitHub Release channel.
-          </p>
+        <div className="flex items-center justify-between p-3.5 rounded-xl bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border">
+          <span className="text-xs font-medium text-slate-700 dark:text-theme-text-muted">
+            Release Channel
+          </span>
 
           <button
             type="button"
@@ -117,7 +94,7 @@ export const UpdatesSettings: React.FC = () => {
             className="px-4 py-2 rounded-xl text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer shrink-0 transition-colors flex items-center gap-2 shadow-xs disabled:opacity-50 min-h-[38px]"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isCheckingUpdate ? 'animate-spin' : ''}`} />
-            <span>{isCheckingUpdate ? 'Checking...' : 'Check for Updates Now'}</span>
+            <span>{isCheckingUpdate ? 'Checking...' : 'Check for Updates'}</span>
           </button>
         </div>
 
@@ -125,7 +102,7 @@ export const UpdatesSettings: React.FC = () => {
         {isCheckingUpdate && (
           <div className="p-3 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-500/30 text-xs text-purple-800 dark:text-purple-300 flex items-center gap-2.5">
             <RefreshCw className="w-4 h-4 animate-spin text-purple-600 dark:text-purple-400 shrink-0" />
-            <span>Connecting to official release repository to verify version integrity...</span>
+            <span>Checking official release repository...</span>
           </div>
         )}
 
@@ -133,7 +110,7 @@ export const UpdatesSettings: React.FC = () => {
         {updateInfo && !updateInfo.hasUpdate && (
           <div className="p-3.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-500/30 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2.5">
             <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-            <span>TotumVault is up to date with the latest official release{rawVersion ? ` (v${rawVersion})` : ''}.</span>
+            <span>TotumVault is up to date{rawVersion ? ` (${currentVersion})` : ''}.</span>
           </div>
         )}
 
