@@ -24,6 +24,7 @@ import {
   detectDocumentCorners,
   cropQuadToImage,
   generateThumbnailDataUrl,
+  getDocumentExpiryDisplay,
 } from './documentUtils';
 import { DocumentCategoryType, SavePageInput } from '../../types';
 import { DualDatePicker } from '../common/DualDatePicker';
@@ -654,6 +655,8 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     onClose();
   };
 
+  const expiryInfo = getDocumentExpiryDisplay(expiryDate);
+
   if (!isOpen) return null;
 
   return (
@@ -666,21 +669,21 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
               <Camera className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-sm sm:text-base font-semibold text-theme-text tracking-tight truncate">
+              <h2 className="text-sm sm:text-base font-bold text-theme-text tracking-tight truncate">
                 {targetDocumentId
-                  ? 'Add Pages to Document'
+                  ? 'Add Pages'
                   : step === 'crop'
-                  ? 'Adjust Perspective & Crop'
+                  ? 'Crop Document'
                   : step === 'metadata'
-                  ? 'Document Details & Review'
-                  : 'Secure Document Scanner'}
+                  ? 'Document Details'
+                  : 'Add Document'}
               </h2>
-              <p className="text-[11px] sm:text-xs text-theme-text-muted truncate">
+              <p className="text-[11px] text-theme-text-muted truncate">
                 {step === 'crop'
-                  ? 'Drag corners to align document boundaries'
+                  ? 'Adjust the corners to fit your document.'
                   : step === 'metadata'
-                  ? `${stagedPages.length} page(s) ready to encrypt & save`
-                  : 'On-device camera & edge detection. Encrypted in your vault.'}
+                  ? `${stagedPages.length} ${stagedPages.length === 1 ? 'page' : 'pages'} ready to save`
+                  : 'Scan or upload a document to your vault.'}
               </p>
             </div>
           </div>
@@ -709,7 +712,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                 }`}
               >
                 <Camera className="w-4 h-4" />
-                <span>Live Camera Scan</span>
+                <span>Scan Document</span>
               </button>
               <button
                 type="button"
@@ -721,7 +724,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                 }`}
               >
                 <Upload className="w-4 h-4" />
-                <span>Upload Image Files</span>
+                <span>Choose File</span>
               </button>
             </div>
 
@@ -1136,19 +1139,23 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                       onChange={setExpiryDate}
                       placeholder="Select expiry (AD / BS)"
                     />
+                    <div className="mt-1 px-2 py-0.5 rounded-lg bg-theme-surface/70 border border-theme-border flex items-center justify-between text-[11px]">
+                      <span className="text-theme-text-muted">Status:</span>
+                      <span className={expiryInfo.badgeClass}>{expiryInfo.label}</span>
+                    </div>
                   </div>
                 </div>
 
                 {expiryDate && (
-                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-theme-bg-secondary border border-theme-border animate-fade-in">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-theme-surface border border-theme-border animate-fade-in">
                     <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                      <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
                         <Bell className="w-3.5 h-3.5" />
                       </div>
                       <div>
                         <span className="text-xs font-semibold text-theme-text block">Renewal Reminders</span>
-                        <span className="text-[10px] text-theme-text-muted block">
-                          Alerts 5 days before, then daily until expiry
+                        <span className="text-[11px] text-theme-text-muted block">
+                          Reminders appear before and after expiry.
                         </span>
                       </div>
                     </div>
@@ -1159,7 +1166,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                         onChange={(e) => setReminderEnabled(e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-8 h-4 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-amber-500"></div>
+                      <div className="w-10 h-6 bg-slate-200 dark:bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
                     </label>
                   </div>
                 )}

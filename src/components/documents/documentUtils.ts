@@ -133,6 +133,99 @@ export function getCategoryConfig(category?: string): DocumentCategoryConfig {
   );
 }
 
+export interface DocumentExpiryDisplay {
+  status: 'expired' | 'today' | 'tomorrow' | 'due' | 'upcoming' | 'none';
+  daysRemaining: number | null;
+  label: string;
+  badgeClass: string;
+}
+
+export function getDocumentExpiryDisplay(expiryDateStr?: string | null): DocumentExpiryDisplay {
+  if (!expiryDateStr || !expiryDateStr.trim()) {
+    return {
+      status: 'none',
+      daysRemaining: null,
+      label: 'No expiry date',
+      badgeClass: 'text-slate-400 dark:text-zinc-500',
+    };
+  }
+
+  const parts = expiryDateStr.trim().split('-');
+  if (parts.length !== 3) {
+    return {
+      status: 'none',
+      daysRemaining: null,
+      label: 'No expiry date',
+      badgeClass: 'text-slate-400 dark:text-zinc-500',
+    };
+  }
+
+  const year = parseInt(parts[0], 10);
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+
+  if (isNaN(year) || isNaN(month) || isNaN(day)) {
+    return {
+      status: 'none',
+      daysRemaining: null,
+      label: 'No expiry date',
+      badgeClass: 'text-slate-400 dark:text-zinc-500',
+    };
+  }
+
+  const expiry = new Date(year, month, day, 0, 0, 0, 0);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+
+  const diffTime = expiry.getTime() - today.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return {
+      status: 'expired',
+      daysRemaining: diffDays,
+      label: 'Expired',
+      badgeClass: 'text-rose-600 dark:text-rose-400 font-semibold',
+    };
+  }
+
+  if (diffDays === 0) {
+    return {
+      status: 'today',
+      daysRemaining: 0,
+      label: 'Expires today',
+      badgeClass: 'text-amber-600 dark:text-amber-400 font-bold',
+    };
+  }
+
+  if (diffDays === 1) {
+    return {
+      status: 'tomorrow',
+      daysRemaining: 1,
+      label: 'Expires tomorrow',
+      badgeClass: 'text-amber-600 dark:text-amber-400 font-semibold',
+    };
+  }
+
+  if (diffDays <= 30) {
+    return {
+      status: 'due',
+      daysRemaining: diffDays,
+      label: `Expires in ${diffDays} days`,
+      badgeClass: diffDays <= 7
+        ? 'text-amber-600 dark:text-amber-400 font-medium'
+        : 'text-slate-700 dark:text-zinc-300 font-medium',
+    };
+  }
+
+  return {
+    status: 'upcoming',
+    daysRemaining: diffDays,
+    label: `Expires in ${diffDays} days`,
+    badgeClass: 'text-slate-600 dark:text-zinc-400',
+  };
+}
+
 /**
  * Creates a downscaled JPEG thumbnail (~200px width/height) from an image element or canvas
  */
