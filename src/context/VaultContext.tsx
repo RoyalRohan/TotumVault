@@ -39,6 +39,14 @@ import {
   setBiometricPromptActive,
 } from '../utils/androidBiometrics';
 import { checkAppUpdate } from '../utils/updater';
+import {
+  CalendarMode,
+  NumeralSystem,
+  getStoredCalendarPreference,
+  setStoredCalendarPreference,
+  getStoredNumeralPreference,
+  setStoredNumeralPreference,
+} from '../utils/nepaliCalendar';
 
 export interface ExportResult {
   path: string;
@@ -176,6 +184,12 @@ interface VaultContextType {
   airGapStatus: NetworkStatus | null;
   toggleAirGapMode: () => Promise<void>;
   testAirGapBlocking: () => Promise<string>;
+
+  // Calendar & Localization Preferences
+  calendarPreference: CalendarMode;
+  setCalendarPreference: (mode: CalendarMode) => void;
+  numeralPreference: NumeralSystem;
+  setNumeralPreference: (pref: NumeralSystem) => void;
 
   // Safe Import Actions
   analyzeImport: (srcPathOrContent: string, password?: string) => Promise<ImportPreview>;
@@ -940,6 +954,20 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
+  // Calendar & Localization Preferences
+  const [calendarPreference, setCalendarPreferenceState] = useState<CalendarMode>(() => getStoredCalendarPreference());
+  const [numeralPreference, setNumeralPreferenceState] = useState<NumeralSystem>(() => getStoredNumeralPreference());
+
+  const setCalendarPreference = useCallback((mode: CalendarMode) => {
+    setCalendarPreferenceState(mode);
+    setStoredCalendarPreference(mode);
+  }, []);
+
+  const setNumeralPreference = useCallback((num: NumeralSystem) => {
+    setNumeralPreferenceState(num);
+    setStoredNumeralPreference(num);
+  }, []);
+
   // Auto Updates
   const checkForUpdates = useCallback(async (manual = false): Promise<UpdateInfo | null> => {
     if (airGapMode) {
@@ -1538,6 +1566,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         airGapStatus,
         toggleAirGapMode,
         testAirGapBlocking,
+        calendarPreference,
+        setCalendarPreference,
+        numeralPreference,
+        setNumeralPreference,
       }}
     >
       {children}

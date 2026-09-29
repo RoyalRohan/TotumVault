@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use tauri::Manager;
 
+pub mod calendar;
 pub mod clipboard;
 pub mod commands;
 pub mod crypto;
@@ -213,6 +214,11 @@ pub fn run() {
             commands::check_network_allowed,
             commands::require_network_access_command,
             commands::test_air_gap_blocking,
+            commands::convert_ad_to_bs_command,
+            commands::convert_bs_to_ad_command,
+            commands::get_bs_month_days_command,
+            commands::get_dual_date_info,
+            commands::get_today_dual_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

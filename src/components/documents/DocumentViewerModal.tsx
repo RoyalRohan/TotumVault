@@ -22,6 +22,8 @@ import { getReminderCountdownInfo } from '../../utils/reminderUtils';
 import { useVault } from '../../context/VaultContext';
 import { DocumentDetail, DocumentCategoryType } from '../../types';
 import { getCategoryConfig, formatBytes, DOCUMENT_CATEGORIES } from './documentUtils';
+import { DualDatePicker } from '../common/DualDatePicker';
+import { formatDisplayDate, getDualDateInfo } from '../../utils/nepaliCalendar';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
 import { useHorizontalScroll } from '../../utils/useHorizontalScroll';
@@ -46,6 +48,8 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     toggleDocumentFavorite,
     saveDocument,
     showToast,
+    calendarPreference,
+    numeralPreference,
   } = useVault();
 
   const [documentDetail, setDocumentDetail] = useState<DocumentDetail | null>(null);
@@ -626,7 +630,20 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                     <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
                       Document Date
                     </span>
-                    <span>{documentDetail.metadata.document_date}</span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-zinc-200">
+                        {formatDisplayDate(documentDetail.metadata.document_date, calendarPreference, numeralPreference)}
+                      </span>
+                      {calendarPreference === 'dual' && (() => {
+                        const info = getDualDateInfo(documentDetail.metadata.document_date, numeralPreference === 'ne');
+                        if (!info) return null;
+                        return (
+                          <span className="text-[10px] text-zinc-400 font-mono">
+                            AD: {info.canonicalAdStr} • BS: {info.formattedBs}
+                          </span>
+                        );
+                      })()}
+                    </div>
                   </div>
                 )}
 
@@ -635,24 +652,37 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                     <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
                       Expiry Date
                     </span>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={isExpired ? 'text-rose-400 font-bold' : 'text-zinc-200'}>
-                        {documentDetail.metadata.expiry_date}
-                      </span>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={isExpired ? 'text-rose-400 font-bold' : 'text-zinc-200 font-medium'}>
+                          {formatDisplayDate(documentDetail.metadata.expiry_date, calendarPreference, numeralPreference)}
+                        </span>
+                        {(() => {
+                          const countdown = getReminderCountdownInfo(documentDetail.metadata.expiry_date);
+                          if (countdown.status !== 'none') {
+                            return (
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${countdown.badgeClass}`}>
+                                {countdown.label}
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
                       {(() => {
-                        const countdown = getReminderCountdownInfo(documentDetail.metadata.expiry_date);
-                        if (countdown.status !== 'none') {
-                          return (
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${countdown.badgeClass}`}>
-                              {countdown.label}
-                            </span>
-                          );
-                        }
-                        return null;
+                        const info = getDualDateInfo(documentDetail.metadata.expiry_date, numeralPreference === 'ne');
+                        if (!info) return null;
+                        return (
+                          <div className="flex items-center gap-2 text-[10px] text-zinc-400 font-mono">
+                            <span>AD: {info.canonicalAdStr}</span>
+                            <span>•</span>
+                            <span className="text-purple-400 font-medium">BS: {info.formattedBs}</span>
+                          </div>
+                        );
                       })()}
                     </div>
                     {documentDetail.metadata.reminder_enabled === false && (
-                      <span className="text-[10px] text-zinc-500 block mt-0.5">
+                      <span className="text-[10px] text-zinc-500 block mt-1">
                         (Renewal reminders disabled for this document)
                       </span>
                     )}
@@ -745,27 +775,25 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                   </select>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
                       Document Date
                     </label>
-                    <input
-                      type="date"
+                    <DualDatePicker
                       value={editDocDate}
-                      onChange={(e) => setEditDocDate(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-2 py-1.5 text-white text-xs"
+                      onChange={setEditDocDate}
+                      placeholder="Select date (AD / BS)"
                     />
                   </div>
                   <div>
                     <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">
                       Expiry Date
                     </label>
-                    <input
-                      type="date"
+                    <DualDatePicker
                       value={editExpiryDate}
-                      onChange={(e) => setEditExpiryDate(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-2 py-1.5 text-white text-xs"
+                      onChange={setEditExpiryDate}
+                      placeholder="Select expiry (AD / BS)"
                     />
                   </div>
                 </div>

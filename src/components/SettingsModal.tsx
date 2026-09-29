@@ -17,11 +17,13 @@ import {
   Bell,
   Shield,
   WifiOff,
+  Calendar,
 } from 'lucide-react';
 import { useVault } from '../context/VaultContext';
 import { useTheme, APP_FONTS } from '../context/ThemeContext';
 import { calculatePasswordStrength, calculateEntropy } from '../utils/cryptoUtils';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { getTodayDual } from '../utils/nepaliCalendar';
 import logoImg from '../assets/logo.png';
 
 export const SettingsModal: React.FC = () => {
@@ -52,6 +54,10 @@ export const SettingsModal: React.FC = () => {
     airGapStatus,
     toggleAirGapMode,
     testAirGapBlocking,
+    calendarPreference,
+    setCalendarPreference,
+    numeralPreference,
+    setNumeralPreference,
   } = useVault();
   const { theme, setTheme, resolvedTheme, font, setFont } = useTheme();
 
@@ -665,6 +671,143 @@ export const SettingsModal: React.FC = () => {
               {isChanging ? 'Updating Password...' : 'Update Master Password'}
             </button>
           </form>
+
+          {/* Calendar & Localization (AD / Nepali Bikram Sambat) */}
+          <div className="space-y-3 pt-4 border-t border-theme-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <label className="text-xs font-bold uppercase tracking-wider text-theme-text-muted block">
+                  Calendar & Localization
+                </label>
+              </div>
+              <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                Gregorian (AD) + Bikram Sambat (BS)
+              </span>
+            </div>
+
+            <p className="text-xs text-theme-text-muted">
+              Configure how dates are displayed across documents, bills, and renewal alerts. All data is securely stored in standard canonical format and operates 100% offline.
+            </p>
+
+            {/* Calendar Mode Selector */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold text-theme-text block">Calendar Display Mode</span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCalendarPreference('dual')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    calendarPreference === 'dual'
+                      ? 'border-purple-500 bg-purple-500/10 text-theme-text ring-1 ring-purple-500/30'
+                      : 'border-theme-border bg-theme-surface hover:bg-theme-hover text-theme-text-muted hover:text-theme-text'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold">Dual (AD + BS)</span>
+                    {calendarPreference === 'dual' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
+                  </div>
+                  <span className="text-[10px] block opacity-80">Show both calendars together (recommended)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCalendarPreference('bs')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    calendarPreference === 'bs'
+                      ? 'border-purple-500 bg-purple-500/10 text-theme-text ring-1 ring-purple-500/30'
+                      : 'border-theme-border bg-theme-surface hover:bg-theme-hover text-theme-text-muted hover:text-theme-text'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold">BS Only (नेपाली)</span>
+                    {calendarPreference === 'bs' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
+                  </div>
+                  <span className="text-[10px] block opacity-80">Nepali Bikram Sambat calendar</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setCalendarPreference('ad')}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    calendarPreference === 'ad'
+                      ? 'border-purple-500 bg-purple-500/10 text-theme-text ring-1 ring-purple-500/30'
+                      : 'border-theme-border bg-theme-surface hover:bg-theme-hover text-theme-text-muted hover:text-theme-text'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold">AD Only</span>
+                    {calendarPreference === 'ad' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
+                  </div>
+                  <span className="text-[10px] block opacity-80">Gregorian international calendar</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Numeral System Selector */}
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[11px] font-semibold text-theme-text block">BS Numeral System</span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNumeralPreference('en')}
+                  className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                    numeralPreference === 'en'
+                      ? 'border-purple-500 bg-purple-500/10 text-theme-text ring-1 ring-purple-500/30'
+                      : 'border-theme-border bg-theme-surface hover:bg-theme-hover text-theme-text-muted hover:text-theme-text'
+                  }`}
+                >
+                  <div>
+                    <span className="text-xs font-bold block">English Digits</span>
+                    <span className="text-[10px] opacity-80">1, 2, 3, 2083</span>
+                  </div>
+                  {numeralPreference === 'en' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNumeralPreference('ne')}
+                  className={`p-2 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between ${
+                    numeralPreference === 'ne'
+                      ? 'border-purple-500 bg-purple-500/10 text-theme-text ring-1 ring-purple-500/30'
+                      : 'border-theme-border bg-theme-surface hover:bg-theme-hover text-theme-text-muted hover:text-theme-text'
+                  }`}
+                >
+                  <div>
+                    <span className="text-xs font-bold block">Nepali Numerals (नेपाली अंक)</span>
+                    <span className="text-[10px] opacity-80">१, २, ३, २०८३</span>
+                  </div>
+                  {numeralPreference === 'ne' && <Check className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 stroke-[2.5]" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Live Today Preview */}
+            {(() => {
+              try {
+                const todayInfo = getTodayDual(numeralPreference === 'ne');
+                return (
+                  <div className="p-2.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+                    <div>
+                      <span className="text-theme-text-muted text-[10px] block">Live Preview (Today):</span>
+                      <span className="font-semibold text-purple-700 dark:text-purple-300">
+                        {calendarPreference === 'dual'
+                          ? todayInfo.formattedDual
+                          : calendarPreference === 'bs'
+                          ? todayInfo.formattedBs
+                          : todayInfo.formattedAd}
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-theme-text-muted font-mono">
+                      Coverage: 1975 – 2099 BS (Offline)
+                    </span>
+                  </div>
+                );
+              } catch {
+                return null;
+              }
+            })()}
+          </div>
 
           {/* Air-Gap Mode Section */}
           <div className="space-y-3 pt-4 border-t border-theme-border">

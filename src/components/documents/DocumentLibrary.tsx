@@ -17,6 +17,7 @@ import { DOCUMENT_CATEGORIES, getCategoryConfig } from './documentUtils';
 import { getLicenseStatus } from '../../utils/license';
 import { getReminderCountdownInfo } from '../../utils/reminderUtils';
 import { useHorizontalScroll } from '../../utils/useHorizontalScroll';
+import { formatDisplayDate, getDualDateInfo } from '../../utils/nepaliCalendar';
 
 interface DocumentLibraryProps {
   onOpenScanner: (mode: 'camera' | 'upload') => void;
@@ -27,7 +28,14 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
   onOpenScanner,
   onSelectDocument,
 }) => {
-  const { documents, toggleDocumentFavorite, searchQuery, setSearchQuery } = useVault();
+  const {
+    documents,
+    toggleDocumentFavorite,
+    searchQuery,
+    setSearchQuery,
+    calendarPreference,
+    numeralPreference,
+  } = useVault();
 
   // Local filter states
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -48,16 +56,43 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
   const filteredDocuments = useMemo(() => {
     let list = [...documents];
 
-    // Search query filter (matches title, description, tags, doc_type)
+    // Search query filter (matches title, description, tags, doc_type, and AD / BS dates)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      list = list.filter(
-        (doc) =>
+      list = list.filter((doc) => {
+        if (
           doc.title.toLowerCase().includes(q) ||
           doc.description.toLowerCase().includes(q) ||
           doc.doc_type.toLowerCase().includes(q) ||
           doc.tags.some((t) => t.toLowerCase().includes(q))
-      );
+        ) {
+          return true;
+        }
+
+        // Match against dates in both AD and Bikram Sambat BS formats
+        const checkDateMatch = (dateStr?: string) => {
+          if (!dateStr) return false;
+          if (dateStr.toLowerCase().includes(q)) return true;
+          const info = getDualDateInfo(dateStr, false);
+          if (info) {
+            if (
+              info.formattedDual.toLowerCase().includes(q) ||
+              info.formattedBs.toLowerCase().includes(q) ||
+              info.canonicalBsStr.includes(q) ||
+              info.bs.year.toString().includes(q)
+            ) {
+              return true;
+            }
+          }
+          const infoNe = getDualDateInfo(dateStr, true);
+          if (infoNe && (infoNe.formattedBs.includes(q) || infoNe.formattedDual.includes(q))) {
+            return true;
+          }
+          return false;
+        };
+
+        return checkDateMatch(doc.document_date) || checkDateMatch(doc.expiry_date);
+      });
     }
 
     // Category filter
@@ -437,7 +472,11 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                   <div className="mt-2.5 pt-2 border-t border-theme-border/60 flex items-center justify-between text-[10px] sm:text-[11px] text-theme-text-muted">
                     <div className="flex items-center gap-1 min-w-0">
                       <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-purple-600 dark:text-purple-400 stroke-[1.75] shrink-0" />
-                      <span className="truncate">{doc.document_date || new Date(doc.created_at).toLocaleDateString()}</span>
+                      <span className="truncate">
+                        {doc.document_date
+                          ? formatDisplayDate(doc.document_date, calendarPreference, numeralPreference)
+                          : new Date(doc.created_at).toLocaleDateString()}
+                      </span>
                     </div>
 
                     {doc.expiry_date && (() => {
@@ -452,7 +491,9 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                               : 'text-theme-text-muted'
                           }`}
                         >
-                          {countdown.status !== 'none' ? countdown.label : doc.expiry_date}
+                          {countdown.status !== 'none'
+                            ? countdown.label
+                            : formatDisplayDate(doc.expiry_date, calendarPreference, numeralPreference)}
                         </span>
                       );
                     })()}
@@ -517,7 +558,11 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                           {doc.page_count} {doc.page_count === 1 ? 'page' : 'pages'}
                         </span>
                         <span>&bull;</span>
-                        <span>{doc.document_date || new Date(doc.created_at).toLocaleDateString()}</span>
+                        <span>
+                          {doc.document_date
+                            ? formatDisplayDate(doc.document_date, calendarPreference, numeralPreference)
+                            : new Date(doc.created_at).toLocaleDateString()}
+                        </span>
                         {doc.tags && doc.tags.length > 0 && (
                           <>
                             <span>&bull;</span>

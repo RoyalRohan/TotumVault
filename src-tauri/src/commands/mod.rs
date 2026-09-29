@@ -7,6 +7,11 @@ use tauri::State;
 use uuid::Uuid;
 
 use crate::network::policy::{NetworkPolicyService, NetworkStatus};
+use crate::calendar::{
+    ad_str_to_bs, bs_str_to_ad, format_dual_date, get_bs_month_days,
+    DualDateResult, GregorianDate, NepaliDate,
+};
+use chrono::Datelike;
 
 use crate::totp::generator::{generate_totp_code as calc_totp, validate_totp_secret};
 use crate::vault::health::evaluate_vault_health;
@@ -1017,6 +1022,34 @@ pub fn test_air_gap_blocking(
 ) -> Result<String, String> {
     policy.test_network_access().map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn convert_ad_to_bs_command(ad_date: String) -> Result<NepaliDate, String> {
+    ad_str_to_bs(&ad_date).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn convert_bs_to_ad_command(bs_date: String) -> Result<GregorianDate, String> {
+    bs_str_to_ad(&bs_date).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_bs_month_days_command(year: i32, month: u8) -> Result<u8, String> {
+    get_bs_month_days(year, month).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_dual_date_info(ad_date: String, in_nepali: Option<bool>) -> Result<DualDateResult, String> {
+    format_dual_date(&ad_date, in_nepali.unwrap_or(false)).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_today_dual_command(in_nepali: Option<bool>) -> Result<DualDateResult, String> {
+    let now = chrono::Utc::now().date_naive();
+    let ad_str = format!("{:04}-{:02}-{:02}", now.year(), now.month(), now.day());
+    format_dual_date(&ad_str, in_nepali.unwrap_or(false)).map_err(|e| e.to_string())
+}
+
 
 
 #[cfg(test)]

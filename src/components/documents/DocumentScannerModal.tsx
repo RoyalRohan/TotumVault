@@ -9,7 +9,6 @@ import {
   Trash2,
   Sparkles,
   Sliders,
-  Calendar,
   Tag,
   FileText,
   AlertCircle,
@@ -27,6 +26,7 @@ import {
   generateThumbnailDataUrl,
 } from './documentUtils';
 import { DocumentCategoryType, SavePageInput } from '../../types';
+import { DualDatePicker } from '../common/DualDatePicker';
 
 interface DocumentScannerModalProps {
   isOpen: boolean;
@@ -1114,36 +1114,28 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                   </div>
                 </div>
 
-                {/* Dates: Document Date & Expiry Date */}
+                {/* Dates: Document Date & Expiry Date (Dual AD + Nepali Bikram Sambat) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
                       Document Date
                     </label>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={documentDate}
-                        onChange={(e) => setDocumentDate(e.target.value)}
-                        className="input-themed w-full rounded-xl pl-9 pr-3.5 py-2 text-xs"
-                      />
-                      <Calendar className="w-3.5 h-3.5 text-theme-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
+                    <DualDatePicker
+                      value={documentDate}
+                      onChange={setDocumentDate}
+                      placeholder="Select date (AD / BS)"
+                    />
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
                       Expiry Date
                     </label>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={expiryDate}
-                        onChange={(e) => setExpiryDate(e.target.value)}
-                        className="input-themed w-full rounded-xl pl-9 pr-3.5 py-2 text-xs"
-                      />
-                      <Calendar className="w-3.5 h-3.5 text-theme-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    </div>
+                    <DualDatePicker
+                      value={expiryDate}
+                      onChange={setExpiryDate}
+                      placeholder="Select expiry (AD / BS)"
+                    />
                   </div>
                 </div>
 
