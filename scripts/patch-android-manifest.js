@@ -92,7 +92,14 @@ const mainActivityPaths = [
 
 const kotlinImports = [
   'android.os.Bundle',
+  'android.content.ClipData',
+  'android.content.ClipDescription',
+  'android.content.ClipboardManager',
+  'android.content.Context',
+  'android.os.Build',
+  'android.os.PersistableBundle',
   'android.webkit.JavascriptInterface',
+
   'android.webkit.WebView',
   'androidx.biometric.BiometricManager',
   'androidx.biometric.BiometricPrompt',
@@ -336,6 +343,40 @@ class AndroidBiometricsBridge(private val activity: MainActivity, private val we
         }
     }
 }
+
+class AndroidClipboardBridge(private val activity: MainActivity) {
+    @JavascriptInterface
+    fun copySecure(text: String, label: String): Boolean {
+        activity.runOnUiThread {
+            try {
+                val cm = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                val clip = ClipData.newPlainText(label, text)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    val bundle = PersistableBundle()
+                    bundle.putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+                    clip.description.extras = bundle
+                }
+                cm.setPrimaryClip(clip)
+            } catch (e: Exception) {}
+        }
+        return true
+    }
+
+    @JavascriptInterface
+    fun clearPrimaryClip(): Boolean {
+        activity.runOnUiThread {
+            try {
+                val cm = activity.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    cm.clearPrimaryClip()
+                } else {
+                    cm.setPrimaryClip(ClipData.newPlainText("", ""))
+                }
+            } catch (e: Exception) {}
+        }
+        return true
+    }
+}
 `;
 
 for (const actPath of mainActivityPaths) {
@@ -362,7 +403,9 @@ for (const actPath of mainActivityPaths) {
     super.onWebViewCreate(webView)
     this.webViewRef = webView
     webView.addJavascriptInterface(AndroidBiometricsBridge(this, webView), "AndroidBiometrics")
+    webView.addJavascriptInterface(AndroidClipboardBridge(this), "AndroidClipboard")
   }
+
 
   override fun onWindowFocusChanged(hasFocus: Boolean) {
     super.onWindowFocusChanged(hasFocus)

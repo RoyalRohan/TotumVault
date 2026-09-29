@@ -27,19 +27,26 @@ impl TauriClipboardBackend {
 
 impl ClipboardBackend for TauriClipboardBackend {
     fn write_text(&self, text: &str) -> Result<(), String> {
-        use tauri_plugin_clipboard_manager::ClipboardExt;
-        self.app.clipboard().write_text(text).map_err(|e| e.to_string())
+        super::native::NativeClipboard::write_sensitive(&self.app, text)
     }
 
     fn read_text(&self) -> Result<String, String> {
-        use tauri_plugin_clipboard_manager::ClipboardExt;
-        self.app.clipboard().read_text().map_err(|e| e.to_string())
+        super::native::NativeClipboard::read_text(&self.app).map_err(|e| e.to_string())
     }
 
     fn clear(&self) -> Result<(), String> {
-        use tauri_plugin_clipboard_manager::ClipboardExt;
-        self.app.clipboard().clear().map_err(|e| e.to_string())
+        super::native::NativeClipboard::clear(&self.app)
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ClipboardClearResult {
+    Cleared,
+    AlreadyChanged,
+    VerificationUnavailable,
+    ClipboardUnavailable,
+    TemporaryFailure(String),
+    Unsupported,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -48,6 +55,7 @@ pub struct ClipboardSessionStatus {
     pub generation: u64,
     pub remaining_seconds: Option<u64>,
 }
+
 
 pub struct ClipboardInner {
     pub session: Option<ClipboardSession>,
@@ -233,7 +241,7 @@ impl ClipboardManager {
         expected_len: usize,
         hmac_key: &[u8; 32],
         expected_fp: &[u8; 32],
-    ) {
+    ) -> ClipboardClearResult {
         // Fast pre-check: if superseded or write is pending, abort immediately
         if let Ok(guard) = inner.0.lock() {
             if guard.shutdown
@@ -241,7 +249,7 @@ impl ClipboardManager {
                 || guard.current_generation != generation
                 || guard.session.as_ref().map(|s| s.generation) != Some(generation)
             {
-                return;
+                return ClipboardClearResult::AlreadyChanged;
             }
         }
 
@@ -265,14 +273,14 @@ impl ClipboardManager {
                         }
                     }
                     eprintln!("[TotumVault Clipboard] Auto-clear skipped: clipboard content replaced.");
-                    return;
+                    return ClipboardClearResult::AlreadyChanged;
                 }
 
                 // Matching secret detected.
                 // To clear safely without erasing a newer copy, acquire op_mutex first.
                 let _op_guard = match op_mutex.lock() {
                     Ok(g) => g,
-                    Err(_) => return,
+                    Err(_) => return ClipboardClearResult::TemporaryFailure("Mutex poisoned".to_string()),
                 };
 
                 // Under op_mutex, verify generation has NOT been superseded while acquiring op_mutex
@@ -281,11 +289,11 @@ impl ClipboardManager {
                         || guard.pending_generation.is_some()
                         || guard.current_generation != generation
                     {
-                        return;
+                        return ClipboardClearResult::AlreadyChanged;
                     }
                     if let Some(session) = &mut guard.session {
                         if session.generation != generation || !session.active {
-                            return;
+                            return ClipboardClearResult::AlreadyChanged;
                         }
                         // Verification fully validated! Execute clear.
                         let _ = backend.clear();
@@ -294,12 +302,14 @@ impl ClipboardManager {
                         guard.session = None;
                         inner.1.notify_all();
                         eprintln!("[TotumVault Clipboard] Auto-clear executed: matching secret cleared.");
+                        return ClipboardClearResult::Cleared;
                     }
                 }
+                ClipboardClearResult::AlreadyChanged
             }
             Err(e) => {
-                // Read unavailable or timed out (e.g. Wayland compositor restriction).
-                // NEVER CLEAR BLINDLY!
+                // Read unavailable or timed out (e.g. Wayland compositor restriction or Android background).
+                // FAIL CLOSED: NEVER CLEAR BLINDLY!
                 if let Ok(mut guard) = inner.0.lock() {
                     if guard.session.as_ref().map(|s| s.generation) == Some(generation) {
                         if let Some(session) = &mut guard.session {
@@ -308,9 +318,11 @@ impl ClipboardManager {
                     }
                 }
                 eprintln!("[TotumVault Clipboard] Verification read failed ({}). Retaining clipboard safely.", e);
+                ClipboardClearResult::VerificationUnavailable
             }
         }
     }
+
 
     /// Writes secret text to system clipboard and initializes a native auto-clear session.
     ///
@@ -372,10 +384,8 @@ impl ClipboardManager {
         Ok(gen)
     }
 
-    /// Clears the clipboard immediately.
-    /// If force is true, unconditionally wipes clipboard.
-    /// If force is false, wipes only if clipboard matches active session.
-    pub fn clear_now(&self, force: bool) -> Result<bool, String> {
+    /// Clears the clipboard immediately returning structured result.
+    pub fn clear_now_structured(&self, force: bool) -> Result<ClipboardClearResult, String> {
         if force {
             let _op_guard = self.op_mutex.lock().map_err(|_| "Failed to acquire clipboard op lock")?;
             let _ = self.backend.clear();
@@ -388,14 +398,14 @@ impl ClipboardManager {
             guard.session = None;
             guard.pending_generation = None;
             self.inner.1.notify_all();
-            return Ok(true);
+            return Ok(ClipboardClearResult::Cleared);
         }
 
         // force == false: verification-guarded clear
         let (generation, expected_len, hmac_key, expected_fp) = {
             let guard = self.inner.0.lock().map_err(|_| "Failed to acquire inner lock")?;
             if guard.pending_generation.is_some() {
-                return Ok(false);
+                return Ok(ClipboardClearResult::AlreadyChanged);
             }
             match &guard.session {
                 Some(session) if session.active => (
@@ -404,63 +414,37 @@ impl ClipboardManager {
                     session.hmac_key,
                     session.expected_fingerprint,
                 ),
-                _ => return Ok(false),
+                _ => return Ok(ClipboardClearResult::AlreadyChanged),
             }
         };
 
-        let read_result = Self::read_clipboard_bounded(&self.reader_cmd_tx, Duration::from_millis(1500));
+        let result = Self::verify_and_clear(
+            &self.backend,
+            &self.inner,
+            &self.op_mutex,
+            &self.reader_cmd_tx,
+            generation,
+            expected_len,
+            &hmac_key,
+            &expected_fp,
+        );
 
-        match read_result {
-            Ok(current_text) => {
-                let matches = current_text.len() == expected_len && {
-                    let fp = session::compute_fingerprint(&hmac_key, &current_text);
-                    session::constant_time_eq(&fp, &expected_fp)
-                };
+        Ok(result)
+    }
 
-                if !matches {
-                    let mut guard = self.inner.0.lock().map_err(|_| "Failed to acquire inner lock")?;
-                    if guard.session.as_ref().map(|s| s.generation) == Some(generation) {
-                        if let Some(session) = &mut guard.session {
-                            session.invalidate();
-                        }
-                    }
-                    return Ok(false);
-                }
-
-                // Acquire op_mutex to coordinate with concurrent copies
-                let _op_guard = self.op_mutex.lock().map_err(|_| "Failed to acquire clipboard op lock")?;
-                let mut guard = self.inner.0.lock().map_err(|_| "Failed to acquire inner lock")?;
-                if guard.shutdown || guard.pending_generation.is_some() || guard.current_generation != generation {
-                    return Ok(false);
-                }
-                if let Some(session) = &mut guard.session {
-                    if session.generation == generation && session.active {
-                        let _ = self.backend.clear();
-                        os_cleaner::safe_clear_os_clipboard();
-                        session.invalidate();
-                        guard.session = None;
-                        self.inner.1.notify_all();
-                        return Ok(true);
-                    }
-                }
-                Ok(false)
-            }
-            Err(_) => {
-                let mut guard = self.inner.0.lock().map_err(|_| "Failed to acquire inner lock")?;
-                if guard.session.as_ref().map(|s| s.generation) == Some(generation) {
-                    if let Some(session) = &mut guard.session {
-                        session.invalidate();
-                    }
-                }
-                Ok(false)
-            }
-        }
+    /// Clears the clipboard immediately.
+    /// If force is true, unconditionally wipes clipboard.
+    /// If force is false, wipes only if clipboard matches active session.
+    pub fn clear_now(&self, force: bool) -> Result<bool, String> {
+        let res = self.clear_now_structured(force)?;
+        Ok(res == ClipboardClearResult::Cleared)
     }
 
     /// Clears clipboard on vault lock if matching active session.
-    pub fn clear_on_lock(&self) -> Result<bool, String> {
-        self.clear_now(false)
+    pub fn clear_on_lock(&self) -> Result<ClipboardClearResult, String> {
+        self.clear_now_structured(false)
     }
+
 
     /// Cancels active timer without modifying the system clipboard.
     pub fn cancel_timer(&self) -> Result<(), String> {
@@ -523,6 +507,7 @@ pub struct MockClipboardBackend {
     pub read_barrier: Mutex<Option<Arc<std::sync::Barrier>>>,
     pub read_delay: Mutex<Option<Duration>>,
     pub fail_writes: Mutex<bool>,
+    pub fail_reads: Mutex<bool>,
 }
 
 #[cfg(test)]
@@ -533,6 +518,7 @@ impl MockClipboardBackend {
             read_barrier: Mutex::new(None),
             read_delay: Mutex::new(None),
             fail_writes: Mutex::new(false),
+            fail_reads: Mutex::new(false),
         }
     }
 }
@@ -549,6 +535,9 @@ impl ClipboardBackend for MockClipboardBackend {
     }
 
     fn read_text(&self) -> Result<String, String> {
+        if *self.fail_reads.lock().unwrap() {
+            return Err("Simulated read restriction / focusless error".to_string());
+        }
         if let Some(barrier) = self.read_barrier.lock().unwrap().clone() {
             barrier.wait();
         }
@@ -565,6 +554,7 @@ impl ClipboardBackend for MockClipboardBackend {
         Ok(())
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -747,5 +737,80 @@ mod tests {
         // Dedicated single reader worker absorbed requests without spawning any extra threads
         let status = manager.get_status().unwrap();
         assert_eq!(status.generation, 0);
+    }
+
+    #[test]
+    fn test_read_failure_fails_closed_without_erasing_unknown_content() {
+        // TEST 6: Read restriction / failure -> must fail closed safely and NOT clear clipboard
+        let backend = Arc::new(MockClipboardBackend::new("SecretStay"));
+        let manager = ClipboardManager::with_backend(backend.clone());
+        let _ = manager.copy_and_track("SecretStay", 30).unwrap();
+
+        // Simulate OS background read restriction (e.g. Android 10+ background or Wayland without data-control)
+        *backend.fail_reads.lock().unwrap() = true;
+
+        let clear_res = manager.clear_now_structured(false).unwrap();
+        assert_eq!(clear_res, ClipboardClearResult::VerificationUnavailable);
+        // Fail closed: content must NOT be wiped
+        assert_eq!(*backend.content.lock().unwrap(), "SecretStay");
+    }
+
+    #[test]
+    fn test_clear_on_lock_matches_and_clears() {
+        // TEST 7: Vault lock with active matching session -> clears immediately
+        let backend = Arc::new(MockClipboardBackend::new(""));
+        let manager = ClipboardManager::with_backend(backend.clone());
+        let _ = manager.copy_and_track("VaultPass2026", 60).unwrap();
+        assert_eq!(*backend.content.lock().unwrap(), "VaultPass2026");
+
+        let res = manager.clear_on_lock().unwrap();
+        assert_eq!(res, ClipboardClearResult::Cleared);
+        assert_eq!(*backend.content.lock().unwrap(), "");
+    }
+
+    #[test]
+    fn test_clear_on_lock_preserves_external_content() {
+        // TEST 8: Vault lock when external app replaced content -> preserves external content
+        let backend = Arc::new(MockClipboardBackend::new(""));
+        let manager = ClipboardManager::with_backend(backend.clone());
+        let _ = manager.copy_and_track("VaultPass2026", 60).unwrap();
+
+        // User copies something else externally
+        *backend.content.lock().unwrap() = "TEST-123".to_string();
+
+        let res = manager.clear_on_lock().unwrap();
+        assert_eq!(res, ClipboardClearResult::AlreadyChanged);
+        assert_eq!(*backend.content.lock().unwrap(), "TEST-123");
+    }
+
+    #[test]
+    fn test_zero_timeout_does_not_clear() {
+        // TEST 9: Timeout disabled (0) -> no auto-clear
+        let backend = Arc::new(MockClipboardBackend::new(""));
+        let manager = ClipboardManager::with_backend(backend.clone());
+        let _ = manager.copy_and_track("PermanentSecret", 0).unwrap();
+
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(*backend.content.lock().unwrap(), "PermanentSecret");
+    }
+
+    #[test]
+    fn test_rapid_consecutive_copies_only_latest_active() {
+        // TEST 10: Rapid consecutive copies -> generation sequence and only latest session active
+        let backend = Arc::new(MockClipboardBackend::new(""));
+        let manager = ClipboardManager::with_backend(backend.clone());
+
+        let g1 = manager.copy_and_track("Secret1", 60).unwrap();
+        let g2 = manager.copy_and_track("Secret2", 60).unwrap();
+        let g3 = manager.copy_and_track("Secret3", 60).unwrap();
+
+        assert_eq!(g1, 1);
+        assert_eq!(g2, 2);
+        assert_eq!(g3, 3);
+        assert_eq!(*backend.content.lock().unwrap(), "Secret3");
+
+        let status = manager.get_status().unwrap();
+        assert_eq!(status.generation, 3);
+        assert!(status.active);
     }
 }

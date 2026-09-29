@@ -414,7 +414,16 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    // 2. Web API fallback
+    // 2. Android native clear bridge
+    if (typeof window !== 'undefined' && (window as any).AndroidClipboard?.clearPrimaryClip && (force || success)) {
+      try {
+        (window as any).AndroidClipboard.clearPrimaryClip();
+      } catch {
+        // ignore
+      }
+    }
+
+    // 3. Web API fallback
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText && (force || success)) {
       try {
         await navigator.clipboard.writeText('');
@@ -424,7 +433,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    // 3. Fallback DOM execCommand with empty string if forced
+    // 4. Fallback DOM execCommand with empty string if forced
+
     if (force && !success) {
       try {
         const textarea = document.createElement('textarea');
@@ -477,6 +487,16 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       let copied = false;
 
+      // 0. Android native bridge with EXTRA_IS_SENSITIVE flag (Android 13+)
+      if (typeof window !== 'undefined' && (window as any).AndroidClipboard?.copySecure) {
+        try {
+          (window as any).AndroidClipboard.copySecure(text, 'TotumVault');
+          copied = true;
+        } catch {
+          // Fall through to Tauri/Rust pipeline
+        }
+      }
+
       // 1. Primary implementation: Native Tauri secure clipboard pipeline
       // Writes text and registers cryptographic HMAC session in native Rust
       try {
@@ -486,6 +506,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
         copied = true;
       } catch {
+
         // Fallback: Official Tauri plugin writeText then track session
         try {
           await tauriWriteText(text);

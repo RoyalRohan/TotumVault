@@ -4780,6 +4780,7 @@ name = "totumvault"
 version = "1.3.2"
 dependencies = [
  "aes-gcm",
+ "arboard",
  "argon2",
  "base64 0.22.1",
  "chrono",
