@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
+  Shield,
   AlertTriangle,
   Clock,
   Key,
@@ -13,7 +14,7 @@ import { useVault } from '../context/VaultContext';
 import { isWeakPassword, calculateEntropy } from '../utils/cryptoUtils';
 
 export const SecurityHealthDashboard: React.FC = () => {
-  const { entries, healthReport, fetchHealthReport, openEditor, setActiveCategory } = useVault();
+  const { entries, healthReport, fetchHealthReport, openEditor, setActiveCategory, airGapMode } = useVault();
   const [activeTab, setActiveTab] = useState<'all' | 'weak' | 'reused' | 'totp'>('all');
 
   useEffect(() => {
@@ -77,13 +78,26 @@ export const SecurityHealthDashboard: React.FC = () => {
           </div>
         </div>
 
-        <button
-          onClick={fetchHealthReport}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-theme-surface hover:bg-theme-bg border border-theme-border text-xs font-medium text-theme-text transition-colors cursor-pointer ml-auto"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>Re-audit</span>
-        </button>
+        <div className="flex items-center gap-2 ml-auto">
+          <span
+            className={`text-xs px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 font-medium ${
+              airGapMode
+                ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-500/30'
+                : 'bg-theme-surface text-theme-text-muted border-theme-border'
+            }`}
+          >
+            {airGapMode ? <Shield className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+            <span>Air-Gap Mode: {airGapMode ? 'Active' : 'Inactive'}</span>
+          </span>
+
+          <button
+            onClick={fetchHealthReport}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-theme-surface hover:bg-theme-bg border border-theme-border text-xs font-medium text-theme-text transition-colors cursor-pointer"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>Re-audit</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Score & Metrics Section */}

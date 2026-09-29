@@ -1,5 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { installGlobalFetchAirGapGate } from "./utils/networkPolicy";
+
+// Initialize early defense-in-depth Air-Gap gate
+installGlobalFetchAirGapGate();
 
 // 1. Inter
 import "@fontsource/inter/400.css";

@@ -15,6 +15,8 @@ import {
   Sparkles,
   AlertCircle,
   Bell,
+  Shield,
+  WifiOff,
 } from 'lucide-react';
 import { useVault } from '../context/VaultContext';
 import { useTheme, APP_FONTS } from '../context/ThemeContext';
@@ -46,6 +48,10 @@ export const SettingsModal: React.FC = () => {
     documentRemindersEnabled,
     setDocumentRemindersEnabled,
     syncDocumentReminders,
+    airGapMode,
+    airGapStatus,
+    toggleAirGapMode,
+    testAirGapBlocking,
   } = useVault();
   const { theme, setTheme, resolvedTheme, font, setFont } = useTheme();
 
@@ -63,6 +69,8 @@ export const SettingsModal: React.FC = () => {
   });
   const [isSyncingReminders, setIsSyncingReminders] = useState(false);
   const [reminderSyncMsg, setReminderSyncMsg] = useState('');
+  const [isTestingAirGap, setIsTestingAirGap] = useState(false);
+  const [airGapTestResult, setAirGapTestResult] = useState<string | null>(null);
 
   if (!isSettingsOpen) return null;
 
@@ -658,6 +666,95 @@ export const SettingsModal: React.FC = () => {
             </button>
           </form>
 
+          {/* Air-Gap Mode Section */}
+          <div className="space-y-3 pt-4 border-t border-theme-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                <label className="text-xs font-bold uppercase tracking-wider text-theme-text-muted block">
+                  Air-Gap Mode
+                </label>
+              </div>
+              <span
+                className={`text-[11px] font-mono font-semibold px-2 py-0.5 rounded border ${
+                  airGapMode
+                    ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-900 dark:text-purple-300 border-purple-300 dark:border-purple-500/40'
+                    : 'bg-slate-100 dark:bg-theme-surface text-slate-600 dark:text-theme-text-muted border-slate-200 dark:border-theme-border'
+                }`}
+              >
+                {airGapStatus?.status_text || (airGapMode ? 'Network access blocked' : 'Network access allowed')}
+              </span>
+            </div>
+
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-xs text-slate-800 dark:text-theme-text font-medium">
+                  Blocks TotumVault's network access while keeping local vault features available.
+                </p>
+                <p className="text-[11px] text-slate-600 dark:text-theme-text-muted">
+                  Your device's internet connection is not disabled. Only TotumVault network operations are blocked.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={toggleAirGapMode}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold cursor-pointer shrink-0 transition-colors flex items-center gap-1.5 shadow-xs ${
+                  airGapMode
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                    : 'bg-white dark:bg-theme-surface border border-slate-300 dark:border-theme-border text-slate-700 dark:text-theme-text hover:bg-slate-50 dark:hover:bg-theme-hover'
+                }`}
+              >
+                {airGapMode ? (
+                  <>
+                    <WifiOff className="w-3.5 h-3.5 stroke-[2.25]" />
+                    <span>Air-Gap ON</span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-3.5 h-3.5 stroke-[2.25]" />
+                    <span>Air-Gap OFF</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Controlled Test Probe */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 text-xs">
+              <button
+                type="button"
+                disabled={isTestingAirGap}
+                onClick={async () => {
+                  setIsTestingAirGap(true);
+                  setAirGapTestResult(null);
+                  try {
+                    const res = await testAirGapBlocking();
+                    setAirGapTestResult(res);
+                  } catch (err: any) {
+                    setAirGapTestResult(err?.message || 'Network test failed');
+                  } finally {
+                    setIsTestingAirGap(false);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-purple-200 dark:border-purple-500/30 bg-purple-50/60 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/30 cursor-pointer shrink-0 transition-colors disabled:opacity-50"
+              >
+                {isTestingAirGap ? 'Testing...' : 'Test Network Blocking'}
+              </button>
+
+              {airGapTestResult && (
+                <span
+                  className={`text-[11px] font-medium leading-tight ${
+                    airGapTestResult.includes('Blocked')
+                      ? 'text-purple-700 dark:text-purple-400 font-semibold'
+                      : 'text-emerald-700 dark:text-emerald-400'
+                  }`}
+                >
+                  {airGapTestResult}
+                </span>
+              )}
+            </div>
+          </div>
+
           {/* Software Updates Section */}
           <div className="space-y-3 pt-4 border-t border-theme-border">
             <div className="flex items-center justify-between">
@@ -672,6 +769,19 @@ export const SettingsModal: React.FC = () => {
               </span>
             </div>
 
+            {/* Air-Gap Active Notice in Updates */}
+            {airGapMode && (
+              <div className="p-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-500/40 text-xs text-purple-900 dark:text-purple-300 flex items-center gap-2">
+                <WifiOff className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                <div>
+                  <span className="font-semibold block">Air-Gap Mode is enabled.</span>
+                  <span className="text-[11px] text-purple-800 dark:text-purple-300">
+                    Updates unavailable while Air-Gap Mode is enabled. Network access is blocked.
+                  </span>
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-slate-600 dark:text-theme-text-muted">
                 Keep TotumVault updated with the latest security and stability improvements.
@@ -679,7 +789,7 @@ export const SettingsModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => checkForUpdates(true)}
-                disabled={isCheckingUpdate}
+                disabled={isCheckingUpdate || airGapMode}
                 className="px-3 py-1.5 rounded-xl text-xs font-semibold border border-purple-300 dark:border-purple-500/40 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/40 cursor-pointer shrink-0 transition-colors flex items-center gap-1.5 disabled:opacity-50"
               >
                 <RefreshCw className={`w-3 h-3 ${isCheckingUpdate ? 'animate-spin' : ''}`} />

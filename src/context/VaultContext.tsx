@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import {
+  getNetworkPolicyStatus,
+  setAirGapMode as apiSetAirGapMode,
+  testAirGapBlocking as apiTestAirGapBlocking,
+  NetworkStatus,
+} from '../utils/networkPolicy';
 import {
   CategoryType,
   DecryptedEntry,
@@ -163,6 +170,12 @@ interface VaultContextType {
   documentRemindersEnabled: boolean;
   setDocumentRemindersEnabled: (enabled: boolean) => Promise<void>;
   syncDocumentReminders: () => Promise<number>;
+
+  // Air-Gap Mode
+  airGapMode: boolean;
+  airGapStatus: NetworkStatus | null;
+  toggleAirGapMode: () => Promise<void>;
+  testAirGapBlocking: () => Promise<string>;
 
   // Safe Import Actions
   analyzeImport: (srcPathOrContent: string, password?: string) => Promise<ImportPreview>;
@@ -870,8 +883,72 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [showToast]);
 
+  // Air-Gap Mode State & Handlers
+  const [airGapMode, setAirGapModeState] = useState<boolean>(() => {
+    return localStorage.getItem('totumvault_air_gap_mode') === 'true';
+  });
+  const [airGapStatus, setAirGapStatus] = useState<NetworkStatus | null>(null);
+
+  useEffect(() => {
+    getNetworkPolicyStatus()
+      .then((st) => {
+        setAirGapModeState(st.air_gap_enabled);
+        setAirGapStatus(st);
+      })
+      .catch(() => {});
+
+    let unlisten: (() => void) | undefined;
+    listen<NetworkStatus>('totumvault://air-gap-changed', (event) => {
+      setAirGapModeState(event.payload.air_gap_enabled);
+      setAirGapStatus(event.payload);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
+  const toggleAirGapMode = useCallback(async () => {
+    const next = !airGapMode;
+    try {
+      const res = await apiSetAirGapMode(next);
+      setAirGapModeState(res.air_gap_enabled);
+      setAirGapStatus(res);
+      if (res.air_gap_enabled) {
+        setUpdateInfo(null);
+        showToast('Air-Gap Mode enabled. Network access blocked.', 'info');
+      } else {
+        showToast('Air-Gap Mode disabled. Network access allowed.', 'success');
+      }
+    } catch (err: any) {
+      showToast(`Failed to update Air-Gap Mode: ${err?.message || err}`, 'error');
+    }
+  }, [airGapMode, showToast]);
+
+  const testAirGapBlocking = useCallback(async (): Promise<string> => {
+    try {
+      const res = await apiTestAirGapBlocking();
+      return res;
+    } catch (err: any) {
+      const msg = typeof err === 'string' ? err : err?.message || JSON.stringify(err);
+      if (msg.includes('NetworkAccessBlockedByAirGap') || msg.includes('Air-Gap Mode is enabled')) {
+        return 'Blocked by Air-Gap Mode. Zero network bytes transmitted.';
+      }
+      throw new Error(msg);
+    }
+  }, []);
+
   // Auto Updates
   const checkForUpdates = useCallback(async (manual = false): Promise<UpdateInfo | null> => {
+    if (airGapMode) {
+      if (manual) {
+        showToast('Updates unavailable while Air-Gap Mode is enabled.', 'info');
+      }
+      return null;
+    }
+
     setIsCheckingUpdate(true);
     try {
       const info = await checkAppUpdate();
@@ -904,13 +981,18 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return info;
     } catch (err: any) {
       if (manual) {
-        showToast(err?.message || 'Unable to check for updates (offline / network error)', 'error');
+        const msg = err?.message || '';
+        if (msg.includes('Air-Gap Mode')) {
+          showToast('Updates unavailable while Air-Gap Mode is enabled.', 'info');
+        } else {
+          showToast(err?.message || 'Unable to check for updates (offline / network error)', 'error');
+        }
       }
       return null;
     } finally {
       setIsCheckingUpdate(false);
     }
-  }, [showToast]);
+  }, [airGapMode, showToast]);
 
   const dismissUpdate = useCallback(() => {
     setUpdateInfo(null);
@@ -975,7 +1057,8 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const checkStartup =
       localStorage.getItem('totumvault_auto_update_check') !== 'false' &&
-      localStorage.getItem('totumvault_check_updates_on_startup') !== 'false';
+      localStorage.getItem('totumvault_check_updates_on_startup') !== 'false' &&
+      localStorage.getItem('totumvault_air_gap_mode') !== 'true';
     if (checkStartup) {
       checkForUpdates(false);
     }
@@ -1451,6 +1534,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         documentRemindersEnabled,
         setDocumentRemindersEnabled,
         syncDocumentReminders,
+        airGapMode,
+        airGapStatus,
+        toggleAirGapMode,
+        testAirGapBlocking,
       }}
     >
       {children}

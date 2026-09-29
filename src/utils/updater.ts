@@ -3,6 +3,7 @@ import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { AppVersionInfo, UpdateInfo } from '../types';
+import { requireNetworkAccess } from './networkPolicy';
 
 export function compareSemver(current: string, latest: string): number {
   const clean = (v: string) => v.replace(/^v/, '').trim();
@@ -19,6 +20,9 @@ export function compareSemver(current: string, latest: string): number {
 }
 
 export async function checkAppUpdate(): Promise<UpdateInfo> {
+  // 0. Verify backend network policy before initiating any network activity
+  await requireNetworkAccess('updater:check');
+
   let appVersion: AppVersionInfo = {
     version: '1.3.2',
     os: 'linux',
@@ -152,6 +156,9 @@ export async function downloadAndInstallUpdate(
   updateInfo: UpdateInfo,
   onProgress?: (progressPercent: number, statusText: string) => void
 ): Promise<void> {
+  // Verify backend network policy before initiating download
+  await requireNetworkAccess('updater:download');
+
   if (updateInfo.updateObject && updateInfo.isDesktopUpdater) {
     let totalLength = 0;
     let downloaded = 0;

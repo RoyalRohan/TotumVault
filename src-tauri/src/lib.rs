@@ -5,6 +5,7 @@ pub mod clipboard;
 pub mod commands;
 pub mod crypto;
 pub mod db;
+pub mod network;
 pub mod reminders;
 pub mod security;
 pub mod totp;
@@ -131,6 +132,9 @@ pub fn run() {
                     }
                 });
 
+            let network_policy = Arc::new(network::policy::NetworkPolicyService::init(app_dir.clone()));
+            app.manage(network_policy);
+
             let manager = VaultManager::new(app_dir.clone());
             let shared_manager: SharedVaultManager = Arc::new(Mutex::new(manager));
             app.manage(shared_manager);
@@ -204,6 +208,11 @@ pub fn run() {
             commands::clear_clipboard_now,
             commands::cancel_clipboard_timer,
             commands::get_clipboard_status,
+            commands::get_network_policy_status,
+            commands::set_air_gap_mode,
+            commands::check_network_allowed,
+            commands::require_network_access_command,
+            commands::test_air_gap_blocking,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

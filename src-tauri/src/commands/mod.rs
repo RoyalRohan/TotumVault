@@ -2,8 +2,11 @@ use std::fs;
 use std::sync::Arc;
 #[cfg(not(target_os = "android"))]
 use tauri::Manager;
+use tauri::Emitter;
 use tauri::State;
 use uuid::Uuid;
+
+use crate::network::policy::{NetworkPolicyService, NetworkStatus};
 
 use crate::totp::generator::{generate_totp_code as calc_totp, validate_totp_secret};
 use crate::vault::health::evaluate_vault_health;
@@ -969,6 +972,50 @@ pub fn get_clipboard_status(
     clipboard_mgr: State<'_, SharedClipboardManager>,
 ) -> Result<ClipboardSessionStatus, String> {
     clipboard_mgr.get_status()
+}
+
+#[tauri::command]
+pub fn get_network_policy_status(
+    policy: State<'_, Arc<NetworkPolicyService>>,
+) -> Result<NetworkStatus, String> {
+    Ok(policy.get_network_status())
+}
+
+#[tauri::command]
+pub fn set_air_gap_mode(
+    app: tauri::AppHandle,
+    policy: State<'_, Arc<NetworkPolicyService>>,
+    enabled: bool,
+) -> Result<NetworkStatus, String> {
+    let status = policy.set_air_gap_enabled(enabled)?;
+    let _ = app.emit("totumvault://air-gap-changed", &status);
+    Ok(status)
+}
+
+#[tauri::command]
+pub fn check_network_allowed(
+    policy: State<'_, Arc<NetworkPolicyService>>,
+    operation: String,
+) -> Result<bool, String> {
+    Ok(policy.is_network_allowed(&operation))
+}
+
+#[tauri::command]
+pub fn require_network_access_command(
+    policy: State<'_, Arc<NetworkPolicyService>>,
+    operation: String,
+) -> Result<(), String> {
+    policy
+        .require_network_access(&operation)
+        .map(|_token| ())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn test_air_gap_blocking(
+    policy: State<'_, Arc<NetworkPolicyService>>,
+) -> Result<String, String> {
+    policy.test_network_access().map_err(|e| e.to_string())
 }
 
 
