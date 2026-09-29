@@ -62,6 +62,40 @@ if (modified) {
   console.log('[patch-android-manifest] All permissions already present in AndroidManifest.xml');
 }
 
+// Inject DocumentReminderReceiver into AndroidManifest.xml if not present
+if (!content.includes('DocumentReminderReceiver')) {
+  const receiverSnippet = `        <receiver
+            android:name="com.royalrohan.veylock.DocumentReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="com.royalrohan.veylock.CHECK_DOCUMENT_REMINDERS" />
+            </intent-filter>
+        </receiver>`;
+  if (content.includes('</application>')) {
+    content = content.replace('</application>', `${receiverSnippet}\n    </application>`);
+    fs.writeFileSync(manifestPath, content, 'utf8');
+    console.log('[patch-android-manifest] Successfully injected DocumentReminderReceiver into AndroidManifest.xml');
+  }
+}
+
+// Copy DocumentReminderReceiver.kt to Android source tree if directory exists
+const receiverSrc = path.resolve(__dirname, 'android/DocumentReminderReceiver.kt');
+if (fs.existsSync(receiverSrc)) {
+  const possibleTargetDirs = [
+    path.resolve(__dirname, '../src-tauri/gen/android/app/src/main/java/com/royalrohan/veylock'),
+    path.resolve(__dirname, '../src-tauri/gen/android/app/src/main/kotlin/com/royalrohan/veylock')
+  ];
+  for (const tDir of possibleTargetDirs) {
+    if (fs.existsSync(tDir)) {
+      const dest = path.join(tDir, 'DocumentReminderReceiver.kt');
+      fs.copyFileSync(receiverSrc, dest);
+      console.log(`[patch-android-manifest] Copied DocumentReminderReceiver.kt to ${dest}`);
+    }
+  }
+}
+
 // Patch build.gradle.kts / build.gradle to ensure androidx.biometric dependency is added
 const gradlePaths = [
   path.resolve(__dirname, '../src-tauri/gen/android/app/build.gradle.kts'),
@@ -96,13 +130,24 @@ const kotlinImports = [
   'android.content.ClipDescription',
   'android.content.ClipboardManager',
   'android.content.Context',
+  'android.content.Intent',
+  'android.content.pm.PackageManager',
+  'android.app.AlarmManager',
+  'android.app.NotificationChannel',
+  'android.app.NotificationManager',
+  'android.app.PendingIntent',
+  'android.net.Uri',
   'android.os.Build',
   'android.os.PersistableBundle',
+  'android.provider.Settings',
+  'android.util.Log',
   'android.webkit.JavascriptInterface',
-
   'android.webkit.WebView',
   'androidx.biometric.BiometricManager',
   'androidx.biometric.BiometricPrompt',
+  'androidx.core.app.ActivityCompat',
+  'androidx.core.app.NotificationCompat',
+  'androidx.core.app.NotificationManagerCompat',
   'androidx.core.content.ContextCompat',
   'java.io.File',
   'java.io.FileInputStream',
@@ -377,6 +422,181 @@ class AndroidClipboardBridge(private val activity: MainActivity) {
         return true
     }
 }
+
+class AndroidNotificationBridge(private val activity: MainActivity, private val webView: WebView) {
+    companion object {
+        const val NOTIFICATION_PERMISSION_REQUEST_CODE = 2001
+        var pendingNotificationCallbackId: String? = null
+    }
+
+    private fun callbackSuccess(callbackId: String, data: Any) {
+        activity.runOnUiThread {
+            webView.requestFocus()
+            val jsArg = if (data is String) JSONObject.quote(data) else data.toString()
+            webView.evaluateJavascript(
+                "if (typeof window !== 'undefined' && window.__notificationCallbacks && window.__notificationCallbacks['$callbackId']) { window.__notificationCallbacks['$callbackId'].resolve($jsArg); delete window.__notificationCallbacks['$callbackId']; }",
+                null
+            )
+        }
+    }
+
+    private fun callbackError(callbackId: String, err: String) {
+        activity.runOnUiThread {
+            webView.requestFocus()
+            val quoted = JSONObject.quote(err)
+            webView.evaluateJavascript(
+                "if (typeof window !== 'undefined' && window.__notificationCallbacks && window.__notificationCallbacks['$callbackId']) { window.__notificationCallbacks['$callbackId'].reject($quoted); delete window.__notificationCallbacks['$callbackId']; }",
+                null
+            )
+        }
+    }
+
+    @JavascriptInterface
+    fun isNotificationPermissionGranted(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+                activity,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            NotificationManagerCompat.from(activity).areNotificationsEnabled()
+        }
+    }
+
+    @JavascriptInterface
+    fun requestNotificationPermission(callbackId: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                activity,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+            if (granted) {
+                callbackSuccess(callbackId, "GRANTED")
+                return
+            }
+            pendingNotificationCallbackId = callbackId
+            ActivityCompat.requestPermissions(
+                activity,
+                arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                NOTIFICATION_PERMISSION_REQUEST_CODE
+            )
+        } else {
+            val enabled = NotificationManagerCompat.from(activity).areNotificationsEnabled()
+            callbackSuccess(callbackId, if (enabled) "GRANTED" else "DENIED")
+        }
+    }
+
+    @JavascriptInterface
+    fun openNotificationSettings() {
+        try {
+            val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+                }
+            } else {
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:\${activity.packageName}")
+                }
+            }
+            activity.startActivity(intent)
+        } catch (e: Exception) {
+            Log.w("DocumentReminder", "Failed to open notification settings: \${e.message}")
+        }
+    }
+
+    @JavascriptInterface
+    fun isExactAlarmPermissionGranted(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val am = activity.getSystemService(Context.ALARM_SERVICE) as? AlarmManager
+            am?.canScheduleExactAlarms() ?: true
+        } else {
+            true
+        }
+    }
+
+    @JavascriptInterface
+    fun openExactAlarmSettings() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM).apply {
+                    data = Uri.parse("package:\${activity.packageName}")
+                }
+                activity.startActivity(intent)
+            } catch (e: Exception) {
+                Log.w("DocumentReminder", "Failed to open exact alarm settings: \${e.message}")
+            }
+        }
+    }
+
+    @JavascriptInterface
+    fun reconcileReminders(callbackId: String) {
+        Thread {
+            try {
+                DocumentReminderReceiver.createNotificationChannel(activity)
+                val count = DocumentReminderReceiver.checkAndDeliver(activity)
+                DocumentReminderReceiver.scheduleDailyAlarm(activity)
+                callbackSuccess(callbackId, count)
+            } catch (e: Exception) {
+                callbackSuccess(callbackId, 0)
+            }
+        }.start()
+    }
+
+    @JavascriptInterface
+    fun cancelReminders() {
+        try {
+            DocumentReminderReceiver.cancelDailyAlarm(activity)
+        } catch (e: Exception) {
+            Log.w("DocumentReminder", "Failed to cancel reminders: \${e.message}")
+        }
+    }
+
+    @JavascriptInterface
+    fun sendTestNotification(callbackId: String) {
+        try {
+            DocumentReminderReceiver.createNotificationChannel(activity)
+            val nm = activity.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+            val launchIntent = activity.packageManager.getLaunchIntentForPackage(activity.packageName)?.apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            }
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val contentPendingIntent = if (launchIntent != null) {
+                PendingIntent.getActivity(activity, 9999, launchIntent, flags)
+            } else null
+
+            val notif = NotificationCompat.Builder(activity, DocumentReminderReceiver.CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("TotumVault")
+                .setContentText("Document renewal reminders are active and functioning.")
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .apply {
+                    if (contentPendingIntent != null) {
+                        setContentIntent(contentPendingIntent)
+                    }
+                }
+                .build()
+
+            nm?.notify(9999, notif)
+            callbackSuccess(callbackId, "SENT")
+        } catch (e: Exception) {
+            callbackError(callbackId, e.message ?: "FAILED_TO_SEND")
+        }
+    }
+
+    fun handlePermissionResult(requestCode: Int, grantResults: IntArray) {
+        if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
+            val callbackId = pendingNotificationCallbackId ?: return
+            pendingNotificationCallbackId = null
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            callbackSuccess(callbackId, if (granted) "GRANTED" else "DENIED")
+        }
+    }
+}
 `;
 
 for (const actPath of mainActivityPaths) {
@@ -385,7 +605,10 @@ for (const actPath of mainActivityPaths) {
     if (!actContent.includes('AndroidBiometricsBridge')) {
       const securityCode = [
         '    // Hardened screen protection: prevent screenshots, screen recordings, and switcher previews',
-        '    window.setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE, android.view.WindowManager.LayoutParams.FLAG_SECURE)\n'
+        '    window.setFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE, android.view.WindowManager.LayoutParams.FLAG_SECURE)',
+        '    // Initialize document reminder notification channel and scheduled daily alarm',
+        '    DocumentReminderReceiver.createNotificationChannel(this)',
+        '    DocumentReminderReceiver.scheduleDailyAlarm(this)\n'
       ].join('\n');
 
       if (actContent.includes('super.onCreate(savedInstanceState)')) {
@@ -398,12 +621,21 @@ for (const actPath of mainActivityPaths) {
       // Add onWebViewCreate override to attach JavaScriptInterface
       const webViewHook = `
   private var webViewRef: android.webkit.WebView? = null
+  private var notificationBridgeRef: AndroidNotificationBridge? = null
 
   override fun onWebViewCreate(webView: android.webkit.WebView) {
     super.onWebViewCreate(webView)
     this.webViewRef = webView
     webView.addJavascriptInterface(AndroidBiometricsBridge(this, webView), "AndroidBiometrics")
     webView.addJavascriptInterface(AndroidClipboardBridge(this), "AndroidClipboard")
+    val notifBridge = AndroidNotificationBridge(this, webView)
+    this.notificationBridgeRef = notifBridge
+    webView.addJavascriptInterface(notifBridge, "AndroidNotification")
+  }
+
+  override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    notificationBridgeRef?.handlePermissionResult(requestCode, grantResults)
   }
 
 

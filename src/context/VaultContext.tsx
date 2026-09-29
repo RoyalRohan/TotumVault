@@ -39,6 +39,11 @@ import {
   androidClearEnrolledKey,
   setBiometricPromptActive,
 } from '../utils/androidBiometrics';
+import {
+  isAndroidNotificationAvailable,
+  reconcileAndroidReminders,
+  cancelAndroidReminders,
+} from '../utils/androidNotification';
 import { checkAppUpdate } from '../utils/updater';
 import {
   CalendarMode,
@@ -295,6 +300,9 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .then((settings) => {
         if (settings && typeof settings.enabled === 'boolean') {
           setDocumentRemindersEnabledState(settings.enabled);
+          if (settings.enabled && isAndroidNotificationAvailable()) {
+            reconcileAndroidReminders().catch(() => {});
+          }
         }
       })
       .catch(() => {});
@@ -304,6 +312,13 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setDocumentRemindersEnabledState(enabled);
     try {
       await invoke('set_document_reminder_settings', { enabled });
+      if (isAndroidNotificationAvailable()) {
+        if (enabled) {
+          await reconcileAndroidReminders();
+        } else {
+          cancelAndroidReminders();
+        }
+      }
     } catch (err) {
       console.error('Failed to update document reminder settings:', err);
     }
@@ -311,6 +326,9 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const syncDocumentReminders = useCallback(async (): Promise<number> => {
     try {
+      if (isAndroidNotificationAvailable()) {
+        return await reconcileAndroidReminders();
+      }
       const count = await invoke<number>('sync_document_reminders');
       return count;
     } catch (err) {
@@ -1263,12 +1281,15 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       showToast('Document saved securely', 'success');
       await refreshDocuments();
       setSelectedDocumentId(docId);
+      if (isAndroidNotificationAvailable() && documentRemindersEnabled) {
+        reconcileAndroidReminders().catch(() => {});
+      }
       return docId;
     } catch (err: any) {
       showToast(err.toString(), 'error');
       throw err;
     }
-  }, [showToast, refreshDocuments]);
+  }, [showToast, refreshDocuments, documentRemindersEnabled]);
 
   const addDocumentPage = useCallback(async (documentId: string, page: SavePageInput): Promise<string> => {
     try {
@@ -1288,11 +1309,14 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       showToast('Document deleted', 'info');
       setSelectedDocumentId((prev) => (prev === id ? null : prev));
       await refreshDocuments();
+      if (isAndroidNotificationAvailable() && documentRemindersEnabled) {
+        reconcileAndroidReminders().catch(() => {});
+      }
     } catch (err: any) {
       showToast(err.toString(), 'error');
       throw err;
     }
-  }, [showToast, refreshDocuments]);
+  }, [showToast, refreshDocuments, documentRemindersEnabled]);
 
   const deleteDocumentPage = useCallback(async (pageId: string): Promise<void> => {
     try {

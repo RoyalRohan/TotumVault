@@ -351,7 +351,39 @@ impl DocumentReminderScheduler for MockReminderScheduler {
     }
 }
 
+// ======================== Android Implementation ========================
+
+#[cfg(target_os = "android")]
+#[derive(Default)]
+pub struct AndroidReminderScheduler;
+
+#[cfg(target_os = "android")]
+impl DocumentReminderScheduler for AndroidReminderScheduler {
+    fn send_notification(&self, _title: &str, _body: &str) -> Result<(), String> {
+        // Handled natively by DocumentReminderReceiver and AndroidNotification bridge
+        Ok(())
+    }
+
+    fn setup_platform_schedule(&self, _exec_path: &Path) -> Result<(), String> {
+        // Native AlarmManager is scheduled via DocumentReminderReceiver / AndroidNotificationBridge
+        Ok(())
+    }
+
+    fn teardown_platform_schedule(&self) -> Result<(), String> {
+        // Native AlarmManager canceled via DocumentReminderReceiver
+        Ok(())
+    }
+
+    fn schedule_test_timer(&self, _exec_path: &Path, _delay_secs: u64, _extra_args: Option<&str>) -> Result<(), String> {
+        Ok(())
+    }
+}
+
 pub fn create_default_scheduler() -> Box<dyn DocumentReminderScheduler> {
+    #[cfg(target_os = "android")]
+    {
+        Box::new(AndroidReminderScheduler)
+    }
     #[cfg(target_os = "linux")]
     {
         Box::new(LinuxReminderScheduler)
@@ -364,8 +396,8 @@ pub fn create_default_scheduler() -> Box<dyn DocumentReminderScheduler> {
     {
         Box::new(MacOSReminderScheduler)
     }
-    #[cfg(not(any(target_os = "linux", target_os = "windows", target_os = "macos")))]
+    #[cfg(not(any(target_os = "android", target_os = "linux", target_os = "windows", target_os = "macos")))]
     {
-        Box::new(LinuxReminderScheduler)
+        Box::new(MockReminderScheduler::default())
     }
 }
