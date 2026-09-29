@@ -11,6 +11,7 @@ import {
   Folder,
 } from 'lucide-react';
 import { DocumentCategoryType } from '../../types';
+import { calculateDaysRemaining } from '../../utils/reminderUtils';
 
 export interface DocumentCategoryConfig {
   id: DocumentCategoryType;
@@ -141,7 +142,9 @@ export interface DocumentExpiryDisplay {
 }
 
 export function getDocumentExpiryDisplay(expiryDateStr?: string | null): DocumentExpiryDisplay {
-  if (!expiryDateStr || !expiryDateStr.trim()) {
+  const diffDays = calculateDaysRemaining(expiryDateStr);
+
+  if (diffDays === null) {
     return {
       status: 'none',
       daysRemaining: null,
@@ -149,36 +152,6 @@ export function getDocumentExpiryDisplay(expiryDateStr?: string | null): Documen
       badgeClass: 'text-slate-400 dark:text-zinc-500',
     };
   }
-
-  const parts = expiryDateStr.trim().split('-');
-  if (parts.length !== 3) {
-    return {
-      status: 'none',
-      daysRemaining: null,
-      label: 'No expiry date',
-      badgeClass: 'text-slate-400 dark:text-zinc-500',
-    };
-  }
-
-  const year = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1;
-  const day = parseInt(parts[2], 10);
-
-  if (isNaN(year) || isNaN(month) || isNaN(day)) {
-    return {
-      status: 'none',
-      daysRemaining: null,
-      label: 'No expiry date',
-      badgeClass: 'text-slate-400 dark:text-zinc-500',
-    };
-  }
-
-  const expiry = new Date(year, month, day, 0, 0, 0, 0);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-
-  const diffTime = expiry.getTime() - today.getTime();
-  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
   if (diffDays < 0) {
     return {

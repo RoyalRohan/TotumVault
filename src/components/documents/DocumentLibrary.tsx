@@ -146,7 +146,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
       } else if (sortBy === 'expiry') {
         if (!a.expiry_date) return 1;
         if (!b.expiry_date) return -1;
-        return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+        return a.expiry_date.localeCompare(b.expiry_date);
       }
       return 0;
     });

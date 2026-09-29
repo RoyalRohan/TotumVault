@@ -7,7 +7,6 @@ import {
   Shield,
   WifiOff,
   FileText,
-  Database,
   RefreshCw,
 } from 'lucide-react';
 import { SettingsCategory, SETTINGS_CATEGORIES } from './types';
@@ -25,7 +24,6 @@ const CATEGORY_ICONS: Record<SettingsCategory, React.ElementType> = {
   security: Shield,
   privacy: WifiOff,
   documents: FileText,
-  data: Database,
   updates: RefreshCw,
 };
 

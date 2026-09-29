@@ -16,17 +16,14 @@ export function calculateDaysRemaining(expiryDateStr?: string | null): number | 
   if (parts.length !== 3) return null;
 
   const year = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1;
+  const month = parseInt(parts[1], 10);
   const day = parseInt(parts[2], 10);
 
   if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
 
-  const expiry = new Date(year, month, day, 0, 0, 0, 0);
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-
-  const diffTime = expiry.getTime() - today.getTime();
-  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  const diffMs = Date.UTC(year, month - 1, day) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round(diffMs / 86400000);
 
   return diffDays;
 }

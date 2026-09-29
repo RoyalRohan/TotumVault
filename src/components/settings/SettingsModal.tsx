@@ -11,7 +11,6 @@ import { AppearanceSettings } from './categories/AppearanceSettings';
 import { SecuritySettings } from './categories/SecuritySettings';
 import { PrivacyNetworkSettings } from './categories/PrivacyNetworkSettings';
 import { DocumentSettings } from './categories/DocumentSettings';
-import { DataSettings } from './categories/DataSettings';
 import { UpdatesSettings } from './categories/UpdatesSettings';
 
 export interface SettingsModalProps {
@@ -51,8 +50,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         return <PrivacyNetworkSettings />;
       case 'documents':
         return <DocumentSettings />;
-      case 'data':
-        return <DataSettings />;
       case 'updates':
         return <UpdatesSettings />;
       default:

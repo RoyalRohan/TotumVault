@@ -4,7 +4,6 @@ export type SettingsCategory =
   | 'security'
   | 'privacy'
   | 'documents'
-  | 'data'
   | 'updates';
 
 export interface CategoryMeta {
@@ -18,6 +17,5 @@ export const SETTINGS_CATEGORIES: CategoryMeta[] = [
   { id: 'security', label: 'Security' },
   { id: 'privacy', label: 'Privacy & Network' },
   { id: 'documents', label: 'Documents' },
-  { id: 'data', label: 'Data' },
   { id: 'updates', label: 'Updates' },
 ];

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -38,6 +39,14 @@ export interface DualDatePickerProps {
   align?: "left" | "right";
 }
 
+interface PopoverCoords {
+  top?: number;
+  bottom?: number;
+  left: number;
+  width: number;
+  isMobile: boolean;
+}
+
 export const DualDatePicker: React.FC<DualDatePickerProps> = ({
   value = "",
   onChange,
@@ -49,7 +58,9 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
   align = "left",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [coords, setCoords] = useState<PopoverCoords | null>(null);
 
   // Preference for initial tab: BS if stored is "bs", else AD
   const defaultTab: "ad" | "bs" = useMemo(() => {
@@ -75,8 +86,8 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
 
   // Selected date components
   const selectedInfo = useMemo(() => {
-    if (!value) return null;
-    return getDualDateInfo(value, numeralSystem === "ne");
+    if (!value || !value.trim()) return null;
+    return getDualDateInfo(value.trim(), numeralSystem === "ne");
   }, [value, numeralSystem]);
 
   // Calendar browsing state (viewYear and viewMonth)
@@ -108,17 +119,86 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
     }
   }, [value]);
 
-  // Close on outside click
-  useEffect(() => {
+  // Calculate popover positioning with boundary clamping
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const isMobile = window.innerWidth < 640;
+    if (isMobile) {
+      setCoords({ isMobile: true, left: 0, width: 0 });
+      return;
+    }
+
+    const rect = triggerRef.current.getBoundingClientRect();
+    const calendarWidth = Math.min(380, window.innerWidth - 32);
+    const calendarHeight = 470;
+    const margin = 6;
+
+    let left = rect.left;
+    if (align === "right") {
+      left = rect.right - calendarWidth;
+    }
+
+    // Clamp horizontally within viewport
+    if (left + calendarWidth > window.innerWidth - 16) {
+      left = window.innerWidth - calendarWidth - 16;
+    }
+    if (left < 16) {
+      left = 16;
+    }
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    let top: number | undefined;
+    let bottom: number | undefined;
+
+    if (spaceBelow < calendarHeight && spaceAbove > spaceBelow) {
+      // Flip up if space below is tight
+      bottom = window.innerHeight - rect.top + margin;
+    } else {
+      // Open below
+      top = rect.bottom + margin;
+    }
+
+    setCoords({ top, bottom, left, width: calendarWidth, isMobile: false });
+  }, [align]);
+
+  const handleOpen = () => {
+    if (disabled) return;
+    updatePosition();
+    setIsOpen(true);
+  };
+
+  const handleClose = () => {
+    setIsOpen(false);
+  };
+
+  // Manage repositioning and keyboard dismiss
+  useLayoutEffect(() => {
     if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
+
+    updatePosition();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleClose();
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen]);
+
+    const handleReposition = () => {
+      updatePosition();
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", handleReposition);
+    window.addEventListener("scroll", handleReposition, true);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleReposition);
+      window.removeEventListener("scroll", handleReposition, true);
+    };
+  }, [isOpen, updatePosition]);
 
   // Handle switching tabs: automatically align viewing month/year
   const handleTabSwitch = (newTab: "ad" | "bs") => {
@@ -302,6 +382,20 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
       firstDayWeekday = 0;
     }
 
+    // Accurately determine previous BS month length
+    let prevBsMonth = bsViewMonth - 1;
+    let prevBsYear = bsViewYear;
+    if (prevBsMonth < 1) {
+      prevBsMonth = 12;
+      prevBsYear = bsViewYear - 1;
+    }
+    let prevBsMonthDays = 30;
+    try {
+      prevBsMonthDays = getBsMonthDays(prevBsYear, prevBsMonth);
+    } catch {
+      prevBsMonthDays = 30;
+    }
+
     const days: Array<{
       day: number;
       isCurrentMonth: boolean;
@@ -310,10 +404,10 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
       isToday: boolean;
     }> = [];
 
-    // Prev month padding
+    // Prev month padding (using actual previous BS month days)
     for (let i = firstDayWeekday - 1; i >= 0; i--) {
       days.push({
-        day: 30 - i,
+        day: prevBsMonthDays - i,
         isCurrentMonth: false,
         isSelected: false,
         isToday: false,
@@ -399,7 +493,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
   }, [adViewYear, adViewMonth]);
 
   return (
-    <div className={`relative ${className}`} ref={containerRef}>
+    <div className={`relative ${className}`} ref={triggerRef}>
       {label && (
         <label className="block text-xs font-semibold text-theme-text mb-1 flex items-center justify-between">
           <span>{label}</span>
@@ -413,20 +507,29 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
 
       {/* Trigger Button */}
       <div
-        onClick={() => !disabled && setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm cursor-pointer transition-all ${
+        onClick={handleOpen}
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        onKeyDown={(e) => {
+          if (!disabled && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault();
+            if (isOpen) handleClose();
+            else handleOpen();
+          }
+        }}
+        className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm cursor-pointer transition-all select-none ${
           disabled
-            ? "opacity-50 cursor-not-allowed bg-slate-100 dark:bg-theme-surface/50 border-theme-border"
+            ? "opacity-50 cursor-not-allowed bg-slate-100 dark:bg-theme-surface/50 border-slate-200 dark:border-theme-border"
             : isOpen
-            ? "border-purple-500 ring-2 ring-purple-500/20 bg-theme-surface shadow-sm"
-            : "bg-theme-surface hover:bg-theme-hover border-theme-border text-theme-text"
+            ? "border-purple-500 ring-2 ring-purple-500/20 bg-white dark:bg-theme-surface shadow-sm"
+            : "bg-white dark:bg-theme-surface hover:bg-slate-50 dark:hover:bg-theme-hover border-slate-200 dark:border-theme-border text-slate-900 dark:text-theme-text"
         }`}
       >
         <div className="flex items-center gap-2.5 min-w-0">
           <CalendarIcon className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 stroke-[2]" />
           {selectedInfo ? (
             <div className="flex items-center gap-2 truncate">
-              <span className="font-semibold text-theme-text truncate text-xs sm:text-sm">
+              <span className="font-semibold text-slate-900 dark:text-theme-text truncate text-xs sm:text-sm">
                 {selectedInfo.formattedAd}
               </span>
               <span className="text-[10px] sm:text-[11px] px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 font-medium shrink-0">
@@ -434,7 +537,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
               </span>
             </div>
           ) : (
-            <span className="text-theme-text-muted text-xs sm:text-sm">{placeholder}</span>
+            <span className="text-slate-400 dark:text-theme-text-muted text-xs sm:text-sm">{placeholder}</span>
           )}
         </div>
 
@@ -446,8 +549,9 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
                 e.stopPropagation();
                 handleClear();
               }}
-              className="p-1 rounded-md text-theme-text-muted hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+              className="p-1 rounded-md text-slate-400 dark:text-theme-text-muted hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
               title="Clear date"
+              aria-label="Clear date"
             >
               <X className="w-3.5 h-3.5 stroke-[2.5]" />
             </button>
@@ -455,298 +559,613 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         </div>
       </div>
 
-      {/* Calendar Popup Dropdown / Modal */}
-      {isOpen && (
-        <div
-          className={`absolute z-50 mt-2 w-[340px] sm:w-[380px] max-w-[calc(100vw-1.5rem)] rounded-2xl border border-theme-border bg-theme-surface shadow-2xl p-3.5 sm:p-4 animate-scale-up text-theme-text ${
-            align === "right" ? "right-0" : "left-0"
-          }`}
-        >
-          {/* Header with AD / BS Tab Switcher */}
-          <div className="flex items-center justify-between pb-3 border-b border-theme-border">
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-theme-bg/80 p-0.5 rounded-xl border border-theme-border">
-              <button
-                type="button"
-                onClick={() => handleTabSwitch("ad")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === "ad"
-                    ? "bg-purple-600 text-white shadow-xs"
-                    : "text-theme-text-muted hover:text-theme-text"
-                }`}
+      {/* Portaled Calendar Popup / Sheet */}
+      {isOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          coords?.isMobile ? (
+            // Mobile: Centered / Bottom-sheet modal overlay
+            <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs select-none animate-in fade-in duration-150">
+              <div
+                className="fixed inset-0"
+                onClick={handleClose}
+                aria-hidden="true"
+              />
+              <div
+                ref={popoverRef}
+                className="relative z-10 w-full max-w-sm sm:max-w-md bg-white dark:bg-theme-surface border border-slate-200 dark:border-theme-border rounded-2xl shadow-2xl p-4 sm:p-5 text-slate-900 dark:text-theme-text animate-scale-up max-h-[92vh] flex flex-col overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
               >
-                AD (Gregorian)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleTabSwitch("bs")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  activeTab === "bs"
-                    ? "bg-purple-600 text-white shadow-xs"
-                    : "text-theme-text-muted hover:text-theme-text"
-                }`}
-              >
-                BS (नेपाली पात्रो)
-              </button>
-            </div>
+                {/* Header with AD / BS Tab Switcher */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-theme-border shrink-0">
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-theme-bg/80 p-0.5 rounded-xl border border-slate-200/80 dark:border-theme-border">
+                    <button
+                      type="button"
+                      onClick={() => handleTabSwitch("ad")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        activeTab === "ad"
+                          ? "bg-purple-600 text-white shadow-xs"
+                          : "text-slate-600 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-theme-text"
+                      }`}
+                    >
+                      AD (Gregorian)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleTabSwitch("bs")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        activeTab === "bs"
+                          ? "bg-purple-600 text-white shadow-xs"
+                          : "text-slate-600 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-theme-text"
+                      }`}
+                    >
+                      BS (नेपाली पात्रो)
+                    </button>
+                  </div>
 
-            <button
-              type="button"
-              onClick={() => setIsOpen(false)}
-              className="p-2 rounded-xl text-theme-text-muted hover:text-theme-text hover:bg-theme-hover transition-colors cursor-pointer"
-              title="Close"
-            >
-              <X className="w-4 h-4 stroke-[2]" />
-            </button>
-          </div>
-
-          {/* Month / Year Navigation */}
-          {activeTab === "ad" ? (
-            <div className="py-3">
-              <div className="flex items-center justify-between gap-1 mb-1.5">
-                <button
-                  type="button"
-                  onClick={prevAdMonth}
-                  className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-theme-hover text-theme-text-muted hover:text-theme-text transition-colors cursor-pointer"
-                  aria-label="Previous Month"
-                >
-                  <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
-                </button>
-
-                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-theme-text">
-                  <select
-                    value={adViewMonth}
-                    onChange={(e) => setAdViewMonth(parseInt(e.target.value, 10))}
-                    className="bg-transparent border border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-none focus:border-purple-500"
+                  <button
+                    type="button"
+                    onClick={handleClose}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-theme-text hover:bg-slate-100 dark:hover:bg-theme-hover transition-colors cursor-pointer"
+                    title="Close calendar"
+                    aria-label="Close calendar"
                   >
-                    {AD_MONTH_NAMES_EN.map((m, idx) => (
-                      <option key={m} value={idx + 1} className="bg-theme-surface text-theme-text">
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={adViewYear}
-                    onChange={(e) => setAdViewYear(parseInt(e.target.value, 10))}
-                    className="bg-transparent border border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-none focus:border-purple-500"
-                  >
-                    {Array.from({ length: 61 }, (_, i) => 1990 + i).map((y) => (
-                      <option key={y} value={y} className="bg-theme-surface text-theme-text">
-                        {y}
-                      </option>
-                    ))}
-                  </select>
+                    <X className="w-4 h-4 stroke-[2]" />
+                  </button>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={nextAdMonth}
-                  className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-theme-hover text-theme-text-muted hover:text-theme-text transition-colors cursor-pointer"
-                  aria-label="Next Month"
-                >
-                  <ChevronRight className="w-5 h-5 stroke-[2.5]" />
-                </button>
-              </div>
+                {/* Month / Year Navigation */}
+                {activeTab === "ad" ? (
+                  <div className="py-2.5 shrink-0">
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <button
+                        type="button"
+                        onClick={prevAdMonth}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
+                        aria-label="Previous Month"
+                      >
+                        <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
+                      </button>
 
-              {/* Subtitle with BS equivalent */}
-              <div className="text-center text-xs font-medium text-purple-600 dark:text-purple-400">
-                {bsEquivalentSubtitle}
+                      <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-900 dark:text-theme-text">
+                        <select
+                          value={adViewMonth}
+                          onChange={(e) => setAdViewMonth(parseInt(e.target.value, 10))}
+                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
+                        >
+                          {AD_MONTH_NAMES_EN.map((m, idx) => (
+                            <option key={m} value={idx + 1} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={adViewYear}
+                          onChange={(e) => setAdViewYear(parseInt(e.target.value, 10))}
+                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
+                        >
+                          {Array.from({ length: 2050 - 1920 + 1 }, (_, i) => 1920 + i).map((y) => (
+                            <option key={y} value={y} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                              {y}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={nextAdMonth}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
+                        aria-label="Next Month"
+                      >
+                        <ChevronRight className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+                    </div>
+
+                    <div className="text-center text-xs font-medium text-purple-600 dark:text-purple-400">
+                      {bsEquivalentSubtitle}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-2.5 shrink-0">
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <button
+                        type="button"
+                        onClick={prevBsMonth}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
+                        aria-label="Previous Month"
+                      >
+                        <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+
+                      <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-900 dark:text-theme-text">
+                        <select
+                          value={bsViewMonth}
+                          onChange={(e) => setBsViewMonth(parseInt(e.target.value, 10))}
+                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
+                        >
+                          {BS_MONTH_NAMES_EN.map((m, idx) => (
+                            <option key={m} value={idx + 1} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                              {BS_MONTH_NAMES_SHORT_EN[idx]} ({BS_MONTH_NAMES_NE[idx]})
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={bsViewYear}
+                          onChange={(e) => setBsViewYear(parseInt(e.target.value, 10))}
+                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
+                        >
+                          {Array.from(
+                            { length: END_BS_YEAR - START_BS_YEAR + 1 },
+                            (_, i) => START_BS_YEAR + i
+                          ).map((y) => (
+                            <option key={y} value={y} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                              {y} ({toNepaliNumerals(y)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={nextBsMonth}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
+                        aria-label="Next Month"
+                      >
+                        <ChevronRight className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+                    </div>
+
+                    <div className="text-center text-xs font-medium text-purple-600 dark:text-purple-400">
+                      {adEquivalentSubtitle}
+                    </div>
+                  </div>
+                )}
+
+                {/* Weekday Names Header */}
+                <div className="grid grid-cols-7 gap-1 text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted py-1.5 border-b border-slate-200/80 dark:border-theme-border mb-1 shrink-0">
+                  {activeTab === "ad"
+                    ? WEEKDAY_NAMES_SHORT_EN.map((d) => <span key={d}>{d}</span>)
+                    : WEEKDAY_NAMES_SHORT_NE.map((d) => <span key={d}>{d}</span>)}
+                </div>
+
+                {/* Calendar Day Grid (Touch-friendly responsive 7 columns) */}
+                <div className="grid grid-cols-7 gap-1 text-xs w-full py-1">
+                  {activeTab === "ad"
+                    ? adDaysGrid.map((item, idx) => {
+                        if (!item.isCurrentMonth) {
+                          return (
+                            <div
+                              key={idx}
+                              className="w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex items-center justify-center text-slate-300 dark:text-zinc-600 text-xs select-none"
+                            >
+                              {item.day}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectAdDate(item.day)}
+                            className={`w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer select-none p-0.5 focus:outline-hidden focus:ring-2 focus:ring-purple-500/50 ${
+                              item.isSelected
+                                ? "bg-purple-600 text-white font-bold shadow-md"
+                                : item.isToday
+                                ? "border-2 border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold hover:bg-purple-500/20"
+                                : "hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-800 dark:text-theme-text font-medium"
+                            }`}
+                          >
+                            <span className="text-xs sm:text-sm leading-none">{item.day}</span>
+                            {item.bsSubDay && (
+                              <span
+                                className={`text-[9px] sm:text-[10px] leading-tight font-mono opacity-75 mt-0.5 ${
+                                  item.isSelected ? "text-purple-100" : "text-purple-600 dark:text-purple-400"
+                                }`}
+                              >
+                                {item.bsSubDay}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })
+                    : bsDaysGrid.map((item, idx) => {
+                        if (!item.isCurrentMonth) {
+                          return (
+                            <div
+                              key={idx}
+                              className="w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex items-center justify-center text-slate-300 dark:text-zinc-600 text-xs select-none"
+                            >
+                              {item.day}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectBsDate(item.day)}
+                            className={`w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer select-none p-0.5 focus:outline-hidden focus:ring-2 focus:ring-purple-500/50 ${
+                              item.isSelected
+                                ? "bg-purple-600 text-white font-bold shadow-md"
+                                : item.isToday
+                                ? "border-2 border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold hover:bg-purple-500/20"
+                                : "hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-800 dark:text-theme-text font-medium"
+                            }`}
+                          >
+                            <span className="text-xs sm:text-sm leading-none">
+                              {numeralSystem === "ne" ? toNepaliNumerals(item.day) : item.day}
+                            </span>
+                            {item.adSubDay && (
+                              <span
+                                className={`text-[9px] sm:text-[10px] leading-tight font-mono opacity-75 mt-0.5 ${
+                                  item.isSelected ? "text-purple-100" : "text-slate-500 dark:text-zinc-400"
+                                }`}
+                              >
+                                {item.adSubDay}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                </div>
+
+                {/* Bottom Info & Action Bar */}
+                <div className="mt-2.5 pt-2.5 border-t border-slate-200/80 dark:border-theme-border flex flex-col gap-2 shrink-0">
+                  {selectedInfo && (
+                    <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-500/30 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-slate-500 dark:text-theme-text-muted block text-[10px]">Selected Date:</span>
+                        <span className="font-semibold text-purple-700 dark:text-purple-300">
+                          {selectedInfo.formattedDual}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleSelectToday}
+                        className="px-3 py-2 rounded-xl border border-slate-200 dark:border-theme-border hover:bg-slate-100 dark:hover:bg-theme-hover text-xs font-semibold text-slate-700 dark:text-theme-text transition-colors flex items-center gap-1.5 min-h-[38px] cursor-pointer"
+                      >
+                        <Clock className="w-3.5 h-3.5 stroke-[2]" />
+                        <span>Today</span>
+                      </button>
+                      {value && (
+                        <button
+                          type="button"
+                          onClick={handleClear}
+                          className="px-3 py-2 rounded-xl border border-slate-200 dark:border-theme-border hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-500/30 text-xs font-semibold text-slate-500 dark:text-theme-text-muted transition-colors min-h-[38px] cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer min-h-[38px]"
+                    >
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                      <span>Done</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
-            <div className="py-3">
-              <div className="flex items-center justify-between gap-1 mb-1.5">
-                <button
-                  type="button"
-                  onClick={prevBsMonth}
-                  className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-theme-hover text-theme-text-muted hover:text-theme-text transition-colors cursor-pointer"
-                  aria-label="Previous Month"
-                >
-                  <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
-                </button>
-
-                <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-theme-text">
-                  <select
-                    value={bsViewMonth}
-                    onChange={(e) => setBsViewMonth(parseInt(e.target.value, 10))}
-                    className="bg-transparent border border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-none focus:border-purple-500"
-                  >
-                    {BS_MONTH_NAMES_EN.map((m, idx) => (
-                      <option key={m} value={idx + 1} className="bg-theme-surface text-theme-text">
-                        {BS_MONTH_NAMES_SHORT_EN[idx]} ({BS_MONTH_NAMES_NE[idx]})
-                      </option>
-                    ))}
-                  </select>
-
-                  <select
-                    value={bsViewYear}
-                    onChange={(e) => setBsViewYear(parseInt(e.target.value, 10))}
-                    className="bg-transparent border border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-none focus:border-purple-500"
-                  >
-                    {Array.from(
-                      { length: END_BS_YEAR - START_BS_YEAR + 1 },
-                      (_, i) => START_BS_YEAR + i
-                    ).map((y) => (
-                      <option key={y} value={y} className="bg-theme-surface text-theme-text">
-                        {y} ({toNepaliNumerals(y)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={nextBsMonth}
-                  className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-theme-hover text-theme-text-muted hover:text-theme-text transition-colors cursor-pointer"
-                  aria-label="Next Month"
-                >
-                  <ChevronRight className="w-5 h-5 stroke-[2.5]" />
-                </button>
-              </div>
-
-              {/* Subtitle with AD equivalent */}
-              <div className="text-center text-xs font-medium text-purple-600 dark:text-purple-400">
-                {adEquivalentSubtitle}
-              </div>
-            </div>
-          )}
-
-          {/* Weekday Names Header */}
-          <div className="grid grid-cols-7 gap-1 text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-theme-text-muted py-1.5 border-b border-theme-border mb-1.5">
-            {activeTab === "ad"
-              ? WEEKDAY_NAMES_SHORT_EN.map((d) => <span key={d}>{d}</span>)
-              : WEEKDAY_NAMES_SHORT_NE.map((d) => <span key={d}>{d}</span>)}
-          </div>
-
-          {/* Calendar Day Grid (Touch-friendly 44px+ cells) */}
-          <div className="grid grid-cols-7 gap-1 text-xs">
-            {activeTab === "ad"
-              ? adDaysGrid.map((item, idx) => {
-                  if (!item.isCurrentMonth) {
-                    return (
-                      <div
-                        key={idx}
-                        className="min-h-[44px] h-11 sm:h-12 rounded-xl flex items-center justify-center text-theme-text-muted/30 text-xs"
-                      >
-                        {item.day}
-                      </div>
-                    );
-                  }
-
-                  return (
+            // Desktop: Positioned anchored popup floating outside modal clip boundaries
+            <div className="fixed inset-0 z-[70] pointer-events-none select-none">
+              <div
+                className="fixed inset-0 pointer-events-auto"
+                onClick={handleClose}
+                aria-hidden="true"
+              />
+              <div
+                ref={popoverRef}
+                style={{
+                  top: coords?.top !== undefined ? `${coords.top}px` : undefined,
+                  bottom: coords?.bottom !== undefined ? `${coords.bottom}px` : undefined,
+                  left: coords?.left !== undefined ? `${coords.left}px` : "16px",
+                  width: coords?.width ? `${coords.width}px` : "380px",
+                }}
+                className="pointer-events-auto absolute rounded-2xl border border-slate-200 dark:border-theme-border bg-white dark:bg-theme-surface shadow-2xl p-4 sm:p-5 animate-scale-up text-slate-900 dark:text-theme-text"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header with AD / BS Tab Switcher */}
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-theme-border shrink-0">
+                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-theme-bg/80 p-0.5 rounded-xl border border-slate-200/80 dark:border-theme-border">
                     <button
-                      key={idx}
                       type="button"
-                      onClick={() => handleSelectAdDate(item.day)}
-                      className={`min-h-[44px] h-11 sm:h-12 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer select-none ${
-                        item.isSelected
-                          ? "bg-purple-600 text-white font-bold shadow-sm"
-                          : item.isToday
-                          ? "border-2 border-purple-500/60 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold hover:bg-purple-500/20"
-                          : "hover:bg-theme-hover text-theme-text font-medium"
+                      onClick={() => handleTabSwitch("ad")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        activeTab === "ad"
+                          ? "bg-purple-600 text-white shadow-xs"
+                          : "text-slate-600 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-theme-text"
                       }`}
                     >
-                      <span className="text-xs sm:text-sm leading-none">{item.day}</span>
-                      {item.bsSubDay && (
-                        <span
-                          className={`text-[9px] sm:text-[10px] leading-tight font-mono opacity-65 mt-0.5 ${
-                            item.isSelected ? "text-purple-100" : "text-purple-600 dark:text-purple-400"
-                          }`}
-                        >
-                          {item.bsSubDay}
-                        </span>
-                      )}
+                      AD (Gregorian)
                     </button>
-                  );
-                })
-              : bsDaysGrid.map((item, idx) => {
-                  if (!item.isCurrentMonth) {
-                    return (
-                      <div
-                        key={idx}
-                        className="min-h-[44px] h-11 sm:h-12 rounded-xl flex items-center justify-center text-theme-text-muted/30 text-xs"
-                      >
-                        {item.day}
-                      </div>
-                    );
-                  }
-
-                  return (
                     <button
-                      key={idx}
                       type="button"
-                      onClick={() => handleSelectBsDate(item.day)}
-                      className={`min-h-[44px] h-11 sm:h-12 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer select-none ${
-                        item.isSelected
-                          ? "bg-purple-600 text-white font-bold shadow-sm"
-                          : item.isToday
-                          ? "border-2 border-purple-500/60 bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold hover:bg-purple-500/20"
-                          : "hover:bg-theme-hover text-theme-text font-medium"
+                      onClick={() => handleTabSwitch("bs")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                        activeTab === "bs"
+                          ? "bg-purple-600 text-white shadow-xs"
+                          : "text-slate-600 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-theme-text"
                       }`}
                     >
-                      <span className="text-xs sm:text-sm leading-none">
-                        {numeralSystem === "ne" ? toNepaliNumerals(item.day) : item.day}
-                      </span>
-                      {item.adSubDay && (
-                        <span
-                          className={`text-[9px] sm:text-[10px] leading-tight font-mono opacity-65 mt-0.5 ${
-                            item.isSelected ? "text-purple-100" : "text-slate-500 dark:text-zinc-400"
-                          }`}
-                        >
-                          {item.adSubDay}
-                        </span>
-                      )}
+                      BS (नेपाली पात्रो)
                     </button>
-                  );
-                })}
-          </div>
+                  </div>
 
-          {/* Bottom Info & Action Bar */}
-          <div className="mt-3.5 pt-3 border-t border-theme-border flex flex-col gap-2.5">
-            {selectedInfo && (
-              <div className="p-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/60 dark:border-purple-500/30 flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-theme-text-muted block text-[10px]">Selected Date:</span>
-                  <span className="font-semibold text-purple-700 dark:text-purple-300">
-                    {selectedInfo.formattedDual}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={handleSelectToday}
-                  className="px-3 py-2 rounded-xl border border-theme-border hover:bg-theme-hover text-xs font-semibold text-theme-text transition-colors flex items-center gap-1.5 min-h-[38px] cursor-pointer"
-                >
-                  <Clock className="w-3.5 h-3.5 stroke-[2]" />
-                  <span>Today</span>
-                </button>
-                {value && (
                   <button
                     type="button"
-                    onClick={handleClear}
-                    className="px-3 py-2 rounded-xl border border-theme-border hover:bg-rose-500/10 hover:text-rose-500 text-xs font-semibold text-theme-text-muted transition-colors min-h-[38px] cursor-pointer"
+                    onClick={handleClose}
+                    className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-theme-text hover:bg-slate-100 dark:hover:bg-theme-hover transition-colors cursor-pointer"
+                    title="Close calendar"
+                    aria-label="Close calendar"
                   >
-                    Clear
+                    <X className="w-4 h-4 stroke-[2]" />
                   </button>
-                )}
-              </div>
+                </div>
 
-              <button
-                type="button"
-                onClick={() => setIsOpen(false)}
-                className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer min-h-[38px]"
-              >
-                <Check className="w-4 h-4 stroke-[2.5]" />
-                <span>Done</span>
-              </button>
+                {/* Month / Year Navigation */}
+                {activeTab === "ad" ? (
+                  <div className="py-2.5 shrink-0">
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <button
+                        type="button"
+                        onClick={prevAdMonth}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
+                        aria-label="Previous Month"
+                      >
+                        <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+
+                      <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-900 dark:text-theme-text">
+                        <select
+                          value={adViewMonth}
+                          onChange={(e) => setAdViewMonth(parseInt(e.target.value, 10))}
+                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
+                        >
+                          {AD_MONTH_NAMES_EN.map((m, idx) => (
+                            <option key={m} value={idx + 1} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={adViewYear}
+                          onChange={(e) => setAdViewYear(parseInt(e.target.value, 10))}
+                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
+                        >
+                          {Array.from({ length: 2050 - 1920 + 1 }, (_, i) => 1920 + i).map((y) => (
+                            <option key={y} value={y} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                              {y}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={nextAdMonth}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
+                        aria-label="Next Month"
+                      >
+                        <ChevronRight className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+                    </div>
+
+                    <div className="text-center text-xs font-medium text-purple-600 dark:text-purple-400">
+                      {bsEquivalentSubtitle}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-2.5 shrink-0">
+                    <div className="flex items-center justify-between gap-1 mb-1">
+                      <button
+                        type="button"
+                        onClick={prevBsMonth}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
+                        aria-label="Previous Month"
+                      >
+                        <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+
+                      <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-900 dark:text-theme-text">
+                        <select
+                          value={bsViewMonth}
+                          onChange={(e) => setBsViewMonth(parseInt(e.target.value, 10))}
+                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
+                        >
+                          {BS_MONTH_NAMES_EN.map((m, idx) => (
+                            <option key={m} value={idx + 1} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                              {BS_MONTH_NAMES_SHORT_EN[idx]} ({BS_MONTH_NAMES_NE[idx]})
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          value={bsViewYear}
+                          onChange={(e) => setBsViewYear(parseInt(e.target.value, 10))}
+                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
+                        >
+                          {Array.from(
+                            { length: END_BS_YEAR - START_BS_YEAR + 1 },
+                            (_, i) => START_BS_YEAR + i
+                          ).map((y) => (
+                            <option key={y} value={y} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                              {y} ({toNepaliNumerals(y)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={nextBsMonth}
+                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
+                        aria-label="Next Month"
+                      >
+                        <ChevronRight className="w-5 h-5 stroke-[2.5]" />
+                      </button>
+                    </div>
+
+                    <div className="text-center text-xs font-medium text-purple-600 dark:text-purple-400">
+                      {adEquivalentSubtitle}
+                    </div>
+                  </div>
+                )}
+
+                {/* Weekday Names Header */}
+                <div className="grid grid-cols-7 gap-1 text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted py-1.5 border-b border-slate-200/80 dark:border-theme-border mb-1 shrink-0">
+                  {activeTab === "ad"
+                    ? WEEKDAY_NAMES_SHORT_EN.map((d) => <span key={d}>{d}</span>)
+                    : WEEKDAY_NAMES_SHORT_NE.map((d) => <span key={d}>{d}</span>)}
+                </div>
+
+                {/* Calendar Day Grid (Touch-friendly responsive 7 columns) */}
+                <div className="grid grid-cols-7 gap-1 text-xs w-full py-1">
+                  {activeTab === "ad"
+                    ? adDaysGrid.map((item, idx) => {
+                        if (!item.isCurrentMonth) {
+                          return (
+                            <div
+                              key={idx}
+                              className="w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex items-center justify-center text-slate-300 dark:text-zinc-600 text-xs select-none"
+                            >
+                              {item.day}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectAdDate(item.day)}
+                            className={`w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer select-none p-0.5 focus:outline-hidden focus:ring-2 focus:ring-purple-500/50 ${
+                              item.isSelected
+                                ? "bg-purple-600 text-white font-bold shadow-md"
+                                : item.isToday
+                                ? "border-2 border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold hover:bg-purple-500/20"
+                                : "hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-800 dark:text-theme-text font-medium"
+                            }`}
+                          >
+                            <span className="text-xs sm:text-sm leading-none">{item.day}</span>
+                            {item.bsSubDay && (
+                              <span
+                                className={`text-[9px] sm:text-[10px] leading-tight font-mono opacity-75 mt-0.5 ${
+                                  item.isSelected ? "text-purple-100" : "text-purple-600 dark:text-purple-400"
+                                }`}
+                              >
+                                {item.bsSubDay}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })
+                    : bsDaysGrid.map((item, idx) => {
+                        if (!item.isCurrentMonth) {
+                          return (
+                            <div
+                              key={idx}
+                              className="w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex items-center justify-center text-slate-300 dark:text-zinc-600 text-xs select-none"
+                            >
+                              {item.day}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => handleSelectBsDate(item.day)}
+                            className={`w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer select-none p-0.5 focus:outline-hidden focus:ring-2 focus:ring-purple-500/50 ${
+                              item.isSelected
+                                ? "bg-purple-600 text-white font-bold shadow-md"
+                                : item.isToday
+                                ? "border-2 border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold hover:bg-purple-500/20"
+                                : "hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-800 dark:text-theme-text font-medium"
+                            }`}
+                          >
+                            <span className="text-xs sm:text-sm leading-none">
+                              {numeralSystem === "ne" ? toNepaliNumerals(item.day) : item.day}
+                            </span>
+                            {item.adSubDay && (
+                              <span
+                                className={`text-[9px] sm:text-[10px] leading-tight font-mono opacity-75 mt-0.5 ${
+                                  item.isSelected ? "text-purple-100" : "text-slate-500 dark:text-zinc-400"
+                                }`}
+                              >
+                                {item.adSubDay}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                </div>
+
+                {/* Bottom Info & Action Bar */}
+                <div className="mt-2.5 pt-2.5 border-t border-slate-200/80 dark:border-theme-border flex flex-col gap-2 shrink-0">
+                  {selectedInfo && (
+                    <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-500/30 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-slate-500 dark:text-theme-text-muted block text-[10px]">Selected Date:</span>
+                        <span className="font-semibold text-purple-700 dark:text-purple-300">
+                          {selectedInfo.formattedDual}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleSelectToday}
+                        className="px-3 py-2 rounded-xl border border-slate-200 dark:border-theme-border hover:bg-slate-100 dark:hover:bg-theme-hover text-xs font-semibold text-slate-700 dark:text-theme-text transition-colors flex items-center gap-1.5 min-h-[38px] cursor-pointer"
+                      >
+                        <Clock className="w-3.5 h-3.5 stroke-[2]" />
+                        <span>Today</span>
+                      </button>
+                      {value && (
+                        <button
+                          type="button"
+                          onClick={handleClear}
+                          className="px-3 py-2 rounded-xl border border-slate-200 dark:border-theme-border hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-500/30 text-xs font-semibold text-slate-500 dark:text-theme-text-muted transition-colors min-h-[38px] cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer min-h-[38px]"
+                    >
+                      <Check className="w-4 h-4 stroke-[2.5]" />
+                      <span>Done</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          ),
+          document.body
+        )}
     </div>
   );
 };
