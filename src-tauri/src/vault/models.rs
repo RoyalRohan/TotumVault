@@ -229,6 +229,8 @@ pub struct BackupDocumentItem {
     pub document_date: Option<String>,
     pub expiry_date: Option<String>,
     pub favorite: bool,
+    #[serde(default = "default_true")]
+    pub reminder_enabled: bool,
     pub created_at: String,
     pub updated_at: String,
     pub pages: Vec<BackupPageItem>,
@@ -292,6 +294,10 @@ pub struct ImportResultSummary {
     pub documents_imported: usize,
 }
 
+fn default_true() -> bool {
+    true
+}
+
 // ======================== Document Vault Models ========================
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -304,6 +310,10 @@ pub struct DocumentMetadata {
     pub document_date: Option<String>,
     pub expiry_date: Option<String>,
     pub favorite: bool,
+    #[serde(default = "default_true")]
+    pub reminder_enabled: bool,
+    pub last_reminder_milestone: Option<i32>,
+    pub last_reminder_date: Option<String>,
     pub page_count: usize,
     pub created_at: String,
     pub updated_at: String,
@@ -352,9 +362,18 @@ pub struct SaveDocumentInput {
     pub document_date: Option<String>,
     pub expiry_date: Option<String>,
     pub favorite: bool,
+    #[serde(default = "default_true")]
+    pub reminder_enabled: bool,
     #[serde(default)]
     pub pages: Vec<SavePageInput>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DocumentReminderSettings {
+    pub enabled: bool,
+    pub default_delivery_time: String,
+}
+
 
 
 #[cfg(test)]

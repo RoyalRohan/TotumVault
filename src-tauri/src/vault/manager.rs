@@ -711,6 +711,7 @@ impl VaultManager {
                 document_date: doc.document_date,
                 expiry_date: doc.expiry_date,
                 favorite: doc.is_favorite,
+                reminder_enabled: doc.reminder_enabled,
                 created_at: doc.created_at,
                 updated_at: doc.updated_at,
                 pages,
@@ -804,6 +805,9 @@ impl VaultManager {
                 doc.document_date.as_deref(),
                 doc.expiry_date.as_deref(),
                 doc.favorite,
+                doc.reminder_enabled,
+                None,
+                None,
                 &doc.created_at,
                 &doc.updated_at,
             )?;
@@ -978,6 +982,7 @@ impl VaultManager {
                         document_date: doc.document_date,
                         expiry_date: doc.expiry_date,
                         favorite: doc.favorite,
+                        reminder_enabled: doc.reminder_enabled,
                         pages: re_encrypted_pages,
                     };
 
@@ -1074,6 +1079,7 @@ impl VaultManager {
                         document_date: doc.document_date,
                         expiry_date: doc.expiry_date,
                         favorite: doc.favorite,
+                        reminder_enabled: doc.reminder_enabled,
                         pages: re_encrypted_pages,
                     };
 
@@ -1124,6 +1130,9 @@ impl VaultManager {
                 document_date: d.document_date,
                 expiry_date: d.expiry_date,
                 favorite: d.is_favorite,
+                reminder_enabled: d.reminder_enabled,
+                last_reminder_milestone: d.last_reminder_milestone,
+                last_reminder_date: d.last_reminder_date,
                 page_count: d.page_count,
                 created_at: d.created_at,
                 updated_at: d.updated_at,
@@ -1185,6 +1194,9 @@ impl VaultManager {
             document_date: d.document_date,
             expiry_date: d.expiry_date,
             favorite: d.is_favorite,
+            reminder_enabled: d.reminder_enabled,
+            last_reminder_milestone: d.last_reminder_milestone,
+            last_reminder_date: d.last_reminder_date,
             page_count: pages.len(),
             created_at: d.created_at,
             updated_at: d.updated_at,
@@ -1224,12 +1236,24 @@ impl VaultManager {
         let now = Utc::now().to_rfc3339();
         let tags_json = serde_json::to_string(&input.tags).unwrap_or_else(|_| "[]".to_string());
 
-        // Check if document already exists to preserve created_at
+        // Check if document already exists to preserve created_at and determine reminder state
         let existing = get_document_record(&conn, &doc_id)?;
         let created_at = existing
             .as_ref()
             .map(|e| e.created_at.clone())
             .unwrap_or_else(|| now.clone());
+
+        let (last_milestone, last_date) = if let Some(ref prev) = existing {
+            let prev_expiry = prev.expiry_date.as_deref().unwrap_or("").trim();
+            let new_expiry = input.expiry_date.as_deref().unwrap_or("").trim();
+            if prev_expiry != new_expiry || prev.reminder_enabled != input.reminder_enabled {
+                (None, None)
+            } else {
+                (prev.last_reminder_milestone, prev.last_reminder_date.as_deref())
+            }
+        } else {
+            (None, None)
+        };
 
         save_document_record(
             &conn,
@@ -1241,6 +1265,9 @@ impl VaultManager {
             input.document_date.as_deref(),
             input.expiry_date.as_deref(),
             input.favorite,
+            input.reminder_enabled,
+            last_milestone,
+            last_date,
             &created_at,
             &now,
         )?;
@@ -1443,6 +1470,7 @@ mod tests {
             document_date: Some("2026-01-01".to_string()),
             expiry_date: Some("2036-01-01".to_string()),
             favorite: true,
+            reminder_enabled: true,
             pages: vec![
                 SavePageInput {
                     id: None,
@@ -1590,6 +1618,7 @@ mod tests {
             document_date: Some("2026-05-01".to_string()),
             expiry_date: None,
             favorite: true,
+            reminder_enabled: true,
             pages: vec![
                 SavePageInput {
                     id: None,

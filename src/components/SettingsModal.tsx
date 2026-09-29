@@ -14,6 +14,7 @@ import {
   ClipboardCheck,
   Sparkles,
   AlertCircle,
+  Bell,
 } from 'lucide-react';
 import { useVault } from '../context/VaultContext';
 import { useTheme, APP_FONTS } from '../context/ThemeContext';
@@ -42,6 +43,9 @@ export const SettingsModal: React.FC = () => {
     isCheckingUpdate,
     checkForUpdates,
     lastUpdateChecked,
+    documentRemindersEnabled,
+    setDocumentRemindersEnabled,
+    syncDocumentReminders,
   } = useVault();
   const { theme, setTheme, resolvedTheme, font, setFont } = useTheme();
 
@@ -57,6 +61,8 @@ export const SettingsModal: React.FC = () => {
   const [checkOnStartup, setCheckOnStartup] = useState(() => {
     return localStorage.getItem('totumvault_check_updates_on_startup') !== 'false';
   });
+  const [isSyncingReminders, setIsSyncingReminders] = useState(false);
+  const [reminderSyncMsg, setReminderSyncMsg] = useState('');
 
   if (!isSettingsOpen) return null;
 
@@ -517,6 +523,59 @@ export const SettingsModal: React.FC = () => {
                 <span>
                   Biometric authentication is not available on this device. Master password is required when biometrics are unavailable.
                 </span>
+              </div>
+            )}
+          </div>
+
+          {/* Document Renewal Reminders */}
+          <div className="space-y-3 pt-4 border-t border-theme-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-theme-text">Document Renewal Reminders</h4>
+                  <p className="text-xs text-theme-text-muted">
+                    Local OS notifications 5 days prior, daily until expiry, and once post-expiry
+                  </p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={documentRemindersEnabled}
+                  onChange={(e) => setDocumentRemindersEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+            </div>
+
+            {documentRemindersEnabled && (
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-theme-surface/50 border border-slate-200/80 dark:border-theme-border flex items-center justify-between gap-3">
+                <div className="text-xs text-theme-text-muted">
+                  <span>Scheduled delivery: </span>
+                  <span className="font-semibold text-theme-text">09:00 local time daily</span>
+                  {reminderSyncMsg && (
+                    <span className="block text-[11px] text-emerald-400 mt-0.5">{reminderSyncMsg}</span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={isSyncingReminders}
+                  onClick={async () => {
+                    setIsSyncingReminders(true);
+                    setReminderSyncMsg('');
+                    const sent = await syncDocumentReminders();
+                    setReminderSyncMsg(sent > 0 ? `Sent ${sent} notification(s)` : 'All reminders up to date');
+                    setIsSyncingReminders(false);
+                    setTimeout(() => setReminderSyncMsg(''), 4000);
+                  }}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-theme-border hover:bg-theme-hover text-theme-text cursor-pointer transition-colors shrink-0"
+                >
+                  {isSyncingReminders ? 'Checking...' : 'Check Now'}
+                </button>
               </div>
             )}
           </div>

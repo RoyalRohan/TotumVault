@@ -16,7 +16,9 @@ import {
   ArrowLeft,
   ArrowRight,
   FileText,
+  Bell,
 } from 'lucide-react';
+import { getReminderCountdownInfo } from '../../utils/reminderUtils';
 import { useVault } from '../../context/VaultContext';
 import { DocumentDetail, DocumentCategoryType } from '../../types';
 import { getCategoryConfig, formatBytes, DOCUMENT_CATEGORIES } from './documentUtils';
@@ -77,6 +79,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const [editDescription, setEditDescription] = useState('');
   const [editDocDate, setEditDocDate] = useState('');
   const [editExpiryDate, setEditExpiryDate] = useState('');
+  const [editReminderEnabled, setEditReminderEnabled] = useState(true);
   const [editTags, setEditTags] = useState<string[]>([]);
   const [editTagInput, setEditTagInput] = useState('');
 
@@ -94,6 +97,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
       setEditDescription(detail.metadata.description || '');
       setEditDocDate(detail.metadata.document_date || '');
       setEditExpiryDate(detail.metadata.expiry_date || '');
+      setEditReminderEnabled(detail.metadata.reminder_enabled ?? true);
       setEditTags(detail.metadata.tags || []);
 
       if (detail.pages.length > 0) {
@@ -318,6 +322,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         document_date: editDocDate || undefined,
         expiry_date: editExpiryDate || undefined,
         favorite: documentDetail.metadata.favorite,
+        reminder_enabled: editReminderEnabled,
         pages: [], // Backend updates metadata without replacing existing pages when pages is empty
       });
       setIsEditingMetadata(false);
@@ -630,9 +635,27 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                     <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
                       Expiry Date
                     </span>
-                    <span className={isExpired ? 'text-rose-400 font-bold' : ''}>
-                      {documentDetail.metadata.expiry_date} {isExpired && '(Expired)'}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={isExpired ? 'text-rose-400 font-bold' : 'text-zinc-200'}>
+                        {documentDetail.metadata.expiry_date}
+                      </span>
+                      {(() => {
+                        const countdown = getReminderCountdownInfo(documentDetail.metadata.expiry_date);
+                        if (countdown.status !== 'none') {
+                          return (
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${countdown.badgeClass}`}>
+                              {countdown.label}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                    {documentDetail.metadata.reminder_enabled === false && (
+                      <span className="text-[10px] text-zinc-500 block mt-0.5">
+                        (Renewal reminders disabled for this document)
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -746,6 +769,24 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                     />
                   </div>
                 </div>
+
+                {editExpiryDate && (
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-zinc-950/60 border border-zinc-800">
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-3.5 h-3.5 text-amber-400" />
+                      <div>
+                        <span className="text-xs text-zinc-200 block">Renewal Reminders</span>
+                        <span className="text-[10px] text-zinc-500 block">5 days before, daily until expiry</span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={editReminderEnabled}
+                      onChange={(e) => setEditReminderEnabled(e.target.checked)}
+                      className="rounded text-amber-500 focus:ring-amber-500 cursor-pointer"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-1">

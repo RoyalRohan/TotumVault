@@ -52,6 +52,9 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
             document_date TEXT,
             expiry_date TEXT,
             is_favorite INTEGER NOT NULL DEFAULT 0,
+            reminder_enabled INTEGER NOT NULL DEFAULT 1,
+            last_reminder_milestone INTEGER,
+            last_reminder_date TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
@@ -77,6 +80,31 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
         ",
     )
     .map_err(|e| format!("Failed to initialize DB schema: {}", e))?;
+
+    // Backward-safe migration: add reminder columns to documents table if upgrading from earlier schema
+    {
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(documents)")
+            .map_err(|e| format!("Failed to inspect documents table: {}", e))?;
+        let cols = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .map_err(|e| format!("Failed to query table_info: {}", e))?
+            .filter_map(Result::ok)
+            .collect::<Vec<String>>();
+
+        if !cols.contains(&"reminder_enabled".to_string()) {
+            conn.execute("ALTER TABLE documents ADD COLUMN reminder_enabled INTEGER NOT NULL DEFAULT 1", [])
+                .map_err(|e| format!("Failed to add reminder_enabled column: {}", e))?;
+        }
+        if !cols.contains(&"last_reminder_milestone".to_string()) {
+            conn.execute("ALTER TABLE documents ADD COLUMN last_reminder_milestone INTEGER", [])
+                .map_err(|e| format!("Failed to add last_reminder_milestone column: {}", e))?;
+        }
+        if !cols.contains(&"last_reminder_date".to_string()) {
+            conn.execute("ALTER TABLE documents ADD COLUMN last_reminder_date TEXT", [])
+                .map_err(|e| format!("Failed to add last_reminder_date column: {}", e))?;
+        }
+    }
 
     Ok(conn)
 }
@@ -199,6 +227,9 @@ pub struct RawDbDocumentRecord {
     pub document_date: Option<String>,
     pub expiry_date: Option<String>,
     pub is_favorite: bool,
+    pub reminder_enabled: bool,
+    pub last_reminder_milestone: Option<i32>,
+    pub last_reminder_date: Option<String>,
     pub created_at: String,
     pub updated_at: String,
     pub page_count: usize,
@@ -217,13 +248,16 @@ pub fn save_document_record(
     document_date: Option<&str>,
     expiry_date: Option<&str>,
     favorite: bool,
+    reminder_enabled: bool,
+    last_reminder_milestone: Option<i32>,
+    last_reminder_date: Option<&str>,
     created_at: &str,
     updated_at: &str,
 ) -> Result<(), String> {
     conn.execute(
-        "INSERT OR REPLACE INTO documents 
-        (id, title, doc_type, description, tags, document_date, expiry_date, is_favorite, created_at, updated_at) 
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        "INSERT OR REPLACE INTO documents
+        (id, title, doc_type, description, tags, document_date, expiry_date, is_favorite, reminder_enabled, last_reminder_milestone, last_reminder_date, created_at, updated_at)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             id,
             title,
@@ -233,6 +267,9 @@ pub fn save_document_record(
             document_date,
             expiry_date,
             if favorite { 1 } else { 0 },
+            if reminder_enabled { 1 } else { 0 },
+            last_reminder_milestone,
+            last_reminder_date,
             created_at,
             updated_at,
         ],
@@ -246,7 +283,8 @@ pub fn get_all_documents(conn: &Connection) -> Result<Vec<RawDbDocumentRecord>, 
     let mut stmt = conn
         .prepare(
             "SELECT d.id, d.title, d.doc_type, d.description, d.tags, d.document_date, d.expiry_date, 
-                    d.is_favorite, d.created_at, d.updated_at,
+                    d.is_favorite, d.reminder_enabled, d.last_reminder_milestone, d.last_reminder_date,
+                    d.created_at, d.updated_at,
                     (SELECT COUNT(*) FROM document_pages WHERE document_id = d.id) as page_count,
                     p.thumbnail_nonce_b64, p.thumbnail_blob_b64
              FROM documents d
@@ -258,7 +296,10 @@ pub fn get_all_documents(conn: &Connection) -> Result<Vec<RawDbDocumentRecord>, 
     let rows = stmt
         .query_map([], |row| {
             let fav_int: i32 = row.get(7)?;
-            let page_count_i: i64 = row.get(10)?;
+            let rem_int: i32 = row.get(8)?;
+            let last_milestone: Option<i32> = row.get(9)?;
+            let last_date: Option<String> = row.get(10)?;
+            let page_count_i: i64 = row.get(13)?;
             Ok(RawDbDocumentRecord {
                 id: row.get(0)?,
                 title: row.get(1)?,
@@ -268,11 +309,14 @@ pub fn get_all_documents(conn: &Connection) -> Result<Vec<RawDbDocumentRecord>, 
                 document_date: row.get(5)?,
                 expiry_date: row.get(6)?,
                 is_favorite: fav_int != 0,
-                created_at: row.get(8)?,
-                updated_at: row.get(9)?,
+                reminder_enabled: rem_int != 0,
+                last_reminder_milestone: last_milestone,
+                last_reminder_date: last_date,
+                created_at: row.get(11)?,
+                updated_at: row.get(12)?,
                 page_count: page_count_i as usize,
-                first_page_thumbnail_nonce: row.get(11)?,
-                first_page_thumbnail_blob: row.get(12)?,
+                first_page_thumbnail_nonce: row.get(14)?,
+                first_page_thumbnail_blob: row.get(15)?,
             })
         })
         .map_err(|e| format!("Error executing documents query: {}", e))?;
@@ -288,7 +332,8 @@ pub fn get_document_record(conn: &Connection, id: &str) -> Result<Option<RawDbDo
     let mut stmt = conn
         .prepare(
             "SELECT d.id, d.title, d.doc_type, d.description, d.tags, d.document_date, d.expiry_date, 
-                    d.is_favorite, d.created_at, d.updated_at,
+                    d.is_favorite, d.reminder_enabled, d.last_reminder_milestone, d.last_reminder_date,
+                    d.created_at, d.updated_at,
                     (SELECT COUNT(*) FROM document_pages WHERE document_id = d.id) as page_count,
                     p.thumbnail_nonce_b64, p.thumbnail_blob_b64
              FROM documents d
@@ -303,7 +348,10 @@ pub fn get_document_record(conn: &Connection, id: &str) -> Result<Option<RawDbDo
 
     if let Some(row) = rows.next().map_err(|e| format!("Error fetching document row: {}", e))? {
         let fav_int: i32 = row.get(7).map_err(|e| format!("Error getting fav: {}", e))?;
-        let page_count_i: i64 = row.get(10).map_err(|e| format!("Error getting count: {}", e))?;
+        let rem_int: i32 = row.get(8).map_err(|e| format!("Error getting reminder: {}", e))?;
+        let last_milestone: Option<i32> = row.get(9).map_err(|e| format!("Error getting last milestone: {}", e))?;
+        let last_date: Option<String> = row.get(10).map_err(|e| format!("Error getting last date: {}", e))?;
+        let page_count_i: i64 = row.get(13).map_err(|e| format!("Error getting count: {}", e))?;
         Ok(Some(RawDbDocumentRecord {
             id: row.get(0).map_err(|e| format!("Error getting id: {}", e))?,
             title: row.get(1).map_err(|e| format!("Error getting title: {}", e))?,
@@ -313,11 +361,14 @@ pub fn get_document_record(conn: &Connection, id: &str) -> Result<Option<RawDbDo
             document_date: row.get(5).map_err(|e| format!("Error getting doc_date: {}", e))?,
             expiry_date: row.get(6).map_err(|e| format!("Error getting exp_date: {}", e))?,
             is_favorite: fav_int != 0,
-            created_at: row.get(8).map_err(|e| format!("Error getting created_at: {}", e))?,
-            updated_at: row.get(9).map_err(|e| format!("Error getting updated_at: {}", e))?,
+            reminder_enabled: rem_int != 0,
+            last_reminder_milestone: last_milestone,
+            last_reminder_date: last_date,
+            created_at: row.get(11).map_err(|e| format!("Error getting created_at: {}", e))?,
+            updated_at: row.get(12).map_err(|e| format!("Error getting updated_at: {}", e))?,
             page_count: page_count_i as usize,
-            first_page_thumbnail_nonce: row.get(11).map_err(|e| format!("Error getting thumb nonce: {}", e))?,
-            first_page_thumbnail_blob: row.get(12).map_err(|e| format!("Error getting thumb blob: {}", e))?,
+            first_page_thumbnail_nonce: row.get(14).map_err(|e| format!("Error getting thumb nonce: {}", e))?,
+            first_page_thumbnail_blob: row.get(15).map_err(|e| format!("Error getting thumb blob: {}", e))?,
         }))
     } else {
         Ok(None)
@@ -531,3 +582,67 @@ pub fn wipe_all_documents(conn: &Connection) -> Result<(), String> {
     Ok(())
 }
 
+// ======================== Document Renewal Reminder Helpers ========================
+
+#[derive(Debug, Clone)]
+pub struct DocumentReminderTarget {
+    pub id: String,
+    pub title: String,
+    pub expiry_date: String,
+    pub reminder_enabled: bool,
+    pub last_reminder_milestone: Option<i32>,
+    pub last_reminder_date: Option<String>,
+}
+
+pub fn update_document_reminder_state(
+    conn: &Connection,
+    doc_id: &str,
+    milestone: i32,
+    date_str: &str,
+) -> Result<(), String> {
+    conn.execute(
+        "UPDATE documents SET last_reminder_milestone = ?1, last_reminder_date = ?2 WHERE id = ?3",
+        params![milestone, date_str, doc_id],
+    )
+    .map_err(|e| format!("Failed to update reminder state for document {}: {}", doc_id, e))?;
+    Ok(())
+}
+
+pub fn reset_document_reminder_state(conn: &Connection, doc_id: &str) -> Result<(), String> {
+    conn.execute(
+        "UPDATE documents SET last_reminder_milestone = NULL, last_reminder_date = NULL WHERE id = ?1",
+        params![doc_id],
+    )
+    .map_err(|e| format!("Failed to reset reminder state for document {}: {}", doc_id, e))?;
+    Ok(())
+}
+
+pub fn get_documents_for_reminder_check(conn: &Connection) -> Result<Vec<DocumentReminderTarget>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, title, expiry_date, reminder_enabled, last_reminder_milestone, last_reminder_date
+             FROM documents
+             WHERE reminder_enabled = 1 AND expiry_date IS NOT NULL AND expiry_date != ''"
+        )
+        .map_err(|e| format!("Failed to prepare reminder check query: {}", e))?;
+
+    let rows = stmt
+        .query_map([], |row| {
+            let rem_int: i32 = row.get(3)?;
+            Ok(DocumentReminderTarget {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                expiry_date: row.get(2)?,
+                reminder_enabled: rem_int != 0,
+                last_reminder_milestone: row.get(4)?,
+                last_reminder_date: row.get(5)?,
+            })
+        })
+        .map_err(|e| format!("Failed to query documents for reminder check: {}", e))?;
+
+    let mut list = Vec::new();
+    for r in rows {
+        list.push(r.map_err(|e| format!("Error mapping reminder target row: {}", e))?);
+    }
+    Ok(list)
+}

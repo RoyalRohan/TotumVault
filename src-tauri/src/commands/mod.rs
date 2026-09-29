@@ -1,4 +1,5 @@
 use std::fs;
+use std::sync::Arc;
 #[cfg(not(target_os = "android"))]
 use tauri::Manager;
 use tauri::State;
@@ -9,10 +10,11 @@ use crate::vault::health::evaluate_vault_health;
 use crate::vault::manager::SharedVaultManager;
 use crate::clipboard::service::{ClipboardSessionStatus, SharedClipboardManager};
 use crate::security::{apply_screen_protection, ScreenProtectionStatus};
+use crate::reminders::service::DocumentReminderService;
 use crate::vault::models::{
-    DecryptedEntry, DocumentDetail, DocumentMetadata, ImportCommitOptions, ImportPreview,
-    ImportResultSummary, LoginFolder, PwGenConfig, SaveDocumentInput, SavePageInput, TotpResult,
-    VaultHealthReport, VaultStatus,
+    DecryptedEntry, DocumentDetail, DocumentMetadata, DocumentReminderSettings, ImportCommitOptions,
+    ImportPreview, ImportResultSummary, LoginFolder, PwGenConfig, SaveDocumentInput, SavePageInput,
+    TotpResult, VaultHealthReport, VaultStatus,
 };
 
 use crate::vault::password_gen::generate_password_csprng;
@@ -419,6 +421,45 @@ pub fn toggle_document_favorite(
 ) -> Result<bool, String> {
     let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
     manager.toggle_document_favorite(&id)
+}
+
+#[tauri::command]
+pub fn get_document_reminder_settings(
+    service: State<'_, Arc<DocumentReminderService>>,
+) -> Result<DocumentReminderSettings, String> {
+    service.get_settings()
+}
+
+#[tauri::command]
+pub fn set_document_reminder_settings(
+    service: State<'_, Arc<DocumentReminderService>>,
+    enabled: bool,
+) -> Result<(), String> {
+    service.set_globally_enabled(enabled)
+}
+
+#[tauri::command]
+pub fn sync_document_reminders(
+    service: State<'_, Arc<DocumentReminderService>>,
+) -> Result<usize, String> {
+    service.check_and_deliver_reminders()
+}
+
+#[tauri::command]
+pub fn test_document_reminder(
+    service: State<'_, Arc<DocumentReminderService>>,
+    document_id: String,
+) -> Result<String, String> {
+    service.test_document_reminder(&document_id)
+}
+
+#[tauri::command]
+pub fn schedule_test_document_reminder(
+    service: State<'_, Arc<DocumentReminderService>>,
+    delay_secs: u64,
+) -> Result<String, String> {
+    service.schedule_test_timer(delay_secs)?;
+    Ok(format!("Test reminder scheduled for {} seconds in the future.", delay_secs))
 }
 
 

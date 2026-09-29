@@ -16,6 +16,7 @@ import {
   FlipHorizontal,
   Layers,
   Star,
+  Bell,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import {
@@ -95,6 +96,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
   const [description, setDescription] = useState('');
   const [documentDate, setDocumentDate] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
+  const [reminderEnabled, setReminderEnabled] = useState(true);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [favorite, setFavorite] = useState(false);
@@ -624,6 +626,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
           document_date: documentDate || undefined,
           expiry_date: expiryDate || undefined,
           favorite,
+          reminder_enabled: reminderEnabled,
           pages: pagesInput,
         });
       }
@@ -645,6 +648,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     setDescription('');
     setDocumentDate('');
     setExpiryDate('');
+    setReminderEnabled(true);
     setTags([]);
     setFavorite(false);
     onClose();
@@ -1142,6 +1146,31 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {expiryDate && (
+                  <div className="flex items-center justify-between p-2.5 rounded-xl bg-theme-bg-secondary border border-theme-border animate-fade-in">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                        <Bell className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className="text-xs font-semibold text-theme-text block">Renewal Reminders</span>
+                        <span className="text-[10px] text-theme-text-muted block">
+                          Alerts 5 days before, then daily until expiry
+                        </span>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={reminderEnabled}
+                        onChange={(e) => setReminderEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-8 h-4 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                  </div>
+                )}
 
                 {/* Tags */}
                 <div className="space-y-1.5">

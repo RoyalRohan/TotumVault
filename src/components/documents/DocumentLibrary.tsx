@@ -15,6 +15,7 @@ import {
 import { useVault } from '../../context/VaultContext';
 import { DOCUMENT_CATEGORIES, getCategoryConfig } from './documentUtils';
 import { getLicenseStatus } from '../../utils/license';
+import { getReminderCountdownInfo } from '../../utils/reminderUtils';
 import { useHorizontalScroll } from '../../utils/useHorizontalScroll';
 
 interface DocumentLibraryProps {
@@ -439,15 +440,22 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                       <span className="truncate">{doc.document_date || new Date(doc.created_at).toLocaleDateString()}</span>
                     </div>
 
-                    {doc.expiry_date && (
-                      <span
-                        className={`text-[9px] sm:text-[10px] font-semibold shrink-0 ml-1 ${
-                          isExpired ? 'text-rose-500 font-bold' : 'text-theme-text-muted'
-                        }`}
-                      >
-                        {isExpired ? 'Expired' : doc.expiry_date}
-                      </span>
-                    )}
+                    {doc.expiry_date && (() => {
+                      const countdown = getReminderCountdownInfo(doc.expiry_date, doc.reminder_enabled);
+                      return (
+                        <span
+                          className={`text-[9px] sm:text-[10px] font-semibold shrink-0 ml-1 px-1.5 py-0.5 rounded-md ${
+                            countdown.status !== 'none'
+                              ? countdown.badgeClass
+                              : isExpired
+                              ? 'text-rose-500 font-bold'
+                              : 'text-theme-text-muted'
+                          }`}
+                        >
+                          {countdown.status !== 'none' ? countdown.label : doc.expiry_date}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
               );
@@ -459,7 +467,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
             {filteredDocuments.map((doc) => {
               const catConfig = getCategoryConfig(doc.doc_type);
               const CatIcon = catConfig.icon;
-              const isExpired = getLicenseStatus(doc.expiry_date) === 'expired';
 
               return (
                 <div
@@ -492,11 +499,17 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                         >
                           {catConfig.label}
                         </span>
-                        {isExpired && (
-                          <span className="text-[10px] font-bold text-rose-500 px-1.5 py-0.2 bg-rose-500/10 rounded border border-rose-500/20 shrink-0">
-                            Expired
-                          </span>
-                        )}
+                        {doc.expiry_date && (() => {
+                          const countdown = getReminderCountdownInfo(doc.expiry_date, doc.reminder_enabled);
+                          if (countdown.status !== 'none') {
+                            return (
+                              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${countdown.badgeClass}`}>
+                                {countdown.label}
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
 
                       <div className="flex items-center gap-2 text-xs text-theme-text-muted mt-0.5">

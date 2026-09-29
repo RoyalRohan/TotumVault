@@ -269,6 +269,9 @@ export interface DocumentMetadata {
   document_date?: string;
   expiry_date?: string;
   favorite: boolean;
+  reminder_enabled?: boolean;
+  last_reminder_milestone?: number | null;
+  last_reminder_date?: string | null;
   page_count: number;
   created_at: string;
   updated_at: string;
@@ -313,7 +316,13 @@ export interface SaveDocumentInput {
   document_date?: string;
   expiry_date?: string;
   favorite: boolean;
+  reminder_enabled?: boolean;
   pages: SavePageInput[];
+}
+
+export interface DocumentReminderSettings {
+  enabled: boolean;
+  default_delivery_time: string;
 }
 
 export interface ScreenProtectionStatus {

@@ -159,6 +159,11 @@ interface VaultContextType {
   getDocumentDetail: (id: string) => Promise<DocumentDetail>;
   getDocumentPageData: (pageId: string) => Promise<string>;
 
+  // Document Renewal Reminders
+  documentRemindersEnabled: boolean;
+  setDocumentRemindersEnabled: (enabled: boolean) => Promise<void>;
+  syncDocumentReminders: () => Promise<number>;
+
   // Safe Import Actions
   analyzeImport: (srcPathOrContent: string, password?: string) => Promise<ImportPreview>;
   commitImport: (options: ImportCommitOptions) => Promise<ImportResultSummary>;
@@ -243,6 +248,38 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('totumvault_clipboard_clear_seconds', secs.toString());
     if (secs === 0) {
       invoke('cancel_clipboard_timer').catch(() => {});
+    }
+  }, []);
+
+  // Document Renewal Reminders State
+  const [documentRemindersEnabled, setDocumentRemindersEnabledState] = useState<boolean>(true);
+
+  useEffect(() => {
+    invoke<any>('get_document_reminder_settings')
+      .then((settings) => {
+        if (settings && typeof settings.enabled === 'boolean') {
+          setDocumentRemindersEnabledState(settings.enabled);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const setDocumentRemindersEnabled = useCallback(async (enabled: boolean) => {
+    setDocumentRemindersEnabledState(enabled);
+    try {
+      await invoke('set_document_reminder_settings', { enabled });
+    } catch (err) {
+      console.error('Failed to update document reminder settings:', err);
+    }
+  }, []);
+
+  const syncDocumentReminders = useCallback(async (): Promise<number> => {
+    try {
+      const count = await invoke<number>('sync_document_reminders');
+      return count;
+    } catch (err) {
+      console.error('Failed to sync document reminders:', err);
+      return 0;
     }
   }, []);
 
@@ -1390,6 +1427,9 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isPrivacyShieldTest,
         triggerPrivacyShieldTest,
         dismissPrivacyShieldTest,
+        documentRemindersEnabled,
+        setDocumentRemindersEnabled,
+        syncDocumentReminders,
       }}
     >
       {children}
