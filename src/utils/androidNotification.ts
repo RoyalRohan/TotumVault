@@ -4,7 +4,9 @@
 declare global {
   interface Window {
     AndroidNotification?: {
+      getAndroidSdkVersion?: () => number;
       isNotificationPermissionGranted: () => boolean;
+      canRequestRuntimePermission?: () => boolean;
       requestNotificationPermission: (callbackId: string) => void;
       openNotificationSettings: () => void;
       isExactAlarmPermissionGranted: () => boolean;
@@ -35,6 +37,34 @@ export function isAndroidNotificationAvailable(): boolean {
 }
 
 /**
+ * Returns Android SDK version (e.g. 33 for Android 13), or 0 if not on Android.
+ */
+export function getAndroidSdkVersion(): number {
+  if (!isAndroidNotificationAvailable()) {
+    return 0;
+  }
+  try {
+    if (typeof window.AndroidNotification?.getAndroidSdkVersion === 'function') {
+      return window.AndroidNotification.getAndroidSdkVersion();
+    }
+    const match = navigator.userAgent.match(/Android\s+([0-9]+)/);
+    if (match && match[1]) {
+      return parseInt(match[1], 10);
+    }
+    return 33;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Returns true if running on Android 13 (API 33) or higher where POST_NOTIFICATIONS is a runtime permission.
+ */
+export function isAndroid13OrHigher(): boolean {
+  return getAndroidSdkVersion() >= 33;
+}
+
+/**
  * Checks whether system notification permission is granted on Android.
  * For non-Android platforms, returns true.
  */
@@ -50,13 +80,43 @@ export function isAndroidNotificationGranted(): boolean {
 }
 
 /**
- * Requests notification permission from Android (API 33+ runtime dialog).
- * Returns true if granted, false if denied.
+ * Checks whether Android can show the system runtime permission dialog
+ * (i.e. Android 13+ and not permanently denied with "Don't ask again").
  */
-export function requestAndroidNotificationPermission(): Promise<boolean> {
+export function canRequestAndroidNotificationPermission(): boolean {
+  if (!isAndroidNotificationAvailable()) {
+    return false;
+  }
+  if (!isAndroid13OrHigher()) {
+    return false;
+  }
+  try {
+    if (typeof window.AndroidNotification?.canRequestRuntimePermission === 'function') {
+      return Boolean(window.AndroidNotification.canRequestRuntimePermission());
+    }
+    return !isAndroidNotificationGranted();
+  } catch {
+    return false;
+  }
+}
+
+export type NotificationPermissionResult = 'GRANTED' | 'DENIED' | 'PERMANENTLY_DENIED';
+
+/**
+ * Requests notification permission from Android (API 33+ runtime dialog).
+ * Returns 'GRANTED', 'DENIED', or 'PERMANENTLY_DENIED'.
+ */
+export function requestAndroidNotificationPermission(): Promise<NotificationPermissionResult> {
   return new Promise((resolve, reject) => {
     if (!isAndroidNotificationAvailable()) {
-      resolve(true);
+      resolve('GRANTED');
+      return;
+    }
+
+    // On Android below 13, do not request POST_NOTIFICATIONS runtime permission
+    if (!isAndroid13OrHigher()) {
+      const granted = isAndroidNotificationGranted();
+      resolve(granted ? 'GRANTED' : 'PERMANENTLY_DENIED');
       return;
     }
 
@@ -68,14 +128,20 @@ export function requestAndroidNotificationPermission(): Promise<boolean> {
     const timeout = setTimeout(() => {
       if (window.__notificationCallbacks && window.__notificationCallbacks[callbackId]) {
         delete window.__notificationCallbacks[callbackId];
-        resolve(isAndroidNotificationGranted());
+        resolve(isAndroidNotificationGranted() ? 'GRANTED' : 'DENIED');
       }
     }, 60000);
 
     window.__notificationCallbacks[callbackId] = {
       resolve: (status: string) => {
         clearTimeout(timeout);
-        resolve(status === 'GRANTED');
+        if (status === 'GRANTED') {
+          resolve('GRANTED');
+        } else if (status === 'PERMANENTLY_DENIED') {
+          resolve('PERMANENTLY_DENIED');
+        } else {
+          resolve('DENIED');
+        }
       },
       reject: (err: any) => {
         clearTimeout(timeout);

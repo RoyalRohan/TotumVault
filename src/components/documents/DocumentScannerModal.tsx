@@ -28,6 +28,10 @@ import {
 } from './documentUtils';
 import { DocumentCategoryType, SavePageInput } from '../../types';
 import { DualDatePicker } from '../common/DualDatePicker';
+import {
+  NotificationPermissionPrompt,
+  useDocumentNotificationPermission,
+} from './NotificationPermissionPrompt';
 
 interface DocumentScannerModalProps {
   isOpen: boolean;
@@ -102,6 +106,19 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
   const [tagInput, setTagInput] = useState('');
   const [favorite, setFavorite] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const {
+    isAndroid,
+    notifAllowed,
+    showConfirmModal,
+    showSettingsModal,
+    handleToggleReminder,
+    requestPermission,
+    onConfirmAllow,
+    onCancelPrompt,
+    onOpenSettings,
+    onCloseSettingsPrompt,
+  } = useDocumentNotificationPermission();
 
   // Stop camera media stream safely
   const stopCameraStream = useCallback(() => {
@@ -1147,27 +1164,51 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                 </div>
 
                 {expiryDate && (
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-theme-surface border border-theme-border animate-fade-in">
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                        <Bell className="w-3.5 h-3.5" />
+                  <div className="p-3 rounded-xl bg-theme-surface border border-theme-border space-y-2.5 animate-fade-in">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                          <Bell className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-semibold text-theme-text block">Renewal Reminders</span>
+                          <span className="text-[11px] text-theme-text-muted block">
+                            Reminders appear before and after expiry.
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-xs font-semibold text-theme-text block">Renewal Reminders</span>
-                        <span className="text-[11px] text-theme-text-muted block">
-                          Reminders appear before and after expiry.
-                        </span>
-                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={reminderEnabled}
+                          onChange={(e) => handleToggleReminder(e.target.checked, setReminderEnabled)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-10 h-6 bg-slate-200 dark:bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                      </label>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={reminderEnabled}
-                        onChange={(e) => setReminderEnabled(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-10 h-6 bg-slate-200 dark:bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                    </label>
+
+                    {isAndroid && reminderEnabled && (
+                      <div className="pt-2 border-t border-theme-border flex items-center justify-between text-xs">
+                        <span className="text-theme-text-muted font-medium">Notifications</span>
+                        {notifAllowed ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Allowed
+                          </span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-rose-600 dark:text-rose-400 font-semibold">Not allowed</span>
+                            <button
+                              type="button"
+                              onClick={() => requestPermission(setReminderEnabled)}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition-colors shadow-xs"
+                            >
+                              Allow Notifications
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1264,6 +1305,15 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
           </div>
         )}
       </div>
+
+      <NotificationPermissionPrompt
+        showConfirmModal={showConfirmModal}
+        showSettingsModal={showSettingsModal}
+        onConfirmAllow={onConfirmAllow}
+        onCancelPrompt={onCancelPrompt}
+        onOpenSettings={onOpenSettings}
+        onCloseSettingsPrompt={onCloseSettingsPrompt}
+      />
     </div>
   );
 };

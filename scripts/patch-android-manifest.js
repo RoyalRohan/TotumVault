@@ -427,6 +427,8 @@ class AndroidNotificationBridge(private val activity: MainActivity, private val 
     companion object {
         const val NOTIFICATION_PERMISSION_REQUEST_CODE = 2001
         var pendingNotificationCallbackId: String? = null
+        private const val PREFS_NAME = "totumvault_notif_prefs"
+        private const val KEY_REQUESTED = "post_notifications_requested"
     }
 
     private fun callbackSuccess(callbackId: String, data: Any) {
@@ -452,6 +454,11 @@ class AndroidNotificationBridge(private val activity: MainActivity, private val 
     }
 
     @JavascriptInterface
+    fun getAndroidSdkVersion(): Int {
+        return Build.VERSION.SDK_INT
+    }
+
+    @JavascriptInterface
     fun isNotificationPermissionGranted(): Boolean {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             ContextCompat.checkSelfPermission(
@@ -461,6 +468,27 @@ class AndroidNotificationBridge(private val activity: MainActivity, private val 
         } else {
             NotificationManagerCompat.from(activity).areNotificationsEnabled()
         }
+    }
+
+    @JavascriptInterface
+    fun canRequestRuntimePermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            return false
+        }
+        val granted = ContextCompat.checkSelfPermission(
+            activity,
+            android.Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) return false
+
+        val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val alreadyRequested = prefs.getBoolean(KEY_REQUESTED, false)
+        val showRationale = ActivityCompat.shouldShowRequestPermissionRationale(
+            activity,
+            android.Manifest.permission.POST_NOTIFICATIONS
+        )
+
+        return !(alreadyRequested && !showRationale)
     }
 
     @JavascriptInterface
@@ -474,6 +502,20 @@ class AndroidNotificationBridge(private val activity: MainActivity, private val 
                 callbackSuccess(callbackId, "GRANTED")
                 return
             }
+
+            val prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val alreadyRequested = prefs.getBoolean(KEY_REQUESTED, false)
+            val showRationale = ActivityCompat.shouldShowRequestPermissionRationale(
+                activity,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            )
+
+            if (alreadyRequested && !showRationale) {
+                callbackSuccess(callbackId, "PERMANENTLY_DENIED")
+                return
+            }
+
+            prefs.edit().putBoolean(KEY_REQUESTED, true).apply()
             pendingNotificationCallbackId = callbackId
             ActivityCompat.requestPermissions(
                 activity,
@@ -593,7 +635,21 @@ class AndroidNotificationBridge(private val activity: MainActivity, private val 
             val callbackId = pendingNotificationCallbackId ?: return
             pendingNotificationCallbackId = null
             val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
-            callbackSuccess(callbackId, if (granted) "GRANTED" else "DENIED")
+            if (granted) {
+                try {
+                    DocumentReminderReceiver.createNotificationChannel(activity)
+                    DocumentReminderReceiver.scheduleDailyAlarm(activity)
+                } catch (e: Exception) {}
+                callbackSuccess(callbackId, "GRANTED")
+            } else {
+                val showRationale = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    ActivityCompat.shouldShowRequestPermissionRationale(
+                        activity,
+                        android.Manifest.permission.POST_NOTIFICATIONS
+                    )
+                } else false
+                callbackSuccess(callbackId, if (!showRationale) "PERMANENTLY_DENIED" else "DENIED")
+            }
         }
     }
 }
