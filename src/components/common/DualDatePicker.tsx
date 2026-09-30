@@ -39,12 +39,71 @@ export interface DualDatePickerProps {
   align?: "left" | "right";
 }
 
-interface PopoverCoords {
+export interface PopoverPosition {
+  isMobile: boolean;
   top?: number;
   bottom?: number;
   left: number;
   width: number;
-  isMobile: boolean;
+  maxHeight?: number;
+}
+
+/**
+ * Calculates collision-aware position for popover or decides mobile sheet presentation.
+ */
+export function calculatePopoverPosition(
+  triggerRect: { top: number; bottom: number; left: number; right: number },
+  windowWidth: number,
+  windowHeight: number,
+  align: "left" | "right" = "left"
+): PopoverPosition {
+  // Mobile / compact sheet breakpoint:
+  // Narrow phones (< 640px) or short-height viewports (< 520px)
+  if (windowWidth < 640 || windowHeight < 520) {
+    return {
+      isMobile: true,
+      left: 0,
+      width: 0,
+    };
+  }
+
+  const viewportMargin = 12;
+  const gap = 6;
+  const calendarWidth = Math.min(380, windowWidth - viewportMargin * 2);
+  const estimatedHeight = 470;
+
+  // Horizontal clamping
+  let idealLeft = triggerRect.left;
+  if (align === "right") {
+    idealLeft = triggerRect.right - calendarWidth;
+  }
+  const maxLeft = windowWidth - calendarWidth - viewportMargin;
+  const left = Math.max(viewportMargin, Math.min(idealLeft, maxLeft));
+
+  // Vertical placement with flip and height clamping
+  const spaceBelow = windowHeight - triggerRect.bottom - gap;
+  const spaceAbove = triggerRect.top - gap;
+
+  let top: number | undefined;
+  let bottom: number | undefined;
+  let maxHeight: number | undefined;
+
+  if (spaceBelow >= estimatedHeight || spaceBelow >= spaceAbove) {
+    top = triggerRect.bottom + gap;
+    maxHeight = Math.min(estimatedHeight, windowHeight - top - viewportMargin);
+  } else {
+    bottom = windowHeight - triggerRect.top + gap;
+    maxHeight = Math.min(estimatedHeight, triggerRect.top - gap - viewportMargin);
+  }
+
+  return {
+    isMobile: false,
+    top,
+    bottom,
+    left,
+    width: calendarWidth,
+    maxHeight,
+  };
 }
 
 export const DualDatePicker: React.FC<DualDatePickerProps> = ({
@@ -60,7 +119,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
-  const [coords, setCoords] = useState<PopoverCoords | null>(null);
+  const [coords, setCoords] = useState<PopoverPosition | null>(null);
 
   // Preference for initial tab: BS if stored is "bs", else AD
   const defaultTab: "ad" | "bs" = useMemo(() => {
@@ -71,11 +130,11 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
   const [activeTab, setActiveTab] = useState<"ad" | "bs">(defaultTab);
   const [numeralSystem] = useState<NumeralSystem>(getStoredNumeralPreference());
 
-  // Current calendar view state
-  const today = useMemo(() => new Date(), []);
-  const todayAdYear = today.getFullYear();
-  const todayAdMonth = today.getMonth() + 1;
-  const todayAdDay = today.getDate();
+  // Current local date (strictly device calendar date, no timezone offset)
+  const now = useMemo(() => new Date(), []);
+  const todayAdYear = now.getFullYear();
+  const todayAdMonth = now.getMonth() + 1;
+  const todayAdDay = now.getDate();
   const todayBs = useMemo(() => {
     try {
       return adToBs(todayAdYear, todayAdMonth, todayAdDay);
@@ -109,7 +168,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
     return todayBs.month;
   });
 
-  // Sync view state when selected date changes externally
+  // Sync view state when selected date changes externally or modal reopens
   useEffect(() => {
     if (selectedInfo) {
       setAdViewYear(selectedInfo.ad.year);
@@ -117,50 +176,19 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
       setBsViewYear(selectedInfo.bs.year);
       setBsViewMonth(selectedInfo.bs.month);
     }
-  }, [value]);
+  }, [value, selectedInfo]);
 
-  // Calculate popover positioning with boundary clamping
+  // Recalculate position
   const updatePosition = useCallback(() => {
     if (!triggerRef.current) return;
-    const isMobile = window.innerWidth < 640;
-    if (isMobile) {
-      setCoords({ isMobile: true, left: 0, width: 0 });
-      return;
-    }
-
     const rect = triggerRef.current.getBoundingClientRect();
-    const calendarWidth = Math.min(380, window.innerWidth - 32);
-    const calendarHeight = 470;
-    const margin = 6;
-
-    let left = rect.left;
-    if (align === "right") {
-      left = rect.right - calendarWidth;
-    }
-
-    // Clamp horizontally within viewport
-    if (left + calendarWidth > window.innerWidth - 16) {
-      left = window.innerWidth - calendarWidth - 16;
-    }
-    if (left < 16) {
-      left = 16;
-    }
-
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-
-    let top: number | undefined;
-    let bottom: number | undefined;
-
-    if (spaceBelow < calendarHeight && spaceAbove > spaceBelow) {
-      // Flip up if space below is tight
-      bottom = window.innerHeight - rect.top + margin;
-    } else {
-      // Open below
-      top = rect.bottom + margin;
-    }
-
-    setCoords({ top, bottom, left, width: calendarWidth, isMobile: false });
+    const pos = calculatePopoverPosition(
+      rect,
+      window.innerWidth,
+      window.innerHeight,
+      align
+    );
+    setCoords(pos);
   }, [align]);
 
   const handleOpen = () => {
@@ -191,16 +219,18 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("resize", handleReposition);
+    window.addEventListener("orientationchange", handleReposition);
     window.addEventListener("scroll", handleReposition, true);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("resize", handleReposition);
+      window.removeEventListener("orientationchange", handleReposition);
       window.removeEventListener("scroll", handleReposition, true);
     };
   }, [isOpen, updatePosition]);
 
-  // Handle switching tabs: automatically align viewing month/year
+  // Handle switching tabs: synchronize viewing month/year to same period
   const handleTabSwitch = (newTab: "ad" | "bs") => {
     setActiveTab(newTab);
     if (newTab === "bs") {
@@ -209,7 +239,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         setBsViewYear(converted.year);
         setBsViewMonth(converted.month);
       } catch {
-        // Fallback
+        // keep existing
       }
     } else {
       try {
@@ -217,7 +247,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         setAdViewYear(converted.year);
         setAdViewMonth(converted.month);
       } catch {
-        // Fallback
+        // keep existing
       }
     }
   };
@@ -281,7 +311,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
     }
   };
 
-  // Select Today
+  // Select Today (local device date only)
   const handleSelectToday = () => {
     const formatted = `${todayAdYear}-${todayAdMonth.toString().padStart(2, "0")}-${todayAdDay.toString().padStart(2, "0")}`;
     onChange(formatted);
@@ -305,9 +335,10 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
     const days: Array<{
       day: number;
       isCurrentMonth: boolean;
-      bsSubDay?: number;
+      subDay?: number;
       isSelected: boolean;
       isToday: boolean;
+      ariaLabel: string;
     }> = [];
 
     // Prev month padding
@@ -317,6 +348,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         isCurrentMonth: false,
         isSelected: false,
         isToday: false,
+        ariaLabel: "",
       });
     }
 
@@ -342,16 +374,20 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         todayAdMonth === adViewMonth &&
         todayAdDay === d;
 
+      const monthName = AD_MONTH_NAMES_EN[adViewMonth - 1];
+      const ariaLabel = `${d} ${monthName} ${adViewYear}${bsSubDay ? ` (${bsSubDay} BS)` : ""}`;
+
       days.push({
         day: d,
         isCurrentMonth: true,
-        bsSubDay,
+        subDay: bsSubDay,
         isSelected,
         isToday,
+        ariaLabel,
       });
     }
 
-    // Next month padding to fill grid
+    // Next month padding to fill complete weeks
     const remaining = (7 - (days.length % 7)) % 7;
     for (let i = 1; i <= remaining; i++) {
       days.push({
@@ -359,13 +395,14 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         isCurrentMonth: false,
         isSelected: false,
         isToday: false,
+        ariaLabel: "",
       });
     }
 
     return days;
   }, [adViewYear, adViewMonth, selectedInfo, todayAdYear, todayAdMonth, todayAdDay]);
 
-  // Grid calculations for BS
+  // Grid calculations for BS (using dynamic previous-month BS length)
   const bsDaysGrid = useMemo(() => {
     let daysInMonth = 30;
     try {
@@ -382,7 +419,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
       firstDayWeekday = 0;
     }
 
-    // Accurately determine previous BS month length
+    // Determine actual previous BS month length
     let prevBsMonth = bsViewMonth - 1;
     let prevBsYear = bsViewYear;
     if (prevBsMonth < 1) {
@@ -399,18 +436,20 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
     const days: Array<{
       day: number;
       isCurrentMonth: boolean;
-      adSubDay?: number;
+      subDay?: number;
       isSelected: boolean;
       isToday: boolean;
+      ariaLabel: string;
     }> = [];
 
-    // Prev month padding (using actual previous BS month days)
+    // Prev month padding using actual previous BS month days
     for (let i = firstDayWeekday - 1; i >= 0; i--) {
       days.push({
         day: prevBsMonthDays - i,
         isCurrentMonth: false,
         isSelected: false,
         isToday: false,
+        ariaLabel: "",
       });
     }
 
@@ -436,16 +475,20 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         todayBs.month === bsViewMonth &&
         todayBs.day === d;
 
+      const bsMonthName = BS_MONTH_NAMES_EN[bsViewMonth - 1];
+      const ariaLabel = `${d} ${bsMonthName} ${bsViewYear} BS${adSubDay ? ` (${adSubDay} AD)` : ""}`;
+
       days.push({
         day: d,
         isCurrentMonth: true,
-        adSubDay,
+        subDay: adSubDay,
         isSelected,
         isToday,
+        ariaLabel,
       });
     }
 
-    // Next month padding
+    // Next month padding to fill complete weeks
     const remaining = (7 - (days.length % 7)) % 7;
     for (let i = 1; i <= remaining; i++) {
       days.push({
@@ -453,6 +496,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         isCurrentMonth: false,
         isSelected: false,
         isToday: false,
+        ariaLabel: "",
       });
     }
 
@@ -492,6 +536,261 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
     }
   }, [adViewYear, adViewMonth]);
 
+  // Shared Calendar Body Component
+  const renderCalendarContent = () => (
+    <div className="w-full flex flex-col select-none shrink-0">
+      {/* 1. Header with Tab Switcher & Close button */}
+      <div className="flex items-center justify-between pb-2.5 border-b border-slate-200/80 dark:border-theme-border shrink-0 gap-2">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-theme-bg/80 p-0.5 rounded-xl border border-slate-200/80 dark:border-theme-border shrink-0">
+          <button
+            type="button"
+            onClick={() => handleTabSwitch("ad")}
+            style={{ minHeight: "40px" }}
+            className={`min-h-[40px] sm:min-h-[44px] px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center ${
+              activeTab === "ad"
+                ? "bg-purple-600 text-white shadow-xs"
+                : "text-slate-600 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-theme-text"
+            }`}
+          >
+            AD (Gregorian)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTabSwitch("bs")}
+            style={{ minHeight: "40px" }}
+            className={`min-h-[40px] sm:min-h-[44px] px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center justify-center ${
+              activeTab === "bs"
+                ? "bg-purple-600 text-white shadow-xs"
+                : "text-slate-600 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-theme-text"
+            }`}
+          >
+            BS (नेपाली पात्रो)
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleClose}
+          style={{ minWidth: "40px", minHeight: "40px" }}
+          className="w-10 h-10 sm:w-11 sm:h-11 min-w-[40px] min-h-[40px] sm:min-w-[44px] sm:min-h-[44px] rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-theme-text hover:bg-slate-100 dark:hover:bg-theme-hover transition-colors cursor-pointer shrink-0"
+          title="Close calendar"
+          aria-label="Close calendar"
+        >
+          <X className="w-4 h-4 stroke-[2]" />
+        </button>
+      </div>
+
+      {/* 2. Month / Year Navigation */}
+      <div className="py-1.5 shrink-0">
+        <div className="flex items-center justify-between gap-1 w-full">
+          <button
+            type="button"
+            onClick={activeTab === "ad" ? prevAdMonth : prevBsMonth}
+            style={{ minWidth: "40px", minHeight: "40px", width: "40px", height: "40px" }}
+            className="w-10 h-10 sm:w-11 sm:h-11 min-w-[40px] min-h-[40px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
+            aria-label="Previous month"
+          >
+            <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
+          </button>
+
+          {/* Flexible Month & Year Selectors (Guaranteed to not push buttons off-screen) */}
+          <div className="flex items-center justify-center gap-1.5 min-w-0 flex-1 px-1">
+            {activeTab === "ad" ? (
+              <>
+                <select
+                  value={adViewMonth}
+                  onChange={(e) => setAdViewMonth(parseInt(e.target.value, 10))}
+                  style={{ minHeight: "40px" }}
+                  className="min-w-0 max-w-[130px] min-h-[40px] sm:min-h-[44px] h-10 sm:h-11 bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text truncate"
+                  aria-label="Select month"
+                >
+                  {AD_MONTH_NAMES_EN.map((m, idx) => (
+                    <option key={m} value={idx + 1} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                      {m}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={adViewYear}
+                  onChange={(e) => setAdViewYear(parseInt(e.target.value, 10))}
+                  style={{ minHeight: "40px" }}
+                  className="min-w-0 max-w-[84px] min-h-[40px] sm:min-h-[44px] h-10 sm:h-11 bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
+                  aria-label="Select year"
+                >
+                  {Array.from({ length: 2050 - 1920 + 1 }, (_, i) => 1920 + i).map((y) => (
+                    <option key={y} value={y} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                      {y}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <>
+                <select
+                  value={bsViewMonth}
+                  onChange={(e) => setBsViewMonth(parseInt(e.target.value, 10))}
+                  style={{ minHeight: "40px" }}
+                  className="min-w-0 max-w-[130px] min-h-[40px] sm:min-h-[44px] h-10 sm:h-11 bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text truncate"
+                  aria-label="Select month"
+                >
+                  {BS_MONTH_NAMES_EN.map((m, idx) => (
+                    <option key={m} value={idx + 1} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                      {BS_MONTH_NAMES_SHORT_EN[idx]} ({BS_MONTH_NAMES_NE[idx]})
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={bsViewYear}
+                  onChange={(e) => setBsViewYear(parseInt(e.target.value, 10))}
+                  style={{ minHeight: "40px" }}
+                  className="min-w-0 max-w-[84px] min-h-[40px] sm:min-h-[44px] h-10 sm:h-11 bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
+                  aria-label="Select year"
+                >
+                  {Array.from(
+                    { length: END_BS_YEAR - START_BS_YEAR + 1 },
+                    (_, i) => START_BS_YEAR + i
+                  ).map((y) => (
+                    <option key={y} value={y} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
+                      {numeralSystem === "ne" ? toNepaliNumerals(y) : y}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={activeTab === "ad" ? nextAdMonth : nextBsMonth}
+            style={{ minWidth: "40px", minHeight: "40px", width: "40px", height: "40px" }}
+            className="w-10 h-10 sm:w-11 sm:h-11 min-w-[40px] min-h-[40px] sm:min-w-[44px] sm:min-h-[44px] flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
+            aria-label="Next month"
+          >
+            <ChevronRight className="w-5 h-5 stroke-[2.5]" />
+          </button>
+        </div>
+
+        <div className="text-center text-[11px] font-medium text-purple-600 dark:text-purple-400 pt-1 shrink-0 truncate">
+          {activeTab === "ad" ? bsEquivalentSubtitle : adEquivalentSubtitle}
+        </div>
+      </div>
+
+      {/* 3. Weekday Names Header */}
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted py-1 border-b border-slate-200/80 dark:border-theme-border shrink-0">
+        {activeTab === "ad"
+          ? WEEKDAY_NAMES_SHORT_EN.map((d) => <span key={d}>{d}</span>)
+          : WEEKDAY_NAMES_SHORT_NE.map((d) => <span key={d}>{d}</span>)}
+      </div>
+
+      {/* 4. Calendar Day Grid (True responsive 7-column layout) */}
+      <div
+        className="grid grid-cols-7 gap-1 text-xs w-full py-1.5 shrink-0"
+        style={{ gridAutoRows: "minmax(44px, auto)" }}
+        role="grid"
+        aria-label="Calendar days"
+      >
+        {(activeTab === "ad" ? adDaysGrid : bsDaysGrid).map((item, idx) => {
+          if (!item.isCurrentMonth) {
+            return (
+              <div
+                key={idx}
+                style={{ minHeight: "44px", height: "44px" }}
+                className="w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex items-center justify-center text-slate-300 dark:text-zinc-600 text-xs select-none shrink-0"
+                aria-hidden="true"
+              >
+                {item.day}
+              </div>
+            );
+          }
+
+          return (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => (activeTab === "ad" ? handleSelectAdDate(item.day) : handleSelectBsDate(item.day))}
+              role="gridcell"
+              aria-label={item.ariaLabel}
+              aria-selected={item.isSelected}
+              aria-current={item.isToday ? "date" : undefined}
+              style={{ minHeight: "44px", height: "44px" }}
+              className={`w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer select-none p-0.5 shrink-0 focus:outline-hidden focus:ring-2 focus:ring-purple-500/50 ${
+                item.isSelected
+                  ? "bg-purple-600 text-white font-bold shadow-md"
+                  : item.isToday
+                  ? "border-2 border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold hover:bg-purple-500/20"
+                  : "hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-800 dark:text-theme-text font-medium"
+              }`}
+            >
+              <span className="text-xs sm:text-sm leading-none">
+                {activeTab === "bs" && numeralSystem === "ne" ? toNepaliNumerals(item.day) : item.day}
+              </span>
+              {item.subDay && (
+                <span
+                  className={`text-[9px] sm:text-[10px] leading-tight font-mono opacity-75 mt-0.5 ${
+                    item.isSelected ? "text-purple-100" : "text-purple-600 dark:text-purple-400"
+                  }`}
+                >
+                  {item.subDay}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 5. Bottom Info & Action Bar */}
+      <div className="mt-1 pt-2 border-t border-slate-200/80 dark:border-theme-border flex flex-col gap-2 shrink-0">
+        {selectedInfo && (
+          <div className="p-2 rounded-xl bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200/70 dark:border-purple-500/20 flex items-center justify-between text-xs shrink-0">
+            <span className="text-slate-500 dark:text-theme-text-muted text-[10px] font-medium">Selected:</span>
+            <span className="font-semibold text-purple-700 dark:text-purple-300 text-xs truncate ml-2">
+              {selectedInfo.formattedDual}
+            </span>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleSelectToday}
+              style={{ minHeight: "44px" }}
+              className="px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-theme-border hover:bg-slate-100 dark:hover:bg-theme-hover text-xs font-semibold text-slate-700 dark:text-theme-text transition-colors flex items-center gap-1.5 min-h-[44px] h-11 cursor-pointer"
+              aria-label="Go to today"
+            >
+              <Clock className="w-4 h-4 stroke-[2]" />
+              <span>Today</span>
+            </button>
+            {value && (
+              <button
+                type="button"
+                onClick={handleClear}
+                style={{ minHeight: "44px" }}
+                className="px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-theme-border hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-500/30 text-xs font-semibold text-slate-500 dark:text-theme-text-muted transition-colors min-h-[44px] h-11 cursor-pointer"
+                aria-label="Clear date"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleClose}
+            style={{ minHeight: "44px" }}
+            className="px-4.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer min-h-[44px] h-11"
+            aria-label="Confirm date and close"
+          >
+            <Check className="w-4 h-4 stroke-[2.5]" />
+            <span>Done</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className={`relative ${className}`} ref={triggerRef}>
       {label && (
@@ -508,7 +807,9 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
       {/* Trigger Button */}
       <div
         onClick={handleOpen}
-        role="button"
+        role="combobox"
+        aria-haspopup="dialog"
+        aria-expanded={isOpen}
         tabIndex={disabled ? -1 : 0}
         onKeyDown={(e) => {
           if (!disabled && (e.key === "Enter" || e.key === " ")) {
@@ -517,7 +818,8 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
             else handleOpen();
           }
         }}
-        className={`w-full flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm cursor-pointer transition-all select-none ${
+        style={{ minHeight: "44px" }}
+        className={`w-full min-h-[44px] flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border text-xs sm:text-sm cursor-pointer transition-all select-none ${
           disabled
             ? "opacity-50 cursor-not-allowed bg-slate-100 dark:bg-theme-surface/50 border-slate-200 dark:border-theme-border"
             : isOpen
@@ -564,8 +866,8 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         typeof document !== "undefined" &&
         createPortal(
           coords?.isMobile ? (
-            // Mobile: Centered / Bottom-sheet modal overlay
-            <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-xs select-none animate-in fade-in duration-150">
+            // Mobile: Centered / Bottom-sheet modal overlay (escapes all container overflow)
+            <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-1.5 sm:p-4 bg-black/60 backdrop-blur-xs select-none animate-in fade-in duration-150">
               <div
                 className="fixed inset-0"
                 onClick={handleClose}
@@ -573,295 +875,17 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
               />
               <div
                 ref={popoverRef}
-                className="relative z-10 w-full max-w-sm sm:max-w-md bg-white dark:bg-theme-surface border border-slate-200 dark:border-theme-border rounded-2xl shadow-2xl p-4 sm:p-5 text-slate-900 dark:text-theme-text animate-scale-up max-h-[92vh] flex flex-col overflow-y-auto"
+                className="relative z-10 w-full max-w-[390px] bg-white dark:bg-theme-surface border border-slate-200 dark:border-theme-border rounded-2xl shadow-2xl p-2.5 sm:p-3.5 text-slate-900 dark:text-theme-text animate-in fade-in duration-150 max-h-[96dvh] flex flex-col overflow-y-auto"
+                role="dialog"
+                aria-modal="true"
+                aria-label={label || "Date picker"}
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Header with AD / BS Tab Switcher */}
-                <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-theme-border shrink-0">
-                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-theme-bg/80 p-0.5 rounded-xl border border-slate-200/80 dark:border-theme-border">
-                    <button
-                      type="button"
-                      onClick={() => handleTabSwitch("ad")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        activeTab === "ad"
-                          ? "bg-purple-600 text-white shadow-xs"
-                          : "text-slate-600 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-theme-text"
-                      }`}
-                    >
-                      AD (Gregorian)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleTabSwitch("bs")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        activeTab === "bs"
-                          ? "bg-purple-600 text-white shadow-xs"
-                          : "text-slate-600 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-theme-text"
-                      }`}
-                    >
-                      BS (नेपाली पात्रो)
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-theme-text hover:bg-slate-100 dark:hover:bg-theme-hover transition-colors cursor-pointer"
-                    title="Close calendar"
-                    aria-label="Close calendar"
-                  >
-                    <X className="w-4 h-4 stroke-[2]" />
-                  </button>
-                </div>
-
-                {/* Month / Year Navigation */}
-                {activeTab === "ad" ? (
-                  <div className="py-2.5 shrink-0">
-                    <div className="flex items-center justify-between gap-1 mb-1">
-                      <button
-                        type="button"
-                        onClick={prevAdMonth}
-                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
-                        aria-label="Previous Month"
-                      >
-                        <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
-                      </button>
-
-                      <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-900 dark:text-theme-text">
-                        <select
-                          value={adViewMonth}
-                          onChange={(e) => setAdViewMonth(parseInt(e.target.value, 10))}
-                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
-                        >
-                          {AD_MONTH_NAMES_EN.map((m, idx) => (
-                            <option key={m} value={idx + 1} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
-                              {m}
-                            </option>
-                          ))}
-                        </select>
-
-                        <select
-                          value={adViewYear}
-                          onChange={(e) => setAdViewYear(parseInt(e.target.value, 10))}
-                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
-                        >
-                          {Array.from({ length: 2050 - 1920 + 1 }, (_, i) => 1920 + i).map((y) => (
-                            <option key={y} value={y} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
-                              {y}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={nextAdMonth}
-                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
-                        aria-label="Next Month"
-                      >
-                        <ChevronRight className="w-5 h-5 stroke-[2.5]" />
-                      </button>
-                    </div>
-
-                    <div className="text-center text-xs font-medium text-purple-600 dark:text-purple-400">
-                      {bsEquivalentSubtitle}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="py-2.5 shrink-0">
-                    <div className="flex items-center justify-between gap-1 mb-1">
-                      <button
-                        type="button"
-                        onClick={prevBsMonth}
-                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
-                        aria-label="Previous Month"
-                      >
-                        <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
-                      </button>
-
-                      <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-900 dark:text-theme-text">
-                        <select
-                          value={bsViewMonth}
-                          onChange={(e) => setBsViewMonth(parseInt(e.target.value, 10))}
-                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
-                        >
-                          {BS_MONTH_NAMES_EN.map((m, idx) => (
-                            <option key={m} value={idx + 1} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
-                              {BS_MONTH_NAMES_SHORT_EN[idx]} ({BS_MONTH_NAMES_NE[idx]})
-                            </option>
-                          ))}
-                        </select>
-
-                        <select
-                          value={bsViewYear}
-                          onChange={(e) => setBsViewYear(parseInt(e.target.value, 10))}
-                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
-                        >
-                          {Array.from(
-                            { length: END_BS_YEAR - START_BS_YEAR + 1 },
-                            (_, i) => START_BS_YEAR + i
-                          ).map((y) => (
-                            <option key={y} value={y} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
-                              {y} ({toNepaliNumerals(y)})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={nextBsMonth}
-                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
-                        aria-label="Next Month"
-                      >
-                        <ChevronRight className="w-5 h-5 stroke-[2.5]" />
-                      </button>
-                    </div>
-
-                    <div className="text-center text-xs font-medium text-purple-600 dark:text-purple-400">
-                      {adEquivalentSubtitle}
-                    </div>
-                  </div>
-                )}
-
-                {/* Weekday Names Header */}
-                <div className="grid grid-cols-7 gap-1 text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted py-1.5 border-b border-slate-200/80 dark:border-theme-border mb-1 shrink-0">
-                  {activeTab === "ad"
-                    ? WEEKDAY_NAMES_SHORT_EN.map((d) => <span key={d}>{d}</span>)
-                    : WEEKDAY_NAMES_SHORT_NE.map((d) => <span key={d}>{d}</span>)}
-                </div>
-
-                {/* Calendar Day Grid (Touch-friendly responsive 7 columns) */}
-                <div className="grid grid-cols-7 gap-1 text-xs w-full py-1">
-                  {activeTab === "ad"
-                    ? adDaysGrid.map((item, idx) => {
-                        if (!item.isCurrentMonth) {
-                          return (
-                            <div
-                              key={idx}
-                              className="w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex items-center justify-center text-slate-300 dark:text-zinc-600 text-xs select-none"
-                            >
-                              {item.day}
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => handleSelectAdDate(item.day)}
-                            className={`w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer select-none p-0.5 focus:outline-hidden focus:ring-2 focus:ring-purple-500/50 ${
-                              item.isSelected
-                                ? "bg-purple-600 text-white font-bold shadow-md"
-                                : item.isToday
-                                ? "border-2 border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold hover:bg-purple-500/20"
-                                : "hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-800 dark:text-theme-text font-medium"
-                            }`}
-                          >
-                            <span className="text-xs sm:text-sm leading-none">{item.day}</span>
-                            {item.bsSubDay && (
-                              <span
-                                className={`text-[9px] sm:text-[10px] leading-tight font-mono opacity-75 mt-0.5 ${
-                                  item.isSelected ? "text-purple-100" : "text-purple-600 dark:text-purple-400"
-                                }`}
-                              >
-                                {item.bsSubDay}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })
-                    : bsDaysGrid.map((item, idx) => {
-                        if (!item.isCurrentMonth) {
-                          return (
-                            <div
-                              key={idx}
-                              className="w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex items-center justify-center text-slate-300 dark:text-zinc-600 text-xs select-none"
-                            >
-                              {item.day}
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => handleSelectBsDate(item.day)}
-                            className={`w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer select-none p-0.5 focus:outline-hidden focus:ring-2 focus:ring-purple-500/50 ${
-                              item.isSelected
-                                ? "bg-purple-600 text-white font-bold shadow-md"
-                                : item.isToday
-                                ? "border-2 border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold hover:bg-purple-500/20"
-                                : "hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-800 dark:text-theme-text font-medium"
-                            }`}
-                          >
-                            <span className="text-xs sm:text-sm leading-none">
-                              {numeralSystem === "ne" ? toNepaliNumerals(item.day) : item.day}
-                            </span>
-                            {item.adSubDay && (
-                              <span
-                                className={`text-[9px] sm:text-[10px] leading-tight font-mono opacity-75 mt-0.5 ${
-                                  item.isSelected ? "text-purple-100" : "text-slate-500 dark:text-zinc-400"
-                                }`}
-                              >
-                                {item.adSubDay}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                </div>
-
-                {/* Bottom Info & Action Bar */}
-                <div className="mt-2.5 pt-2.5 border-t border-slate-200/80 dark:border-theme-border flex flex-col gap-2 shrink-0">
-                  {selectedInfo && (
-                    <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-500/30 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="text-slate-500 dark:text-theme-text-muted block text-[10px]">Selected Date:</span>
-                        <span className="font-semibold text-purple-700 dark:text-purple-300">
-                          {selectedInfo.formattedDual}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={handleSelectToday}
-                        className="px-3 py-2 rounded-xl border border-slate-200 dark:border-theme-border hover:bg-slate-100 dark:hover:bg-theme-hover text-xs font-semibold text-slate-700 dark:text-theme-text transition-colors flex items-center gap-1.5 min-h-[38px] cursor-pointer"
-                      >
-                        <Clock className="w-3.5 h-3.5 stroke-[2]" />
-                        <span>Today</span>
-                      </button>
-                      {value && (
-                        <button
-                          type="button"
-                          onClick={handleClear}
-                          className="px-3 py-2 rounded-xl border border-slate-200 dark:border-theme-border hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-500/30 text-xs font-semibold text-slate-500 dark:text-theme-text-muted transition-colors min-h-[38px] cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleClose}
-                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer min-h-[38px]"
-                    >
-                      <Check className="w-4 h-4 stroke-[2.5]" />
-                      <span>Done</span>
-                    </button>
-                  </div>
-                </div>
+                {renderCalendarContent()}
               </div>
             </div>
           ) : (
-            // Desktop: Positioned anchored popup floating outside modal clip boundaries
+            // Desktop: Anchored floating popup with boundary clamping & collision flipping
             <div className="fixed inset-0 z-[70] pointer-events-none select-none">
               <div
                 className="fixed inset-0 pointer-events-auto"
@@ -873,294 +897,17 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
                 style={{
                   top: coords?.top !== undefined ? `${coords.top}px` : undefined,
                   bottom: coords?.bottom !== undefined ? `${coords.bottom}px` : undefined,
-                  left: coords?.left !== undefined ? `${coords.left}px` : "16px",
+                  left: coords?.left !== undefined ? `${coords.left}px` : "12px",
                   width: coords?.width ? `${coords.width}px` : "380px",
+                  maxHeight: coords?.maxHeight ? `${coords.maxHeight}px` : undefined,
                 }}
-                className="pointer-events-auto absolute rounded-2xl border border-slate-200 dark:border-theme-border bg-white dark:bg-theme-surface shadow-2xl p-4 sm:p-5 animate-scale-up text-slate-900 dark:text-theme-text"
+                className="pointer-events-auto absolute rounded-2xl border border-slate-200 dark:border-theme-border bg-white dark:bg-theme-surface shadow-2xl p-4 text-slate-900 dark:text-theme-text flex flex-col overflow-y-auto animate-in fade-in duration-150"
+                role="dialog"
+                aria-modal="true"
+                aria-label={label || "Date picker"}
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Header with AD / BS Tab Switcher */}
-                <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-theme-border shrink-0">
-                  <div className="flex items-center gap-1 bg-slate-100 dark:bg-theme-bg/80 p-0.5 rounded-xl border border-slate-200/80 dark:border-theme-border">
-                    <button
-                      type="button"
-                      onClick={() => handleTabSwitch("ad")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        activeTab === "ad"
-                          ? "bg-purple-600 text-white shadow-xs"
-                          : "text-slate-600 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-theme-text"
-                      }`}
-                    >
-                      AD (Gregorian)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleTabSwitch("bs")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                        activeTab === "bs"
-                          ? "bg-purple-600 text-white shadow-xs"
-                          : "text-slate-600 dark:text-theme-text-muted hover:text-slate-900 dark:hover:text-theme-text"
-                      }`}
-                    >
-                      BS (नेपाली पात्रो)
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleClose}
-                    className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-theme-text hover:bg-slate-100 dark:hover:bg-theme-hover transition-colors cursor-pointer"
-                    title="Close calendar"
-                    aria-label="Close calendar"
-                  >
-                    <X className="w-4 h-4 stroke-[2]" />
-                  </button>
-                </div>
-
-                {/* Month / Year Navigation */}
-                {activeTab === "ad" ? (
-                  <div className="py-2.5 shrink-0">
-                    <div className="flex items-center justify-between gap-1 mb-1">
-                      <button
-                        type="button"
-                        onClick={prevAdMonth}
-                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
-                        aria-label="Previous Month"
-                      >
-                        <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
-                      </button>
-
-                      <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-900 dark:text-theme-text">
-                        <select
-                          value={adViewMonth}
-                          onChange={(e) => setAdViewMonth(parseInt(e.target.value, 10))}
-                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
-                        >
-                          {AD_MONTH_NAMES_EN.map((m, idx) => (
-                            <option key={m} value={idx + 1} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
-                              {m}
-                            </option>
-                          ))}
-                        </select>
-
-                        <select
-                          value={adViewYear}
-                          onChange={(e) => setAdViewYear(parseInt(e.target.value, 10))}
-                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
-                        >
-                          {Array.from({ length: 2050 - 1920 + 1 }, (_, i) => 1920 + i).map((y) => (
-                            <option key={y} value={y} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
-                              {y}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={nextAdMonth}
-                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
-                        aria-label="Next Month"
-                      >
-                        <ChevronRight className="w-5 h-5 stroke-[2.5]" />
-                      </button>
-                    </div>
-
-                    <div className="text-center text-xs font-medium text-purple-600 dark:text-purple-400">
-                      {bsEquivalentSubtitle}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="py-2.5 shrink-0">
-                    <div className="flex items-center justify-between gap-1 mb-1">
-                      <button
-                        type="button"
-                        onClick={prevBsMonth}
-                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
-                        aria-label="Previous Month"
-                      >
-                        <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
-                      </button>
-
-                      <div className="flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-900 dark:text-theme-text">
-                        <select
-                          value={bsViewMonth}
-                          onChange={(e) => setBsViewMonth(parseInt(e.target.value, 10))}
-                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
-                        >
-                          {BS_MONTH_NAMES_EN.map((m, idx) => (
-                            <option key={m} value={idx + 1} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
-                              {BS_MONTH_NAMES_SHORT_EN[idx]} ({BS_MONTH_NAMES_NE[idx]})
-                            </option>
-                          ))}
-                        </select>
-
-                        <select
-                          value={bsViewYear}
-                          onChange={(e) => setBsViewYear(parseInt(e.target.value, 10))}
-                          className="bg-white dark:bg-theme-bg border border-slate-200 dark:border-theme-border rounded-xl px-2.5 py-1.5 font-semibold text-xs sm:text-sm cursor-pointer focus:outline-hidden focus:border-purple-500 text-slate-900 dark:text-theme-text"
-                        >
-                          {Array.from(
-                            { length: END_BS_YEAR - START_BS_YEAR + 1 },
-                            (_, i) => START_BS_YEAR + i
-                          ).map((y) => (
-                            <option key={y} value={y} className="bg-white dark:bg-theme-surface text-slate-900 dark:text-theme-text">
-                              {y} ({toNepaliNumerals(y)})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={nextBsMonth}
-                        className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-600 dark:text-theme-text-muted hover:text-slate-950 dark:hover:text-theme-text transition-colors cursor-pointer shrink-0"
-                        aria-label="Next Month"
-                      >
-                        <ChevronRight className="w-5 h-5 stroke-[2.5]" />
-                      </button>
-                    </div>
-
-                    <div className="text-center text-xs font-medium text-purple-600 dark:text-purple-400">
-                      {adEquivalentSubtitle}
-                    </div>
-                  </div>
-                )}
-
-                {/* Weekday Names Header */}
-                <div className="grid grid-cols-7 gap-1 text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted py-1.5 border-b border-slate-200/80 dark:border-theme-border mb-1 shrink-0">
-                  {activeTab === "ad"
-                    ? WEEKDAY_NAMES_SHORT_EN.map((d) => <span key={d}>{d}</span>)
-                    : WEEKDAY_NAMES_SHORT_NE.map((d) => <span key={d}>{d}</span>)}
-                </div>
-
-                {/* Calendar Day Grid (Touch-friendly responsive 7 columns) */}
-                <div className="grid grid-cols-7 gap-1 text-xs w-full py-1">
-                  {activeTab === "ad"
-                    ? adDaysGrid.map((item, idx) => {
-                        if (!item.isCurrentMonth) {
-                          return (
-                            <div
-                              key={idx}
-                              className="w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex items-center justify-center text-slate-300 dark:text-zinc-600 text-xs select-none"
-                            >
-                              {item.day}
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => handleSelectAdDate(item.day)}
-                            className={`w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer select-none p-0.5 focus:outline-hidden focus:ring-2 focus:ring-purple-500/50 ${
-                              item.isSelected
-                                ? "bg-purple-600 text-white font-bold shadow-md"
-                                : item.isToday
-                                ? "border-2 border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold hover:bg-purple-500/20"
-                                : "hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-800 dark:text-theme-text font-medium"
-                            }`}
-                          >
-                            <span className="text-xs sm:text-sm leading-none">{item.day}</span>
-                            {item.bsSubDay && (
-                              <span
-                                className={`text-[9px] sm:text-[10px] leading-tight font-mono opacity-75 mt-0.5 ${
-                                  item.isSelected ? "text-purple-100" : "text-purple-600 dark:text-purple-400"
-                                }`}
-                              >
-                                {item.bsSubDay}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })
-                    : bsDaysGrid.map((item, idx) => {
-                        if (!item.isCurrentMonth) {
-                          return (
-                            <div
-                              key={idx}
-                              className="w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex items-center justify-center text-slate-300 dark:text-zinc-600 text-xs select-none"
-                            >
-                              {item.day}
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => handleSelectBsDate(item.day)}
-                            className={`w-full min-h-[44px] h-11 sm:h-12 rounded-xl flex flex-col items-center justify-center relative transition-all cursor-pointer select-none p-0.5 focus:outline-hidden focus:ring-2 focus:ring-purple-500/50 ${
-                              item.isSelected
-                                ? "bg-purple-600 text-white font-bold shadow-md"
-                                : item.isToday
-                                ? "border-2 border-purple-500 bg-purple-500/10 text-purple-700 dark:text-purple-300 font-bold hover:bg-purple-500/20"
-                                : "hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-800 dark:text-theme-text font-medium"
-                            }`}
-                          >
-                            <span className="text-xs sm:text-sm leading-none">
-                              {numeralSystem === "ne" ? toNepaliNumerals(item.day) : item.day}
-                            </span>
-                            {item.adSubDay && (
-                              <span
-                                className={`text-[9px] sm:text-[10px] leading-tight font-mono opacity-75 mt-0.5 ${
-                                  item.isSelected ? "text-purple-100" : "text-slate-500 dark:text-zinc-400"
-                                }`}
-                              >
-                                {item.adSubDay}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                </div>
-
-                {/* Bottom Info & Action Bar */}
-                <div className="mt-2.5 pt-2.5 border-t border-slate-200/80 dark:border-theme-border flex flex-col gap-2 shrink-0">
-                  {selectedInfo && (
-                    <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-500/30 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="text-slate-500 dark:text-theme-text-muted block text-[10px]">Selected Date:</span>
-                        <span className="font-semibold text-purple-700 dark:text-purple-300">
-                          {selectedInfo.formattedDual}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={handleSelectToday}
-                        className="px-3 py-2 rounded-xl border border-slate-200 dark:border-theme-border hover:bg-slate-100 dark:hover:bg-theme-hover text-xs font-semibold text-slate-700 dark:text-theme-text transition-colors flex items-center gap-1.5 min-h-[38px] cursor-pointer"
-                      >
-                        <Clock className="w-3.5 h-3.5 stroke-[2]" />
-                        <span>Today</span>
-                      </button>
-                      {value && (
-                        <button
-                          type="button"
-                          onClick={handleClear}
-                          className="px-3 py-2 rounded-xl border border-slate-200 dark:border-theme-border hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-500/30 text-xs font-semibold text-slate-500 dark:text-theme-text-muted transition-colors min-h-[38px] cursor-pointer"
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleClose}
-                      className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer min-h-[38px]"
-                    >
-                      <Check className="w-4 h-4 stroke-[2.5]" />
-                      <span>Done</span>
-                    </button>
-                  </div>
-                </div>
+                {renderCalendarContent()}
               </div>
             </div>
           ),
