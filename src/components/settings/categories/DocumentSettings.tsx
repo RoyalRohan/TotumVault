@@ -26,6 +26,7 @@ export const DocumentSettings: React.FC = () => {
   const {
     isAndroid,
     notifAllowed,
+    canRequest,
     showConfirmModal,
     showSettingsModal,
     handleToggleReminder,
@@ -86,6 +87,9 @@ export const DocumentSettings: React.FC = () => {
                 <span>Next notification: </span>
                 <span className="font-semibold text-slate-900 dark:text-theme-text">09:00 local time</span>
               </div>
+              <p className="text-[11px] text-slate-500 dark:text-theme-text-muted leading-tight">
+                09:00 local time is the intended reminder time. Delivery timing may vary depending on Android battery optimization and system power-management policies.
+              </p>
               {isAndroid && (
                 <div className="flex items-center gap-2 pt-0.5">
                   <span className="font-medium text-slate-500 dark:text-theme-text-muted">Notifications:</span>
@@ -93,7 +97,7 @@ export const DocumentSettings: React.FC = () => {
                     <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
                       <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Allowed
                     </span>
-                  ) : (
+                  ) : canRequest ? (
                     <div className="flex items-center gap-2">
                       <span className="text-rose-600 dark:text-rose-400 font-semibold">Not allowed</span>
                       <button
@@ -102,6 +106,17 @@ export const DocumentSettings: React.FC = () => {
                         className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition-colors shadow-xs"
                       >
                         Allow Notifications
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <span className="text-amber-600 dark:text-amber-400 font-semibold">Notifications disabled</span>
+                      <button
+                        type="button"
+                        onClick={onOpenSettings}
+                        className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition-colors shadow-xs"
+                      >
+                        Open Notification Settings
                       </button>
                     </div>
                   )}

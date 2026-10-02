@@ -272,3 +272,31 @@ export function sendAndroidTestNotification(): Promise<boolean> {
     }
   });
 }
+
+/**
+ * Checks whether SCHEDULE_EXACT_ALARM permission is granted on Android 12+ (API 31+).
+ */
+export function isExactAlarmPermissionGranted(): boolean {
+  if (!isAndroidNotificationAvailable()) {
+    return true;
+  }
+  try {
+    if (typeof window.AndroidNotification?.isExactAlarmPermissionGranted === 'function') {
+      return Boolean(window.AndroidNotification.isExactAlarmPermissionGranted());
+    }
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Opens Android Special App Access settings for Alarms & Reminders (API 31+).
+ */
+export function openAndroidExactAlarmSettings(): void {
+  if (isAndroidNotificationAvailable()) {
+    try {
+      window.AndroidNotification?.openExactAlarmSettings();
+    } catch {}
+  }
+}

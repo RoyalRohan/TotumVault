@@ -142,9 +142,11 @@ export const NotificationPermissionPrompt: React.FC<NotificationPermissionPrompt
 export function useDocumentNotificationPermission() {
   const [isAndroid, setIsAndroid] = useState(false);
   const [notifAllowed, setNotifAllowed] = useState(true);
+  const [canRequest, setCanRequest] = useState(true);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const pendingReminderSetterRef = React.useRef<((val: boolean) => void) | null>(null);
+  const pendingSaveActionRef = React.useRef<((effectiveReminderEnabled: boolean) => Promise<void> | void) | null>(null);
   const { showToast } = useVault();
 
   const checkStatus = useCallback(() => {
@@ -152,6 +154,8 @@ export function useDocumentNotificationPermission() {
     setIsAndroid(available);
     if (available) {
       const granted = isAndroidNotificationGranted();
+      const canReq = canRequestAndroidNotificationPermission();
+      setCanRequest(canReq);
       setNotifAllowed((prev) => {
         if (!prev && granted) {
           // Permission was enabled later (e.g. in settings) -> automatically reconcile reminders
@@ -164,6 +168,7 @@ export function useDocumentNotificationPermission() {
       });
     } else {
       setNotifAllowed(true);
+      setCanRequest(false);
     }
   }, []);
 
@@ -183,14 +188,9 @@ export function useDocumentNotificationPermission() {
     };
   }, [checkStatus]);
 
-  const handleToggleReminder = useCallback(
-    async (checked: boolean, setReminderState: (val: boolean) => void) => {
+  const checkAndPromptOnActivation = useCallback(
+    (setReminderState: (val: boolean) => void) => {
       pendingReminderSetterRef.current = setReminderState;
-
-      if (!checked) {
-        setReminderState(false);
-        return;
-      }
 
       if (!isAndroidNotificationAvailable()) {
         setReminderState(true);
@@ -206,48 +206,58 @@ export function useDocumentNotificationPermission() {
         return;
       }
 
-      // Notification not granted
-      setReminderState(false);
+      // Android notification permission is missing: prompt immediately!
+      const canReq = canRequestAndroidNotificationPermission();
+      setCanRequest(canReq);
 
-      if (!isAndroid13OrHigher()) {
-        // Below Android 13: no runtime POST_NOTIFICATIONS dialog; notifications disabled in settings
+      if (!isAndroid13OrHigher() || !canReq) {
         setShowSettingsModal(true);
-        return;
+      } else {
+        setShowConfirmModal(true);
       }
-
-      // Android 13+
-      const canRequest = canRequestAndroidNotificationPermission();
-      if (!canRequest) {
-        // Permanently denied
-        setShowSettingsModal(true);
-        return;
-      }
-
-      // Show in-app confirmation popup BEFORE requesting Android system dialog
-      setShowConfirmModal(true);
     },
     []
+  );
+
+  const getEffectiveReminderEnabled = useCallback(
+    (hasExpiryDate: boolean, isReminderEnabled: boolean): boolean => {
+      if (!hasExpiryDate || !isReminderEnabled) return false;
+      if (isAndroidNotificationAvailable() && !isAndroidNotificationGranted()) return false;
+      return true;
+    },
+    []
+  );
+
+  const handleToggleReminder = useCallback(
+    async (checked: boolean, setReminderState: (val: boolean) => void) => {
+      if (!checked) {
+        setReminderState(false);
+        return;
+      }
+      checkAndPromptOnActivation(setReminderState);
+    },
+    [checkAndPromptOnActivation]
   );
 
   const requestPermission = useCallback(
     async (setReminderState?: (val: boolean) => void) => {
       if (setReminderState) {
-        pendingReminderSetterRef.current = setReminderState;
+        checkAndPromptOnActivation(setReminderState);
+        return isAndroidNotificationGranted();
       }
 
       if (!isAndroidNotificationAvailable()) {
-        setReminderState?.(true);
         return true;
       }
 
       const granted = isAndroidNotificationGranted();
       setNotifAllowed(granted);
-      if (granted) {
-        setReminderState?.(true);
-        return true;
-      }
+      if (granted) return true;
 
-      if (!isAndroid13OrHigher() || !canRequestAndroidNotificationPermission()) {
+      const canReq = canRequestAndroidNotificationPermission();
+      setCanRequest(canReq);
+
+      if (!isAndroid13OrHigher() || !canReq) {
         setShowSettingsModal(true);
         return false;
       }
@@ -255,54 +265,144 @@ export function useDocumentNotificationPermission() {
       setShowConfirmModal(true);
       return false;
     },
+    [checkAndPromptOnActivation]
+  );
+
+  const promptBeforeSave = useCallback(
+    async ({
+      hasExpiryDate,
+      reminderEnabled,
+      onProceed,
+    }: {
+      hasExpiryDate: boolean;
+      reminderEnabled: boolean;
+      onProceed: (effectiveReminderEnabled: boolean) => Promise<void> | void;
+    }) => {
+      // If not on Android or document has no expiry date or reminder is toggled off:
+      if (!isAndroidNotificationAvailable() || !hasExpiryDate || !reminderEnabled) {
+        await onProceed(reminderEnabled);
+        return;
+      }
+
+      // Check current permission
+      const granted = isAndroidNotificationGranted();
+      setNotifAllowed(granted);
+
+      if (granted) {
+        await onProceed(true);
+        reconcileAndroidReminders().catch(() => {});
+        return;
+      }
+
+      // Permission needed before activating reminders:
+      // Store the save callback so document data is NEVER lost regardless of user decision
+      pendingSaveActionRef.current = onProceed;
+
+      if (!isAndroid13OrHigher() || !canRequestAndroidNotificationPermission()) {
+        setShowSettingsModal(true);
+      } else {
+        setShowConfirmModal(true);
+      }
+    },
     []
   );
 
   const onConfirmAllow = useCallback(
     async (overrideSetter?: (val: boolean) => void) => {
       setShowConfirmModal(false);
+      const saveAction = pendingSaveActionRef.current;
+      pendingSaveActionRef.current = null;
       const setter = overrideSetter || pendingReminderSetterRef.current;
 
       const result = await requestAndroidNotificationPermission();
       const granted = result === 'GRANTED';
       setNotifAllowed(granted);
+      setCanRequest(canRequestAndroidNotificationPermission());
 
       if (granted) {
         setter?.(true);
-        await reconcileAndroidReminders();
-        showToast('Notifications allowed', 'success');
+        showToast('Document reminders are enabled.', 'success');
+        if (saveAction) {
+          await saveAction(true);
+        }
+        await reconcileAndroidReminders().catch(() => {});
       } else {
         setter?.(false);
-        showToast('Notifications are off. You can enable them later.', 'info');
+        showToast(
+          result === 'PERMANENTLY_DENIED'
+            ? 'Notifications are disabled for TotumVault. You can enable them later in Android Settings.'
+            : 'Notifications are off. You can enable them later in Documents settings.',
+          'info'
+        );
+        if (saveAction) {
+          await saveAction(false);
+        }
       }
     },
     [showToast]
   );
 
-  const onCancelPrompt = useCallback((overrideSetter?: (val: boolean) => void) => {
-    setShowConfirmModal(false);
-    const setter = overrideSetter || pendingReminderSetterRef.current;
-    setter?.(false);
-  }, []);
+  const onCancelPrompt = useCallback(
+    async (overrideSetter?: (val: boolean) => void) => {
+      setShowConfirmModal(false);
+      const saveAction = pendingSaveActionRef.current;
+      pendingSaveActionRef.current = null;
+      const setter = overrideSetter || pendingReminderSetterRef.current;
+      setter?.(false);
 
-  const onOpenSettings = useCallback(() => {
-    setShowSettingsModal(false);
-    openAndroidNotificationSettings();
-  }, []);
+      if (saveAction) {
+        showToast('Notifications are off. You can enable them later in Documents settings.', 'info');
+        await saveAction(false);
+      }
+    },
+    [showToast]
+  );
 
-  const onCloseSettingsPrompt = useCallback((overrideSetter?: (val: boolean) => void) => {
-    setShowSettingsModal(false);
-    const setter = overrideSetter || pendingReminderSetterRef.current;
-    setter?.(false);
-  }, []);
+  const onOpenSettings = useCallback(
+    async () => {
+      setShowSettingsModal(false);
+      const saveAction = pendingSaveActionRef.current;
+      pendingSaveActionRef.current = null;
+      const setter = pendingReminderSetterRef.current;
+      setter?.(false);
+
+      openAndroidNotificationSettings();
+
+      if (saveAction) {
+        showToast('Notifications are off. You can enable them later in Android Settings.', 'info');
+        await saveAction(false);
+      }
+    },
+    [showToast]
+  );
+
+  const onCloseSettingsPrompt = useCallback(
+    async (overrideSetter?: (val: boolean) => void) => {
+      setShowSettingsModal(false);
+      const saveAction = pendingSaveActionRef.current;
+      pendingSaveActionRef.current = null;
+      const setter = overrideSetter || pendingReminderSetterRef.current;
+      setter?.(false);
+
+      if (saveAction) {
+        showToast('Notifications are off. You can enable them later in Documents settings.', 'info');
+        await saveAction(false);
+      }
+    },
+    [showToast]
+  );
 
   return {
     isAndroid,
     notifAllowed,
+    canRequest,
     showConfirmModal,
     showSettingsModal,
     handleToggleReminder,
+    checkAndPromptOnActivation,
+    getEffectiveReminderEnabled,
     requestPermission,
+    promptBeforeSave,
     onConfirmAllow,
     onCancelPrompt,
     onOpenSettings,

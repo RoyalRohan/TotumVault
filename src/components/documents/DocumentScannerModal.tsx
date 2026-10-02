@@ -32,6 +32,7 @@ import {
   NotificationPermissionPrompt,
   useDocumentNotificationPermission,
 } from './NotificationPermissionPrompt';
+import { reconcileAndroidReminders } from '../../utils/androidNotification';
 
 interface DocumentScannerModalProps {
   isOpen: boolean;
@@ -110,9 +111,12 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
   const {
     isAndroid,
     notifAllowed,
+    canRequest,
     showConfirmModal,
     showSettingsModal,
     handleToggleReminder,
+    checkAndPromptOnActivation,
+    getEffectiveReminderEnabled,
     requestPermission,
     onConfirmAllow,
     onCancelPrompt,
@@ -594,6 +598,13 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
+  const handleExpiryDateChange = (newDate: string) => {
+    setExpiryDate(newDate);
+    if (newDate && reminderEnabled) {
+      checkAndPromptOnActivation(setReminderEnabled);
+    }
+  };
+
   // Save document or add page to existing document
   const handleSaveAll = async () => {
     if (stagedPages.length === 0) {
@@ -605,6 +616,8 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
       showToast('Please provide a document title', 'error');
       return;
     }
+
+    const effectiveReminder = getEffectiveReminderEnabled(Boolean(expiryDate), reminderEnabled);
 
     setIsSaving(true);
     try {
@@ -644,9 +657,13 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
           document_date: documentDate || undefined,
           expiry_date: expiryDate || undefined,
           favorite,
-          reminder_enabled: reminderEnabled,
+          reminder_enabled: effectiveReminder,
           pages: pagesInput,
         });
+
+        if (effectiveReminder) {
+          reconcileAndroidReminders().catch(() => {});
+        }
       }
 
       handleCloseModal();
@@ -1143,6 +1160,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                     <DualDatePicker
                       value={documentDate}
                       onChange={setDocumentDate}
+                      title="Document Date"
                       placeholder="Select date (AD / BS)"
                     />
                   </div>
@@ -1153,7 +1171,8 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                     </label>
                     <DualDatePicker
                       value={expiryDate}
-                      onChange={setExpiryDate}
+                      onChange={handleExpiryDateChange}
+                      title="Expiry Date"
                       placeholder="Select expiry (AD / BS)"
                     />
                     <div className="mt-1 px-2 py-0.5 rounded-lg bg-theme-surface/70 border border-theme-border flex items-center justify-between text-[11px]">
@@ -1195,7 +1214,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                           <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
                             <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Allowed
                           </span>
-                        ) : (
+                        ) : canRequest ? (
                           <div className="flex items-center gap-2">
                             <span className="text-rose-600 dark:text-rose-400 font-semibold">Not allowed</span>
                             <button
@@ -1204,6 +1223,17 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                               className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition-colors shadow-xs"
                             >
                               Allow Notifications
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <span className="text-amber-600 dark:text-amber-400 font-semibold">Notifications disabled</span>
+                            <button
+                              type="button"
+                              onClick={onOpenSettings}
+                              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition-colors shadow-xs"
+                            >
+                              Open Settings
                             </button>
                           </div>
                         )}

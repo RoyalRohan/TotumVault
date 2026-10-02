@@ -70,6 +70,9 @@ if (!content.includes('DocumentReminderReceiver')) {
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
                 <action android:name="com.royalrohan.veylock.CHECK_DOCUMENT_REMINDERS" />
             </intent-filter>
         </receiver>`;
@@ -77,6 +80,28 @@ if (!content.includes('DocumentReminderReceiver')) {
     content = content.replace('</application>', `${receiverSnippet}\n    </application>`);
     fs.writeFileSync(manifestPath, content, 'utf8');
     console.log('[patch-android-manifest] Successfully injected DocumentReminderReceiver into AndroidManifest.xml');
+  }
+} else {
+  // Ensure all required intent actions are present inside the receiver's intent-filter
+  const requiredActions = [
+    '<action android:name="android.intent.action.TIMEZONE_CHANGED" />',
+    '<action android:name="android.intent.action.TIME_SET" />',
+    '<action android:name="android.intent.action.DATE_CHANGED" />'
+  ];
+  let updatedContent = content;
+  for (const actLine of requiredActions) {
+    const actMatch = actLine.match(/android:name="([^"]+)"/);
+    if (actMatch && !updatedContent.includes(actMatch[1])) {
+      updatedContent = updatedContent.replace(
+        '<action android:name="com.royalrohan.veylock.CHECK_DOCUMENT_REMINDERS" />',
+        `${actLine}\n                <action android:name="com.royalrohan.veylock.CHECK_DOCUMENT_REMINDERS" />`
+      );
+    }
+  }
+  if (updatedContent !== content) {
+    content = updatedContent;
+    fs.writeFileSync(manifestPath, content, 'utf8');
+    console.log('[patch-android-manifest] Added missing time/date actions to DocumentReminderReceiver in AndroidManifest.xml');
   }
 }
 

@@ -8,6 +8,7 @@ import {
   NotificationPermissionPrompt,
   useDocumentNotificationPermission,
 } from './NotificationPermissionPrompt';
+import { reconcileAndroidReminders } from '../../utils/androidNotification';
 
 interface DocumentEditModalProps {
   documentId: string | null;
@@ -26,9 +27,12 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
   const {
     isAndroid,
     notifAllowed,
+    canRequest,
     showConfirmModal,
     showSettingsModal,
     handleToggleReminder,
+    checkAndPromptOnActivation,
+    getEffectiveReminderEnabled,
     requestPermission,
     onConfirmAllow,
     onCancelPrompt,
@@ -101,6 +105,13 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
+  const handleExpiryDateChange = (newDate: string) => {
+    setExpiryDate(newDate);
+    if (newDate && reminderEnabled) {
+      checkAndPromptOnActivation(setReminderEnabled);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!documentId) return;
@@ -110,6 +121,8 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
       showToast('Document title is required', 'error');
       return;
     }
+
+    const effectiveReminder = getEffectiveReminderEnabled(Boolean(expiryDate), reminderEnabled);
 
     setIsSaving(true);
     try {
@@ -122,9 +135,13 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
         document_date: documentDate || undefined,
         expiry_date: expiryDate || undefined,
         favorite,
-        reminder_enabled: reminderEnabled,
+        reminder_enabled: effectiveReminder,
         pages: [], // Preserves existing encrypted pages
       });
+
+      if (effectiveReminder) {
+        reconcileAndroidReminders().catch(() => {});
+      }
 
       showToast('Document saved', 'success');
       onSaved?.();
@@ -229,6 +246,7 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
                 <DualDatePicker
                   value={documentDate}
                   onChange={setDocumentDate}
+                  title="Issue Date"
                   placeholder="Select issue date"
                 />
               </div>
@@ -239,7 +257,8 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
                 </label>
                 <DualDatePicker
                   value={expiryDate}
-                  onChange={setExpiryDate}
+                  onChange={handleExpiryDateChange}
+                  title="Expiry Date"
                   placeholder="Select expiry date"
                 />
                 {/* Live Expiry Status beneath Expiry Date */}
@@ -284,7 +303,7 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
                       <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
                         <Check className="w-3.5 h-3.5 stroke-[2.5]" /> Allowed
                       </span>
-                    ) : (
+                    ) : canRequest ? (
                       <div className="flex items-center gap-2">
                         <span className="text-rose-600 dark:text-rose-400 font-semibold">Not allowed</span>
                         <button
@@ -293,6 +312,17 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
                           className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition-colors shadow-xs"
                         >
                           Allow Notifications
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-600 dark:text-amber-400 font-semibold">Notifications disabled</span>
+                        <button
+                          type="button"
+                          onClick={onOpenSettings}
+                          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white cursor-pointer transition-colors shadow-xs"
+                        >
+                          Open Settings
                         </button>
                       </div>
                     )}

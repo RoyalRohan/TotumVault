@@ -30,15 +30,17 @@ class DocumentReminderReceiver : BroadcastReceiver() {
 
         fun createNotificationChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = NotificationChannel(
-                    CHANNEL_ID,
-                    CHANNEL_NAME,
-                    NotificationManager.IMPORTANCE_DEFAULT
-                ).apply {
-                    description = "TotumVault document renewal and expiry reminders"
-                }
                 val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-                nm?.createNotificationChannel(channel)
+                if (nm != null && nm.getNotificationChannel(CHANNEL_ID) == null) {
+                    val channel = NotificationChannel(
+                        CHANNEL_ID,
+                        CHANNEL_NAME,
+                        NotificationManager.IMPORTANCE_DEFAULT
+                    ).apply {
+                        description = "TotumVault document renewal and expiry reminders"
+                    }
+                    nm.createNotificationChannel(channel)
+                }
             }
         }
 
@@ -72,19 +74,14 @@ class DocumentReminderReceiver : BroadcastReceiver() {
 
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                        if (alarmManager.canScheduleExactAlarms()) {
-                            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                        } else {
-                            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                        }
-                    } else {
-                        alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
-                    }
+                    // Use inexact scheduling by default to respect Android battery and Doze policies.
+                    // 09:00 local time is the intended reminder time; inexact AlarmManager delivery
+                    // may be delayed by Android power-management policies.
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
                 } else {
                     alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
                 }
-                Log.d(TAG, "Document reminder alarm scheduled for 09:00 local time")
+                Log.d(TAG, "Document reminder alarm scheduled for ~09:00 local time (inexact)")
             } catch (e: Exception) {
                 try {
                     alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
@@ -109,6 +106,17 @@ class DocumentReminderReceiver : BroadcastReceiver() {
             Log.d(TAG, "Document reminder alarm cancelled")
         }
 
+        private fun findDatabaseFile(context: Context): File? {
+            val candidatePaths = listOf(
+                File(context.filesDir, "vault.sqlite"),
+                File(context.filesDir, "com.royalrohan.veylock/vault.sqlite"),
+                File(context.noBackupFilesDir, "vault.sqlite"),
+                File(context.getDatabasePath("vault.sqlite").path),
+                File(context.applicationInfo.dataDir, "files/vault.sqlite")
+            )
+            return candidatePaths.firstOrNull { it.exists() }
+        }
+
         fun checkAndDeliver(context: Context): Int {
             createNotificationChannel(context)
 
@@ -124,8 +132,9 @@ class DocumentReminderReceiver : BroadcastReceiver() {
                 }
             }
 
-            val dbFile = File(context.filesDir, "vault.sqlite")
-            if (!dbFile.exists()) {
+            val dbFile = findDatabaseFile(context)
+            if (dbFile == null || !dbFile.exists()) {
+                Log.d(TAG, "vault.sqlite not found in standard paths, skipping delivery")
                 return 0
             }
 
@@ -221,15 +230,17 @@ class DocumentReminderReceiver : BroadcastReceiver() {
                     // Suppress if milestone already delivered
                     if (lastMilestone == milestone) continue
 
+                    val docTitle = if (title.isNullOrBlank()) "A document" else title
+
                     // Privacy-safe message: Only document title and countdown
                     val message = when (milestone) {
-                        5 -> "$title expires in 5 days."
-                        4 -> "$title expires in 4 days."
-                        3 -> "$title expires in 3 days."
-                        2 -> "$title expires in 2 days."
-                        1 -> "$title expires tomorrow."
-                        0 -> "$title expires today."
-                        else -> "$title has expired."
+                        5 -> "$docTitle expires in 5 days."
+                        4 -> "$docTitle expires in 4 days."
+                        3 -> "$docTitle expires in 3 days."
+                        2 -> "$docTitle expires in 2 days."
+                        1 -> "$docTitle expires tomorrow."
+                        0 -> "$docTitle expires today."
+                        else -> "$docTitle has expired."
                     }
 
                     val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
@@ -287,6 +298,9 @@ class DocumentReminderReceiver : BroadcastReceiver() {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
+            Intent.ACTION_TIMEZONE_CHANGED,
+            Intent.ACTION_TIME_CHANGED,
+            Intent.ACTION_DATE_CHANGED,
             ACTION_CHECK_REMINDERS -> {
                 Log.d(TAG, "DocumentReminderReceiver triggered with action: ${intent.action}")
                 checkAndDeliver(context)
