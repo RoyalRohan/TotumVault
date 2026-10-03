@@ -175,36 +175,39 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
 
   return (
     <div className="flex-1 min-h-0 min-w-0 w-full flex flex-col h-full overflow-hidden bg-theme-bg select-none">
-      <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 border-b border-theme-border shrink-0 bg-theme-surface/50 backdrop-blur-md">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <button
-              type="button"
-              onClick={() => setIsMobileNavOpen(true)}
-              className="md:hidden w-9 h-9 rounded-xl bg-theme-surface hover:bg-theme-hover border border-theme-border text-theme-text-muted hover:text-theme-text transition-all cursor-pointer shadow-xs flex items-center justify-center active:scale-95 shrink-0"
-              title="Open Navigation Menu"
-              aria-label="Open Navigation Menu"
-            >
-              <Menu className="w-4.5 h-4.5 text-theme-text" />
-            </button>
+      <div className="border-b border-theme-border shrink-0 bg-theme-surface/80 backdrop-blur-xl pt-safe pl-safe pr-safe">
+        <div className="px-3.5 sm:px-5 py-3 sm:py-3.5">
+          <div className="flex items-center justify-between gap-2.5 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+              <button
+                type="button"
+                onClick={() => setIsMobileNavOpen(true)}
+                className="md:hidden w-9 h-9 rounded-xl bg-theme-surface hover:bg-theme-hover border border-theme-border text-theme-text-muted hover:text-theme-text transition-all cursor-pointer shadow-xs flex items-center justify-center active:scale-95 shrink-0"
+                title="Open Navigation Menu"
+                aria-label="Open Navigation Menu"
+              >
+                <Menu className="w-4.5 h-4.5 text-theme-text" />
+              </button>
 
-            <h1 className="text-lg sm:text-xl font-bold text-theme-text tracking-tight truncate">
-              Documents
-            </h1>
-            <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shrink-0">
-              {documents.length} {documents.length === 1 ? 'doc' : 'docs'}
-            </span>
-          </div>
+              <h1 className="text-base sm:text-xl font-bold text-theme-text tracking-tight shrink-0">
+                Documents
+              </h1>
+              <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shrink-0">
+                {documents.length} {documents.length === 1 ? 'doc' : 'docs'}
+              </span>
+            </div>
 
-          <div className="relative shrink-0" ref={addMenuRef}>
-            <button
-              type="button"
-              onClick={() => setShowAddMenu(!showAddMenu)}
-              className="py-2 px-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer min-h-[38px]"
-            >
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>Add Document</span>
-            </button>
+            <div className="relative shrink-0" ref={addMenuRef}>
+              <button
+                type="button"
+                onClick={() => setShowAddMenu(!showAddMenu)}
+                aria-label="Add Document"
+                className="py-2 px-3 sm:px-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white text-xs font-semibold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer min-h-[38px] active:scale-95"
+              >
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span className="hidden min-[380px]:inline">Add Document</span>
+                <span className="min-[380px]:hidden">Add</span>
+              </button>
 
             {showAddMenu && (
               <div className="absolute right-0 mt-1.5 w-44 rounded-2xl border border-theme-border bg-theme-surface shadow-2xl p-1.5 z-30 animate-scale-up text-xs font-medium">
@@ -405,6 +408,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
           )}
         </div>
       </div>
+    </div>
 
       <div
         className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-5 pb-28 sm:pb-8 pb-safe pl-safe pr-safe overscroll-y-contain focus:outline-none"

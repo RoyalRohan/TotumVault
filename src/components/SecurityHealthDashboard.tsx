@@ -52,8 +52,9 @@ export const SecurityHealthDashboard: React.FC = () => {
   });
 
   return (
-    <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-6 select-none bg-theme-bg pb-safe text-theme-text">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex-1 overflow-y-auto select-none bg-theme-bg text-theme-text pt-safe pb-safe pl-safe pr-safe">
+      <div className="p-3.5 sm:p-6 space-y-4 sm:space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => setActiveCategory('all')}
@@ -366,5 +367,6 @@ export const SecurityHealthDashboard: React.FC = () => {
         </div>
       </div>
     </div>
+  </div>
   );
 };

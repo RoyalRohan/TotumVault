@@ -325,8 +325,9 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col h-screen h-[100dvh] max-h-[100dvh] bg-black/95 backdrop-blur-md select-none overflow-hidden animate-scale-up">
-      <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 bg-zinc-950/90 border-b border-zinc-800/80 backdrop-blur-lg shrink-0 z-20 pt-safe pl-safe pr-safe">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+      <div className="bg-zinc-950/90 border-b border-zinc-800/80 backdrop-blur-lg shrink-0 z-20 pt-safe pl-safe pr-safe">
+        <div className="flex items-center justify-between px-3 sm:px-5 py-2.5">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             type="button"
             onClick={onClose}
@@ -524,6 +525,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           </div>
         </div>
       </div>
+    </div>
 
       <div
         className="flex-1 min-h-0 w-full relative overflow-hidden flex items-center justify-center p-2 sm:p-4 bg-zinc-950 select-none touch-none cursor-grab active:cursor-grabbing"

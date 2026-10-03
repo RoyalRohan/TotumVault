@@ -647,38 +647,40 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex flex-col h-screen h-[100dvh] max-h-[100dvh] bg-zinc-950 sm:bg-black/85 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4 select-none overflow-hidden animate-scale-up">
       <div className="w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-3xl glass-panel sm:rounded-2xl shadow-2xl border-0 sm:border border-theme-border flex flex-col overflow-hidden bg-theme-bg/95">
-        <div className="flex items-center justify-between px-3.5 sm:px-5 py-3 border-b border-theme-border shrink-0 bg-theme-surface/70 backdrop-blur-md pt-safe pl-safe pr-safe">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
-              <Camera className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+        <div className="border-b border-theme-border shrink-0 bg-theme-surface/70 backdrop-blur-md pt-safe pl-safe pr-safe">
+          <div className="flex items-center justify-between px-3.5 sm:px-5 py-3">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
+                <Camera className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-sm sm:text-base font-bold text-theme-text tracking-tight truncate">
+                  {targetDocumentId
+                    ? 'Add Pages'
+                    : step === 'crop'
+                    ? 'Crop Document'
+                    : step === 'metadata'
+                    ? 'Document Details'
+                    : 'Add Document'}
+                </h2>
+                <p className="text-[11px] text-theme-text-muted truncate">
+                  {step === 'crop'
+                    ? 'Adjust the corners to fit your document.'
+                    : step === 'metadata'
+                    ? `${stagedPages.length} ${stagedPages.length === 1 ? 'page' : 'pages'} ready to save`
+                    : 'Scan or upload a document to your vault.'}
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h2 className="text-sm sm:text-base font-bold text-theme-text tracking-tight truncate">
-                {targetDocumentId
-                  ? 'Add Pages'
-                  : step === 'crop'
-                  ? 'Crop Document'
-                  : step === 'metadata'
-                  ? 'Document Details'
-                  : 'Add Document'}
-              </h2>
-              <p className="text-[11px] text-theme-text-muted truncate">
-                {step === 'crop'
-                  ? 'Adjust the corners to fit your document.'
-                  : step === 'metadata'
-                  ? `${stagedPages.length} ${stagedPages.length === 1 ? 'page' : 'pages'} ready to save`
-                  : 'Scan or upload a document to your vault.'}
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={handleCloseModal}
+              className="p-2 rounded-xl hover:bg-theme-surface text-theme-text-muted hover:text-theme-text transition-colors cursor-pointer shrink-0"
+              title="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={handleCloseModal}
-            className="p-2 rounded-xl hover:bg-theme-surface text-theme-text-muted hover:text-theme-text transition-colors cursor-pointer shrink-0"
-            title="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
 
         {step === 'capture' && (
