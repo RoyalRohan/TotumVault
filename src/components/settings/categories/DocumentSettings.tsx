@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Bell, Calendar, Check, Clock } from 'lucide-react';
 import { useVault } from '../../../context/VaultContext';
 import { getTodayDual } from '../../../utils/nepaliCalendar';
-import { sendAndroidTestNotification } from '../../../utils/androidNotification';
+import { sendAndroidTestNotification, scheduleAndroidTestAlarm } from '../../../utils/androidNotification';
 import {
   NotificationPermissionPrompt,
   useDocumentNotificationPermission,
@@ -21,6 +21,7 @@ export const DocumentSettings: React.FC = () => {
 
   const [isSyncingReminders, setIsSyncingReminders] = useState(false);
   const [isSendingTestNotif, setIsSendingTestNotif] = useState(false);
+  const [isSchedulingTestAlarm, setIsSchedulingTestAlarm] = useState(false);
   const [reminderSyncMsg, setReminderSyncMsg] = useState('');
 
   const {
@@ -44,6 +45,19 @@ export const DocumentSettings: React.FC = () => {
     setReminderSyncMsg(ok ? 'Test notification sent' : 'Failed to send test notification');
     setIsSendingTestNotif(false);
     setTimeout(() => setReminderSyncMsg(''), 4000);
+  };
+
+  const handleScheduleTestAlarm = async () => {
+    setIsSchedulingTestAlarm(true);
+    setReminderSyncMsg('');
+    const ok = await scheduleAndroidTestAlarm(30);
+    setReminderSyncMsg(
+      ok
+        ? '30s test alarm scheduled. Close or lock app to verify background delivery.'
+        : 'Failed to schedule test alarm'
+    );
+    setIsSchedulingTestAlarm(false);
+    setTimeout(() => setReminderSyncMsg(''), 6000);
   };
 
   const todayInfo = (() => {
@@ -129,7 +143,7 @@ export const DocumentSettings: React.FC = () => {
               )}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
                 disabled={isSyncingReminders}
@@ -147,14 +161,26 @@ export const DocumentSettings: React.FC = () => {
               </button>
 
               {isAndroid && (
-                <button
-                  type="button"
-                  disabled={isSendingTestNotif || !notifAllowed}
-                  onClick={handleSendTestNotification}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-theme-border hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-700 dark:text-theme-text cursor-pointer transition-colors shrink-0 min-h-[36px] disabled:opacity-50"
-                >
-                  {isSendingTestNotif ? 'Sending...' : 'Send Test Notification'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    disabled={isSendingTestNotif || !notifAllowed}
+                    onClick={handleSendTestNotification}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-theme-border hover:bg-slate-100 dark:hover:bg-theme-hover text-slate-700 dark:text-theme-text cursor-pointer transition-colors shrink-0 min-h-[36px] disabled:opacity-50"
+                  >
+                    {isSendingTestNotif ? 'Sending...' : 'Send Test Notification'}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isSchedulingTestAlarm || !notifAllowed}
+                    onClick={handleScheduleTestAlarm}
+                    title="Schedules a real AlarmManager alarm in 30 seconds to test background wake and receiver execution"
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-purple-300 dark:border-purple-800/60 bg-purple-50/50 dark:bg-purple-950/20 hover:bg-purple-100/60 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 cursor-pointer transition-colors shrink-0 min-h-[36px] disabled:opacity-50"
+                  >
+                    {isSchedulingTestAlarm ? 'Scheduling...' : 'Test 30s Alarm'}
+                  </button>
+                </>
               )}
             </div>
           </div>

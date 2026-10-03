@@ -599,11 +599,13 @@ class AndroidNotificationBridge(private val activity: MainActivity, private val 
     fun reconcileReminders(callbackId: String) {
         Thread {
             try {
+                Log.d("DocumentReminder", "REMINDER: Bridge reconcileReminders called")
                 DocumentReminderReceiver.createNotificationChannel(activity)
                 val count = DocumentReminderReceiver.checkAndDeliver(activity)
                 DocumentReminderReceiver.scheduleDailyAlarm(activity)
                 callbackSuccess(callbackId, count)
             } catch (e: Exception) {
+                Log.w("DocumentReminder", "REMINDER: Bridge reconcileReminders error: \${e.message}")
                 callbackSuccess(callbackId, 0)
             }
         }.start()
@@ -612,15 +614,30 @@ class AndroidNotificationBridge(private val activity: MainActivity, private val 
     @JavascriptInterface
     fun cancelReminders() {
         try {
+            Log.d("DocumentReminder", "REMINDER: Bridge cancelReminders called")
             DocumentReminderReceiver.cancelDailyAlarm(activity)
         } catch (e: Exception) {
-            Log.w("DocumentReminder", "Failed to cancel reminders: \${e.message}")
+            Log.w("DocumentReminder", "REMINDER: Failed to cancel reminders: \${e.message}")
+        }
+    }
+
+    @JavascriptInterface
+    fun scheduleTestAlarm(delaySeconds: Int, callbackId: String) {
+        try {
+            Log.d("DocumentReminder", "REMINDER: Bridge scheduleTestAlarm called for \${delaySeconds}s")
+            DocumentReminderReceiver.createNotificationChannel(activity)
+            DocumentReminderReceiver.scheduleTestAlarm(activity, delaySeconds)
+            callbackSuccess(callbackId, "SCHEDULED")
+        } catch (e: Exception) {
+            Log.w("DocumentReminder", "REMINDER: Bridge scheduleTestAlarm failed: \${e.message}")
+            callbackError(callbackId, e.message ?: "FAILED_TO_SCHEDULE")
         }
     }
 
     @JavascriptInterface
     fun sendTestNotification(callbackId: String) {
         try {
+            Log.d("DocumentReminder", "REMINDER: Bridge sendTestNotification called (foreground immediate test)")
             DocumentReminderReceiver.createNotificationChannel(activity)
             val nm = activity.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             val launchIntent = activity.packageManager.getLaunchIntentForPackage(activity.packageName)?.apply {
@@ -651,6 +668,7 @@ class AndroidNotificationBridge(private val activity: MainActivity, private val 
             nm?.notify(9999, notif)
             callbackSuccess(callbackId, "SENT")
         } catch (e: Exception) {
+            Log.w("DocumentReminder", "REMINDER: Bridge sendTestNotification failed: \${e.message}")
             callbackError(callbackId, e.message ?: "FAILED_TO_SEND")
         }
     }

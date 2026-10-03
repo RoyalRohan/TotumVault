@@ -220,6 +220,11 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [activeCategory, setActiveCategory] = useState<CategoryType>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Clear search query whenever the active category / section changes
+  useEffect(() => {
+    setSearchQuery('');
+  }, [activeCategory]);
+
   // Login Folders State
   const [folders, setFolders] = useState<LoginFolder[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -1466,9 +1471,12 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
+        const docInput = document.getElementById('documents-search-input');
         const desktopInput = document.getElementById('vault-search-input');
         const mobileInput = document.getElementById('vault-search-input-mobile');
-        if (desktopInput && desktopInput.offsetParent !== null) {
+        if (docInput && docInput.offsetParent !== null) {
+          docInput.focus();
+        } else if (desktopInput && desktopInput.offsetParent !== null) {
           desktopInput.focus();
         } else if (mobileInput) {
           mobileInput.focus();

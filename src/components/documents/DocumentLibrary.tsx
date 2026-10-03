@@ -17,6 +17,7 @@ import {
   Plus,
   Search,
   X,
+  Menu,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { DOCUMENT_CATEGORIES, getCategoryConfig, getDocumentExpiryDisplay } from './documentUtils';
@@ -39,10 +40,21 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
     deleteDocument,
     searchQuery,
     setSearchQuery,
+    setIsMobileNavOpen,
     calendarPreference,
     numeralPreference,
     showToast,
   } = useVault();
+
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPod|iPhone|iPad/.test(navigator.platform);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Escape') {
+      setSearchQuery('');
+      searchInputRef.current?.blur();
+    }
+  };
 
   // Local filter states
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -177,6 +189,17 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
       <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 border-b border-theme-border shrink-0 bg-theme-surface/50 backdrop-blur-md">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
+            {/* Mobile Navigation Drawer Button */}
+            <button
+              type="button"
+              onClick={() => setIsMobileNavOpen(true)}
+              className="md:hidden w-9 h-9 rounded-xl bg-theme-surface hover:bg-theme-hover border border-theme-border text-theme-text-muted hover:text-theme-text transition-all cursor-pointer shadow-xs flex items-center justify-center active:scale-95 shrink-0"
+              title="Open Navigation Menu"
+              aria-label="Open Navigation Menu"
+            >
+              <Menu className="w-4.5 h-4.5 text-theme-text" />
+            </button>
+
             <h1 className="text-lg sm:text-xl font-bold text-theme-text tracking-tight truncate">
               Documents
             </h1>
@@ -229,24 +252,36 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
         {/* SEARCH & FILTERS BAR */}
         <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
           {/* Search Field */}
-          <div className="relative flex-1 max-w-md">
+          <div className="relative flex-1 max-w-md w-full">
+            <Search className="w-4 h-4 text-theme-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
+              ref={searchInputRef}
+              id="documents-search-input"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
               placeholder="Search documents..."
-              className="input-themed w-full rounded-xl pl-9 pr-8 py-2 text-xs"
+              aria-label="Search documents"
+              className="input-themed w-full rounded-xl pl-9 pr-14 py-2 text-xs sm:text-sm placeholder:text-theme-text-muted/60 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/30 transition-all shadow-inner shadow-black/10 min-h-[40px]"
             />
-            <Search className="w-4 h-4 text-theme-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            {searchQuery && (
+            {searchQuery ? (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-theme-text-muted hover:text-theme-text p-0.5 cursor-pointer"
-                title="Clear search"
+                onClick={() => {
+                  setSearchQuery('');
+                  searchInputRef.current?.focus();
+                }}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 min-w-[34px] min-h-[34px] flex items-center justify-center text-theme-text-muted hover:text-theme-text hover:bg-theme-hover rounded-lg transition-colors cursor-pointer"
+                title="Clear search (Esc)"
+                aria-label="Clear search (Esc)"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
+            ) : (
+              <kbd className="hidden sm:inline-block absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-mono font-medium text-theme-text-muted bg-theme-surface px-1.5 py-0.5 rounded border border-theme-border pointer-events-none">
+                {isMac ? '⌘K' : 'Ctrl+K'}
+              </kbd>
             )}
           </div>
 

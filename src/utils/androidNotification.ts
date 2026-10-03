@@ -13,6 +13,7 @@ declare global {
       openExactAlarmSettings: () => void;
       reconcileReminders: (callbackId: string) => void;
       cancelReminders: () => void;
+      scheduleTestAlarm?: (delaySeconds: number, callbackId: string) => void;
       sendTestNotification: (callbackId: string) => void;
     };
     __notificationCallbacks?: Record<
@@ -263,6 +264,52 @@ export function sendAndroidTestNotification(): Promise<boolean> {
 
     try {
       window.AndroidNotification!.sendTestNotification(callbackId);
+    } catch {
+      clearTimeout(timeout);
+      if (window.__notificationCallbacks) {
+        delete window.__notificationCallbacks[callbackId];
+      }
+      resolve(false);
+    }
+  });
+}
+
+/**
+ * Schedules a real Android AlarmManager test alarm (default 30 seconds) to verify
+ * background delivery pipeline without waiting 24 hours for daily 09:00 alarm.
+ */
+export function scheduleAndroidTestAlarm(delaySeconds: number = 30): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!isAndroidNotificationAvailable() || typeof window.AndroidNotification?.scheduleTestAlarm !== 'function') {
+      resolve(false);
+      return;
+    }
+
+    const callbackId = 'notif_test_alarm_' + Math.random().toString(36).substring(2, 11);
+    if (!window.__notificationCallbacks) {
+      window.__notificationCallbacks = {};
+    }
+
+    const timeout = setTimeout(() => {
+      if (window.__notificationCallbacks && window.__notificationCallbacks[callbackId]) {
+        delete window.__notificationCallbacks[callbackId];
+        resolve(false);
+      }
+    }, 10000);
+
+    window.__notificationCallbacks[callbackId] = {
+      resolve: () => {
+        clearTimeout(timeout);
+        resolve(true);
+      },
+      reject: () => {
+        clearTimeout(timeout);
+        resolve(false);
+      },
+    };
+
+    try {
+      window.AndroidNotification.scheduleTestAlarm(delaySeconds, callbackId);
     } catch {
       clearTimeout(timeout);
       if (window.__notificationCallbacks) {

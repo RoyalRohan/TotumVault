@@ -27,6 +27,9 @@ class DocumentReminderReceiver : BroadcastReceiver() {
         const val CHANNEL_ID = "document_reminders"
         const val CHANNEL_NAME = "Document Reminders"
         const val ACTION_CHECK_REMINDERS = "com.royalrohan.veylock.CHECK_DOCUMENT_REMINDERS"
+        const val REQUEST_CODE_DAILY = 1001
+        const val REQUEST_CODE_TEST = 1002
+        const val NOTIFICATION_ID_TEST_ALARM = 9998
 
         fun createNotificationChannel(context: Context) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -40,6 +43,7 @@ class DocumentReminderReceiver : BroadcastReceiver() {
                         description = "TotumVault document renewal and expiry reminders"
                     }
                     nm.createNotificationChannel(channel)
+                    Log.d(TAG, "REMINDER: Notification channel '$CHANNEL_ID' created")
                 }
             }
         }
@@ -54,7 +58,7 @@ class DocumentReminderReceiver : BroadcastReceiver() {
             } else {
                 PendingIntent.FLAG_UPDATE_CURRENT
             }
-            val pendingIntent = PendingIntent.getBroadcast(context, 1001, intent, flags)
+            val pendingIntent = PendingIntent.getBroadcast(context, REQUEST_CODE_DAILY, intent, flags)
 
             // Calculate next 09:00 local time
             val cal = Calendar.getInstance().apply {
@@ -71,23 +75,54 @@ class DocumentReminderReceiver : BroadcastReceiver() {
             }
 
             val triggerAtMillis = cal.timeInMillis
+            val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).apply {
+                timeZone = TimeZone.getDefault()
+            }
+            val targetStr = sdf.format(Date(triggerAtMillis))
 
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    // Use inexact scheduling by default to respect Android battery and Doze policies.
+                    // Inexact scheduling by default to respect Android battery and Doze policies.
                     // 09:00 local time is the intended reminder time; inexact AlarmManager delivery
                     // may be delayed by Android power-management policies.
                     alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
                 } else {
                     alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
                 }
-                Log.d(TAG, "Document reminder alarm scheduled for ~09:00 local time (inexact)")
+                Log.d(TAG, "REMINDER: Daily alarm scheduled for $targetStr (${TimeZone.getDefault().id}, requestCode=$REQUEST_CODE_DAILY)")
             } catch (e: Exception) {
                 try {
                     alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                    Log.d(TAG, "REMINDER: Fallback alarm set for $targetStr")
                 } catch (fallbackErr: Exception) {
-                    Log.w(TAG, "Failed to schedule alarm: ${fallbackErr.message}")
+                    Log.w(TAG, "REMINDER: Failed to schedule alarm: ${fallbackErr.message}")
                 }
+            }
+        }
+
+        fun scheduleTestAlarm(context: Context, delaySeconds: Int = 30) {
+            val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as? AlarmManager ?: return
+            val intent = Intent(context, DocumentReminderReceiver::class.java).apply {
+                action = ACTION_CHECK_REMINDERS
+                putExtra("is_test_alarm", true)
+            }
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            } else {
+                PendingIntent.FLAG_UPDATE_CURRENT
+            }
+            val pendingIntent = PendingIntent.getBroadcast(context, REQUEST_CODE_TEST, intent, flags)
+            val triggerAtMillis = System.currentTimeMillis() + (delaySeconds * 1000L)
+
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                } else {
+                    alarmManager.set(AlarmManager.RTC_WAKEUP, triggerAtMillis, pendingIntent)
+                }
+                Log.d(TAG, "REMINDER: 30-second test alarm registered for +${delaySeconds}s (triggerAt: $triggerAtMillis, requestCode=$REQUEST_CODE_TEST)")
+            } catch (e: Exception) {
+                Log.w(TAG, "REMINDER: Failed to schedule test alarm: ${e.message}")
             }
         }
 
@@ -101,23 +136,139 @@ class DocumentReminderReceiver : BroadcastReceiver() {
             } else {
                 PendingIntent.FLAG_UPDATE_CURRENT
             }
-            val pendingIntent = PendingIntent.getBroadcast(context, 1001, intent, flags)
+            val pendingIntent = PendingIntent.getBroadcast(context, REQUEST_CODE_DAILY, intent, flags)
             alarmManager.cancel(pendingIntent)
-            Log.d(TAG, "Document reminder alarm cancelled")
+            Log.d(TAG, "REMINDER: Daily reminder alarm cancelled")
         }
 
-        private fun findDatabaseFile(context: Context): File? {
-            val candidatePaths = listOf(
-                File(context.filesDir, "vault.sqlite"),
-                File(context.filesDir, "com.royalrohan.veylock/vault.sqlite"),
-                File(context.noBackupFilesDir, "vault.sqlite"),
-                File(context.getDatabasePath("vault.sqlite").path),
-                File(context.applicationInfo.dataDir, "files/vault.sqlite")
-            )
-            return candidatePaths.firstOrNull { it.exists() }
+        private fun findVaultSqliteRecursive(dir: File, currentDepth: Int, maxDepth: Int): File? {
+            if (currentDepth > maxDepth || !dir.exists() || !dir.isDirectory) return null
+            val files = dir.listFiles() ?: return null
+            for (file in files) {
+                if (file.name == "cache" || file.name == "code_cache") continue
+                if (file.isFile && file.name == "vault.sqlite" && file.length() > 0) {
+                    return file
+                }
+                if (file.isDirectory) {
+                    val nested = findVaultSqliteRecursive(file, currentDepth + 1, maxDepth)
+                    if (nested != null) return nested
+                }
+            }
+            return null
+        }
+
+        fun findDatabaseFile(context: Context): File? {
+            val candidates = mutableListOf<File>()
+
+            // 1. Android Context dataDir (API 24+) - where Tauri v2 app_data_dir resolves
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                try {
+                    val dDir = context.dataDir
+                    candidates.add(File(dDir, "vault.sqlite"))
+                    candidates.add(File(dDir, "totumvault_data/vault.sqlite"))
+                    candidates.add(File(dDir, "TotumVault/vault.sqlite"))
+                    candidates.add(File(dDir, "com.royalrohan.veylock/vault.sqlite"))
+                } catch (_: Exception) {}
+            }
+
+            // 2. applicationInfo.dataDir
+            try {
+                val appDataDir = context.applicationInfo.dataDir
+                if (!appDataDir.isNullOrBlank()) {
+                    val base = File(appDataDir)
+                    candidates.add(File(base, "vault.sqlite"))
+                    candidates.add(File(base, "files/vault.sqlite"))
+                    candidates.add(File(base, "totumvault_data/vault.sqlite"))
+                    candidates.add(File(base, "databases/vault.sqlite"))
+                    candidates.add(File(base, "com.royalrohan.veylock/vault.sqlite"))
+                }
+            } catch (_: Exception) {}
+
+            // 3. Context filesDir & subdirectories
+            try {
+                candidates.add(File(context.filesDir, "vault.sqlite"))
+                candidates.add(File(context.filesDir, "com.royalrohan.veylock/vault.sqlite"))
+                candidates.add(File(context.filesDir, "totumvault_data/vault.sqlite"))
+            } catch (_: Exception) {}
+
+            // 4. noBackupFilesDir & standard database path
+            try {
+                candidates.add(File(context.noBackupFilesDir, "vault.sqlite"))
+                candidates.add(File(context.getDatabasePath("vault.sqlite").path))
+            } catch (_: Exception) {}
+
+            // Check candidate files in prioritized order
+            for (candidate in candidates) {
+                try {
+                    if (candidate.exists() && candidate.isFile && candidate.length() > 0) {
+                        Log.d(TAG, "REMINDER: Database located at candidate path: ${candidate.absolutePath} (size: ${candidate.length()} bytes)")
+                        return candidate
+                    }
+                } catch (_: Exception) {}
+            }
+
+            // 5. Fallback: Shallow recursive search of app's data directory
+            try {
+                val rootDir = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    context.dataDir
+                } else {
+                    val appDataDir = context.applicationInfo.dataDir
+                    if (!appDataDir.isNullOrBlank()) File(appDataDir) else context.filesDir.parentFile
+                }
+                if (rootDir != null && rootDir.exists() && rootDir.isDirectory) {
+                    val found = findVaultSqliteRecursive(rootDir, 0, 3)
+                    if (found != null) {
+                        Log.d(TAG, "REMINDER: Database discovered via directory scan: ${found.absolutePath} (size: ${found.length()} bytes)")
+                        return found
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "REMINDER: Directory scan exception: ${e.message}")
+            }
+
+            Log.w(TAG, "REMINDER: vault.sqlite not found in any standard paths or subdirectories")
+            return null
+        }
+
+        fun sendTestAlarmConfirmationNotification(context: Context) {
+            try {
+                createNotificationChannel(context)
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+                val launchIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
+                    flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    putExtra("route", "documents")
+                }
+                val piFlags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                } else {
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                }
+                val contentPendingIntent = if (launchIntent != null) {
+                    PendingIntent.getActivity(context, NOTIFICATION_ID_TEST_ALARM, launchIntent, piFlags)
+                } else null
+
+                val notif = NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setContentTitle("TotumVault")
+                    .setContentText("Scheduled background alarm verified: AlarmManager and Receiver are functional.")
+                    .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                    .setAutoCancel(true)
+                    .apply {
+                        if (contentPendingIntent != null) {
+                            setContentIntent(contentPendingIntent)
+                        }
+                    }
+                    .build()
+
+                nm.notify(NOTIFICATION_ID_TEST_ALARM, notif)
+                Log.d(TAG, "REMINDER: Dispatched test alarm confirmation notification (id: $NOTIFICATION_ID_TEST_ALARM)")
+            } catch (e: Exception) {
+                Log.w(TAG, "REMINDER: Failed to dispatch test alarm confirmation: ${e.message}")
+            }
         }
 
         fun checkAndDeliver(context: Context): Int {
+            Log.d(TAG, "REMINDER: checkAndDeliver invoked")
             createNotificationChannel(context)
 
             // Check notification permission on Android 13+ (API 33+)
@@ -127,35 +278,42 @@ class DocumentReminderReceiver : BroadcastReceiver() {
                     android.Manifest.permission.POST_NOTIFICATIONS
                 ) == PackageManager.PERMISSION_GRANTED
                 if (!hasPermission) {
-                    Log.d(TAG, "Notification permission not granted, skipping delivery")
+                    Log.d(TAG, "REMINDER: Notification permission not granted, skipping delivery")
                     return 0
                 }
             }
 
             val dbFile = findDatabaseFile(context)
             if (dbFile == null || !dbFile.exists()) {
-                Log.d(TAG, "vault.sqlite not found in standard paths, skipping delivery")
+                Log.d(TAG, "REMINDER: vault.sqlite not found, skipping delivery")
                 return 0
             }
 
             var deliveredCount = 0
             var db: SQLiteDatabase? = null
             try {
-                db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
+                // Open database with WRITE_AHEAD_LOGGING support to prevent locks against Rust WAL
+                val openFlags = SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.ENABLE_WRITE_AHEAD_LOGGING
+                db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, openFlags)
 
                 // Check if document reminders are enabled in vault_metadata
-                val metaCursor = db.rawQuery(
-                    "SELECT value FROM vault_metadata WHERE key = 'document_reminders_enabled'",
-                    null
-                )
                 var remindersGloballyEnabled = true
-                if (metaCursor.moveToFirst()) {
-                    val valStr = metaCursor.getString(0)
-                    remindersGloballyEnabled = valStr != "0"
+                try {
+                    val metaCursor = db.rawQuery(
+                        "SELECT value FROM vault_metadata WHERE key = 'document_reminders_enabled'",
+                        null
+                    )
+                    if (metaCursor.moveToFirst()) {
+                        val valStr = metaCursor.getString(0)
+                        remindersGloballyEnabled = valStr != "0"
+                    }
+                    metaCursor.close()
+                } catch (e: Exception) {
+                    Log.d(TAG, "REMINDER: vault_metadata query note: ${e.message}")
                 }
-                metaCursor.close()
 
                 if (!remindersGloballyEnabled) {
+                    Log.d(TAG, "REMINDER: Reminders globally disabled in vault_metadata, cancelling alarm")
                     cancelDailyAlarm(context)
                     return 0
                 }
@@ -173,10 +331,14 @@ class DocumentReminderReceiver : BroadcastReceiver() {
                     set(Calendar.MILLISECOND, 0)
                 }
 
+                Log.d(TAG, "REMINDER: Evaluating due documents for local date $todayStr")
+
                 val cursor = db.rawQuery(
                     "SELECT id, title, expiry_date, reminder_enabled, last_reminder_milestone, last_reminder_date FROM documents WHERE reminder_enabled = 1 AND expiry_date IS NOT NULL AND expiry_date != ''",
                     null
                 )
+
+                Log.d(TAG, "REMINDER: Found ${cursor.count} document(s) with reminder_enabled=1 and expiry_date set")
 
                 val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
 
@@ -206,7 +368,8 @@ class DocumentReminderReceiver : BroadcastReceiver() {
                     }
 
                     val diffMillis = expiryCal.timeInMillis - todayCal.timeInMillis
-                    val diffDays = (diffMillis / (1000L * 60 * 60 * 24)).toInt()
+                    // Use Math.round to handle DST transitions (e.g. 23 or 25 hour days) robustly
+                    val diffDays = Math.round(diffMillis.toDouble() / (1000.0 * 60.0 * 60.0 * 24.0)).toInt()
 
                     val milestone: Int? = when (diffDays) {
                         5 -> 5
@@ -218,6 +381,9 @@ class DocumentReminderReceiver : BroadcastReceiver() {
                         in Int.MIN_VALUE..-1 -> -1
                         else -> null
                     }
+
+                    val maskedDocId = if (docId.length > 8) docId.substring(0, 8) + "..." else docId
+                    Log.d(TAG, "REMINDER: docId=$maskedDocId diffDays=$diffDays milestone=$milestone lastMilestone=$lastMilestone lastDate=$lastDate")
 
                     if (milestone == null) continue
 
@@ -272,6 +438,7 @@ class DocumentReminderReceiver : BroadcastReceiver() {
 
                     nm?.notify(docId.hashCode(), notification)
                     deliveredCount++
+                    Log.d(TAG, "REMINDER: Notification dispatched for docId=$maskedDocId (milestone: $milestone)")
 
                     val updateStmt = db.compileStatement(
                         "UPDATE documents SET last_reminder_milestone = ?, last_reminder_date = ? WHERE id = ?"
@@ -285,16 +452,22 @@ class DocumentReminderReceiver : BroadcastReceiver() {
 
                 cursor.close()
             } catch (e: Exception) {
-                Log.w(TAG, "Error evaluating document reminders: ${e.message}")
+                Log.w(TAG, "REMINDER: Error evaluating document reminders: ${e.message}")
             } finally {
-                db?.close()
+                try {
+                    db?.close()
+                } catch (_: Exception) {}
             }
 
+            Log.d(TAG, "REMINDER: checkAndDeliver completed. Delivered count: $deliveredCount")
             return deliveredCount
         }
     }
 
     override fun onReceive(context: Context, intent: Intent) {
+        val isTestAlarm = intent.getBooleanExtra("is_test_alarm", false)
+        Log.d(TAG, "REMINDER: onReceive triggered. action=${intent.action}, is_test_alarm=$isTestAlarm")
+
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED,
@@ -302,9 +475,16 @@ class DocumentReminderReceiver : BroadcastReceiver() {
             Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_DATE_CHANGED,
             ACTION_CHECK_REMINDERS -> {
-                Log.d(TAG, "DocumentReminderReceiver triggered with action: ${intent.action}")
-                checkAndDeliver(context)
+                val deliveredCount = checkAndDeliver(context)
+                if (isTestAlarm && deliveredCount == 0) {
+                    // Test alarm verification: if no real documents are currently due, dispatch
+                    // confirmation so user can immediately verify the AlarmManager -> Receiver pipeline.
+                    sendTestAlarmConfirmationNotification(context)
+                }
                 scheduleDailyAlarm(context)
+            }
+            else -> {
+                Log.d(TAG, "REMINDER: Unhandled action: ${intent.action}")
             }
         }
     }

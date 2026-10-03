@@ -4,9 +4,21 @@ import { useVault } from '../context/VaultContext';
 import logoImg from '../assets/logo.png';
 
 export const Header: React.FC = () => {
-  const { searchQuery, setSearchQuery, openEditor, setIsGeneratorOpen, setIsMobileNavOpen } = useVault();
+  const {
+    activeCategory,
+    searchQuery,
+    setSearchQuery,
+    openEditor,
+    setIsGeneratorOpen,
+    setIsMobileNavOpen,
+  } = useVault();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
+
+  // Dedicated sections (Documents, Security Health) provide their own self-contained headers/toolbars
+  if (activeCategory === 'documents' || activeCategory === 'health') {
+    return null;
+  }
 
   const handleKeyDown = (
     e: React.KeyboardEvent<HTMLInputElement>,
