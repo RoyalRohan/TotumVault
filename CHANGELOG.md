@@ -4,6 +4,32 @@ All notable changes to TotumVault are documented here.
 
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] — 2026-10-03
+
+### Added
+
+- **Real Offline Android Document Expiry Notification Pipeline**:
+  - Full native background scheduling via Android `AlarmManager` and `DocumentReminderReceiver` with persistent broadcast receiver filters (`BOOT_COMPLETED`, `MY_PACKAGE_REPLACED`, `TIMEZONE_CHANGED`, `TIME_SET`, `DATE_CHANGED`).
+  - Resilient multi-path SQLite database resolution discovering `vault.sqlite` across `context.dataDir` (Tauri v2 Android app data directory), `applicationInfo.dataDir`, subdirectories, and shallow recursive fallback.
+  - Concurrent SQLite WAL mode support (`OPEN_READWRITE or ENABLE_WRITE_AHEAD_LOGGING`) eliminating lock contention against the Rust backend.
+  - DST-safe day-difference calculation (`Math.round`) ensuring exact milestone countdown delivery (5, 4, 3, 2, 1 days before, expiry day, and post-expiry single alert).
+  - End-to-end 30-second scheduled test alarm (`Test 30s Alarm`) in Document Settings to verify background wakeups and receiver delivery on physical devices and emulators.
+  - Contextual in-app notification permission explanation modal triggered immediately upon setting document expiry or enabling reminders.
+  - Safe technical diagnostic logging (`REMINDER:` prefix) with zero sensitive data or credential leakage.
+
+- **Unified Single Documents Search & Navigation**:
+  - Context-aware global header unmounting in Documents view, establishing a single authoritative search and filter toolbar.
+  - Keyboard shortcut navigation (`Ctrl+K` / `⌘K` to focus, `Escape` to clear/blur) and mobile drawer menu integration.
+
+- **Collision-Aware Dual Calendar System (BS + AD)**:
+  - Responsive Bikram Sambat (BS) and Gregorian (AD) calendar date pickers with zero horizontal overflow across 320px–1920px viewports.
+  - Full touch-target compliance guaranteeing 44px–48px minimum hit areas on desktop and mobile.
+
+### Fixed
+
+- **Android Scheduled Notification Delivery**: Resolved runtime failure where scheduled alarms could not locate `vault.sqlite` in `context.dataDir`.
+- **Documents Duplicate Search Input**: Resolved layout defect where global vault search and document library search rendered concurrently.
+
 ## [1.3.4] — 2026-09-29
 
 ### Added
