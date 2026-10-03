@@ -34,11 +34,8 @@ export const Header: React.FC = () => {
 
   return (
     <header className="border-b border-theme-border bg-theme-surface/80 backdrop-blur-xl shrink-0 select-none pt-safe text-theme-text transition-colors">
-      {/* ===================== MOBILE VIEW (< md) ===================== */}
       <div className="flex flex-col md:hidden">
-        {/* Tier 1: Top Navigation Bar ([Menu] --- [TotumVault Logo] --- [Generator] [+]) */}
         <div className="h-13 px-3.5 flex items-center justify-between relative">
-          {/* Left: Hamburger Drawer Button */}
           <button
             onClick={() => setIsMobileNavOpen(true)}
             className="w-10 h-10 rounded-xl bg-theme-surface hover:bg-theme-hover border border-theme-border text-theme-text-muted hover:text-theme-text transition-all cursor-pointer shadow-sm flex items-center justify-center active:scale-95 shrink-0"
@@ -48,7 +45,6 @@ export const Header: React.FC = () => {
             <Menu className="w-5 h-5 text-theme-text" />
           </button>
 
-          {/* Center: Brand Logo & Title (Proportional & Mathematically Centered) */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-2 select-none pointer-events-none">
             <img
               src={logoImg}
@@ -58,7 +54,6 @@ export const Header: React.FC = () => {
             <span className="font-bold text-base tracking-tight text-theme-text">TotumVault</span>
           </div>
 
-          {/* Right: Quick Action Buttons (Uniform Sizing, Touch-Friendly) */}
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setIsGeneratorOpen(true)}
@@ -80,7 +75,6 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* Tier 2: Search Input with Full Width and Breathing Room */}
         <div className="px-3.5 pb-2.5 pt-0.5">
           <div className="relative w-full">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-theme-text-muted pointer-events-none" />
@@ -111,9 +105,7 @@ export const Header: React.FC = () => {
         </div>
       </div>
 
-      {/* ===================== DESKTOP VIEW (>= md) ===================== */}
       <div className="hidden md:flex h-14 px-6 items-center justify-between gap-4">
-        {/* Search Input with Clear Button */}
         <div className="relative flex-1 max-w-md lg:w-84 min-w-0">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-theme-text-muted pointer-events-none" />
           <input
@@ -146,7 +138,6 @@ export const Header: React.FC = () => {
           )}
         </div>
 
-        {/* Quick Action Buttons with Text Labels */}
         <div className="flex items-center gap-2.5 shrink-0">
           <button
             onClick={() => setIsGeneratorOpen(true)}

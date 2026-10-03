@@ -29,7 +29,6 @@ export const SecuritySettings: React.FC = () => {
     disableBiometric,
   } = useVault();
 
-  // Password Change State
   const [oldPass, setOldPass] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
@@ -38,7 +37,6 @@ export const SecuritySettings: React.FC = () => {
   const [showOldPass, setShowOldPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
 
-  // Biometrics Enrollment State
   const [isEnrollingBio, setIsEnrollingBio] = useState(false);
   const [bioMasterPassword, setBioMasterPassword] = useState('');
   const [bioEnrollError, setBioEnrollError] = useState('');
@@ -89,7 +87,6 @@ export const SecuritySettings: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Subsection 1: Vault Security */}
       <div className="space-y-4">
         <div className="flex items-center gap-1.5">
           <Lock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
@@ -98,7 +95,6 @@ export const SecuritySettings: React.FC = () => {
           </h4>
         </div>
 
-        {/* Auto-Lock Timer */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-800 dark:text-theme-text">
@@ -129,7 +125,6 @@ export const SecuritySettings: React.FC = () => {
           </div>
         </div>
 
-        {/* Change Master Password */}
         <form onSubmit={handleChangePassword} className="space-y-3 pt-3 border-t border-slate-200/80 dark:border-theme-border">
           <div className="flex items-center gap-1.5">
             <KeyRound className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
@@ -196,7 +191,6 @@ export const SecuritySettings: React.FC = () => {
             </div>
           </div>
 
-          {/* New Password Strength Indicator */}
           {newPass && (
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-theme-surface/70 border border-slate-200/80 dark:border-theme-border space-y-2 animate-scale-up">
               <div className="flex items-center justify-between text-xs">
@@ -239,7 +233,6 @@ export const SecuritySettings: React.FC = () => {
         </form>
       </div>
 
-      {/* Subsection 2: Biometric Unlock */}
       <div className="space-y-3 pt-5 border-t border-slate-200/80 dark:border-theme-border">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -336,7 +329,6 @@ export const SecuritySettings: React.FC = () => {
         )}
       </div>
 
-      {/* Subsection 3: Clipboard Security */}
       <div className="space-y-3 pt-5 border-t border-slate-200/80 dark:border-theme-border">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -400,7 +392,6 @@ export const SecuritySettings: React.FC = () => {
         </div>
       </div>
 
-      {/* Subsection 4: Screen Protection */}
       <div className="space-y-3 pt-5 border-t border-slate-200/80 dark:border-theme-border">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">

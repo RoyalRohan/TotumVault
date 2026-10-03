@@ -77,7 +77,6 @@ interface VaultContextType {
   isMobileNavOpen: boolean;
   setIsMobileNavOpen: (open: boolean) => void;
 
-  // Actions
   refreshStatus: () => Promise<void>;
   createVault: (password: string) => Promise<void>;
   unlockVault: (password: string) => Promise<boolean>;
@@ -92,7 +91,6 @@ interface VaultContextType {
   closeEditor: () => void;
   initialEditorCategory: CategoryType | null;
 
-  // Login Folders
   folders: LoginFolder[];
   selectedFolderId: string | null;
   setSelectedFolderId: (id: string | null) => void;
@@ -105,7 +103,6 @@ interface VaultContextType {
   reorderFolders: (orderedIds: string[]) => Promise<void>;
   reorderEntries: (orderedIds: string[]) => Promise<void>;
 
-  // Authoritative Folder Management State & Dialog Handlers
   deletingFolder: LoginFolder | null;
   promptDeleteFolder: (folder: LoginFolder) => void;
   cancelDeleteFolder: () => void;
@@ -115,7 +112,6 @@ interface VaultContextType {
   cancelRenameFolder: () => void;
   confirmRenameFolder: (newName: string) => Promise<void>;
 
-  // Biometrics
   isBiometricSupported: boolean;
   isBiometricEnabled: boolean;
   biometricFailedAttempts: number;
@@ -124,11 +120,9 @@ interface VaultContextType {
   unlockWithBiometric: () => Promise<boolean>;
   disableBiometric: () => Promise<void>;
 
-  // Screen Protection
   screenProtection: ScreenProtectionStatus | null;
   setScreenProtection: (enabled: boolean) => Promise<void>;
 
-  // Auto Updates
   appVersion: AppVersionInfo | null;
   updateInfo: UpdateInfo | null;
   isCheckingUpdate: boolean;
@@ -137,17 +131,14 @@ interface VaultContextType {
   skipUpdateVersion: (version: string) => void;
   lastUpdateChecked: string;
 
-  // Clipboard Settings & Actions
   clipboardClearSeconds: number;
   setClipboardClearSeconds: (secs: number) => void;
   clearClipboard: (notify?: boolean, force?: boolean) => Promise<boolean>;
 
-  // Privacy Screen Shield Test
   isPrivacyShieldTest: boolean;
   triggerPrivacyShieldTest: () => void;
   dismissPrivacyShieldTest: () => void;
 
-  // Document Vault Scanner State & Actions
   isScannerOpen: boolean;
   setIsScannerOpen: (open: boolean) => void;
   scannerInitialMode: 'camera' | 'upload';
@@ -170,7 +161,6 @@ interface VaultContextType {
   importCsv: (path: string) => Promise<number>;
   showToast: (message: string, type?: 'info' | 'success' | 'warning' | 'error') => void;
 
-  // Document Vault Actions
   refreshDocuments: () => Promise<void>;
   saveDocument: (doc: SaveDocumentInput) => Promise<string>;
   addDocumentPage: (documentId: string, page: SavePageInput) => Promise<string>;
@@ -181,24 +171,20 @@ interface VaultContextType {
   getDocumentDetail: (id: string) => Promise<DocumentDetail>;
   getDocumentPageData: (pageId: string) => Promise<string>;
 
-  // Document Renewal Reminders
   documentRemindersEnabled: boolean;
   setDocumentRemindersEnabled: (enabled: boolean) => Promise<void>;
   syncDocumentReminders: () => Promise<number>;
 
-  // Air-Gap Mode
   airGapMode: boolean;
   airGapStatus: NetworkStatus | null;
   toggleAirGapMode: () => Promise<void>;
   testAirGapBlocking: () => Promise<string>;
 
-  // Calendar & Localization Preferences
   calendarPreference: CalendarMode;
   setCalendarPreference: (mode: CalendarMode) => void;
   numeralPreference: NumeralSystem;
   setNumeralPreference: (pref: NumeralSystem) => void;
 
-  // Safe Import Actions
   analyzeImport: (srcPathOrContent: string, password?: string) => Promise<ImportPreview>;
   commitImport: (options: ImportCommitOptions) => Promise<ImportResultSummary>;
 }
@@ -220,18 +206,15 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [activeCategory, setActiveCategory] = useState<CategoryType>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // Clear search query whenever the active category / section changes
   useEffect(() => {
     setSearchQuery('');
   }, [activeCategory]);
 
-  // Login Folders State
   const [folders, setFolders] = useState<LoginFolder[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<LoginFolder | null>(null);
   const [renamingFolder, setRenamingFolder] = useState<LoginFolder | null>(null);
 
-  // Biometrics State
   const [isBiometricSupported, setIsBiometricSupported] = useState<boolean>(() => {
     if (typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent)) return true;
     if (typeof localStorage !== 'undefined' && localStorage.getItem('totumvault_bio_token') !== null) return true;
@@ -241,7 +224,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [biometricFailedAttempts, setBiometricFailedAttempts] = useState<number>(0);
   const isBiometricLockedOut = biometricFailedAttempts >= 3;
 
-  // Screen Protection State
   const [screenProtection, setScreenProtectionState] = useState<ScreenProtectionStatus>(() => {
     const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('totumvault_screen_protection') : null;
     const active = saved !== 'false';
@@ -265,7 +247,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setIsPrivacyShieldTest(false);
   }, []);
 
-  // Auto Updates State
   const [appVersion, setAppVersion] = useState<AppVersionInfo | null>(null);
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
@@ -284,7 +265,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setUpdateInfo(null);
   }, []);
 
-  // Smart Clipboard Settings & State (default: 30s)
   const [clipboardClearSeconds, setClipboardClearSecondsState] = useState<number>(() => {
     const saved = localStorage.getItem('totumvault_clipboard_clear_seconds');
     return saved !== null ? parseInt(saved, 10) : 30;
@@ -297,7 +277,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  // Document Renewal Reminders State
   const [documentRemindersEnabled, setDocumentRemindersEnabledState] = useState<boolean>(true);
 
   useEffect(() => {
@@ -435,7 +414,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       const success = await invoke<boolean>('unlock_vault', { masterPassword: password });
       if (success) {
-        setBiometricFailedAttempts(0); // Reset biometric attempts
+        setBiometricFailedAttempts(0);
         showToast('Vault unlocked', 'success');
         await refreshStatus();
         return true;
@@ -455,44 +434,33 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const clearClipboard = useCallback(async (notify = false, force = false): Promise<boolean> => {
     let success = false;
 
-    // 1. Primary implementation: Native Tauri clipboard manager with HMAC equality verification
+    // Primary implementation: Native Tauri clipboard manager with HMAC equality verification
     try {
       const cleared = await invoke<boolean>('clear_clipboard_now', { force });
       if (cleared) {
         success = true;
       }
     } catch {
-      // Fallback outside Tauri
       try {
         if (force) {
           await tauriClear();
           success = true;
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
-    // 2. Android native clear bridge
     if (typeof window !== 'undefined' && (window as any).AndroidClipboard?.clearPrimaryClip && (force || success)) {
       try {
         (window as any).AndroidClipboard.clearPrimaryClip();
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
-    // 3. Web API fallback
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText && (force || success)) {
       try {
         await navigator.clipboard.writeText('');
         success = true;
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
-
-    // 4. Fallback DOM execCommand with empty string if forced
 
     if (force && !success) {
       try {
@@ -511,9 +479,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (ok) {
           success = true;
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
     if (success && notify) {
@@ -546,18 +512,15 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       let copied = false;
 
-      // 0. Android native bridge with EXTRA_IS_SENSITIVE flag (Android 13+)
+      // Android native bridge with EXTRA_IS_SENSITIVE flag (Android 13+)
       if (typeof window !== 'undefined' && (window as any).AndroidClipboard?.copySecure) {
         try {
           (window as any).AndroidClipboard.copySecure(text, 'TotumVault');
           copied = true;
-        } catch {
-          // Fall through to Tauri/Rust pipeline
-        }
+        } catch {}
       }
 
-      // 1. Primary implementation: Native Tauri secure clipboard pipeline
-      // Writes text and registers cryptographic HMAC session in native Rust
+      // Native Tauri secure clipboard pipeline registers cryptographic HMAC session in native Rust
       try {
         await invoke('copy_to_clipboard_secure', {
           text,
@@ -565,8 +528,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
         copied = true;
       } catch {
-
-        // Fallback: Official Tauri plugin writeText then track session
         try {
           await tauriWriteText(text);
           copied = true;
@@ -575,25 +536,17 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               text,
               timeoutSecs: clipboardClearSeconds,
             });
-          } catch {
-            // Outside Tauri
-          }
-        } catch {
-          // Web fallback below
-        }
+          } catch {}
+        } catch {}
       }
 
-      // 2. Web Clipboard API fallback
       if (!copied && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         try {
           await navigator.clipboard.writeText(text);
           copied = true;
-        } catch {
-          // Fallback to execCommand below
-        }
+        } catch {}
       }
 
-      // 3. Fallback DOM execCommand
       if (!copied) {
         const textarea = document.createElement('textarea');
         textarea.value = text;
@@ -616,7 +569,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [showToast, clipboardClearSeconds]);
 
-  // Folder Operations
   const createFolder = useCallback(async (name: string, parentId?: string | null): Promise<LoginFolder | null> => {
     try {
       const f = await invoke<LoginFolder>('create_login_folder', { name: name.trim(), parentId: parentId || null });
@@ -769,7 +721,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     [entries, refreshStatus, showToast]
   );
 
-  // Biometrics
   const setupBiometric = useCallback(async (masterPassword: string): Promise<boolean> => {
     try {
       const token = await invoke<string>('setup_biometric_unlock', { masterPassword });
@@ -913,7 +864,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [showToast]);
 
-  // Screen Protection
   const setScreenProtection = useCallback(async (enabled: boolean) => {
     try {
       const st = await invoke<ScreenProtectionStatus>('set_screen_protection', { enabled });
@@ -929,7 +879,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [showToast]);
 
-  // Air-Gap Mode State & Handlers
   const [airGapMode, setAirGapModeState] = useState<boolean>(() => {
     return localStorage.getItem('totumvault_air_gap_mode') === 'true';
   });
@@ -986,7 +935,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
-  // Calendar & Localization Preferences
   const [calendarPreference, setCalendarPreferenceState] = useState<CalendarMode>(() => getStoredCalendarPreference());
   const [numeralPreference, setNumeralPreferenceState] = useState<NumeralSystem>(() => getStoredNumeralPreference());
 
@@ -1000,7 +948,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setStoredNumeralPreference(num);
   }, []);
 
-  // Auto Updates
   const checkForUpdates = useCallback(async (manual = false): Promise<UpdateInfo | null> => {
     if (airGapMode) {
       if (manual) {
@@ -1058,12 +1005,11 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setUpdateInfo(null);
   }, []);
 
-  // Check hardware biometrics & restore screen protection & startup updates
   useEffect(() => {
     const checkBiometricHardwareAvailability = async () => {
       let isAvailable = false;
 
-      // 1. Android native Keystore / BiometricManager bridge
+      // Android native Keystore / BiometricManager bridge
       if (isAndroidBiometricsAvailable()) {
         const hwStatus = checkAndroidBiometricHardware();
         if (hwStatus === 'SUCCESS') {
@@ -1076,17 +1022,13 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           isAvailable = true;
         }
       } else {
-        // 2. Query native backend capability on desktop / fallback
         try {
           const capability = await invoke<BiometricCapability>('check_biometric_capability');
           if (capability?.supported) {
             isAvailable = true;
           }
-        } catch {
-          // Fallback
-        }
+        } catch {}
 
-        // 3. Platform authenticator availability
         if (
           !isAvailable &&
           typeof window !== 'undefined' &&
@@ -1098,9 +1040,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             if (webAuthnAvailable) {
               isAvailable = true;
             }
-          } catch {
-            // ignore
-          }
+          } catch {}
         }
       }
 
@@ -1124,7 +1064,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [checkForUpdates]);
 
-  // Automatic biometric prompt on launch/resume when vault is locked and biometrics enabled
   const autoBioPromptTriggeredRef = useRef<boolean>(false);
   useEffect(() => {
     if (
@@ -1279,7 +1218,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [showToast, refreshStatus]);
 
-  // Document Vault Actions
   const saveDocument = useCallback(async (doc: SaveDocumentInput): Promise<string> => {
     try {
       const docId = await invoke<string>('save_document', { document: doc });
@@ -1362,7 +1300,6 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return await invoke<string>('get_document_page_data', { pageId });
   }, []);
 
-  // Safe Import Actions
   const analyzeImport = useCallback(async (srcPathOrContent: string, password?: string): Promise<ImportPreview> => {
     try {
       return await invoke<ImportPreview>('analyze_import', {
@@ -1387,12 +1324,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [showToast, refreshStatus]);
 
-  // Initial Sync
   useEffect(() => {
     refreshStatus();
   }, [refreshStatus]);
 
-  // Safe category selector that deselects entry if it does not belong to new category
   const handleSetActiveCategory = useCallback((cat: CategoryType) => {
     setActiveCategory(cat);
     setIsMobileNavOpen(false);
@@ -1457,16 +1392,13 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             setSelectedDocumentId(null);
             setEditingEntry(null);
           }
-        } catch {
-          // ignore transient poll error
-        }
+        } catch {}
       }
     }, 5000);
 
     return () => clearInterval(interval);
   }, [status.unlocked, status.auto_lock_minutes, lockVault]);
 
-  // Keyboard Shortcuts Setup (Ctrl/Cmd + K, Ctrl/Cmd + N, Ctrl/Cmd + L, Ctrl/Cmd + G)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {

@@ -5,7 +5,6 @@ import { SettingsCategory, SETTINGS_CATEGORIES } from './types';
 import { SettingsSidebar } from './SettingsSidebar';
 import { SettingsMobileNav } from './SettingsMobileNav';
 
-// Category Components
 import { GeneralSettings } from './categories/GeneralSettings';
 import { AppearanceSettings } from './categories/AppearanceSettings';
 import { SecuritySettings } from './categories/SecuritySettings';
@@ -60,18 +59,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md select-none animate-in fade-in duration-150">
       <div className="w-full max-w-4xl h-[92vh] sm:h-[84vh] max-h-[700px] glass-panel rounded-2xl shadow-2xl border border-slate-200/90 dark:border-theme-border flex overflow-hidden text-slate-900 dark:text-theme-text bg-white dark:bg-theme-bg">
-        
-        {/* DESKTOP MASTER-DETAIL VIEW (Hidden on Mobile) */}
         <div className="hidden md:flex w-full h-full">
-          {/* Left Master Navigation Sidebar */}
           <SettingsSidebar
             activeCategory={activeCategory}
             onSelectCategory={setActiveCategory}
           />
 
-          {/* Right Detail Content View */}
           <div className="flex-1 flex flex-col h-full min-w-0 bg-white dark:bg-theme-surface/40">
-            {/* Desktop Top Header Bar */}
             <div className="px-6 py-4 border-b border-slate-200/80 dark:border-theme-border flex items-center justify-between shrink-0">
               <div className="min-w-0 pr-3">
                 <h2 className="text-base font-bold text-slate-900 dark:text-theme-text leading-tight truncate">
@@ -89,14 +83,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
 
-            {/* Scrollable Content Body */}
             <div className="flex-1 overflow-y-auto px-6 py-5">
               {renderActiveCategoryContent()}
             </div>
           </div>
         </div>
 
-        {/* MOBILE VIEW (Visible only below md breakpoint) */}
         <div className="flex md:hidden w-full h-full flex-col">
           {mobileView === 'list' ? (
             <SettingsMobileNav
@@ -105,7 +97,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             />
           ) : (
             <div className="flex-1 flex flex-col h-full min-w-0">
-              {/* Mobile Detail Top Navigation Bar */}
               <div className="px-4 py-3.5 border-b border-slate-200/80 dark:border-theme-border flex items-center justify-between shrink-0 bg-slate-50/70 dark:bg-theme-bg/50">
                 <button
                   type="button"
@@ -130,7 +121,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
               </div>
 
-              {/* Mobile Scrollable Detail Body */}
               <div className="flex-1 overflow-y-auto p-4">
                 {renderActiveCategoryContent()}
               </div>

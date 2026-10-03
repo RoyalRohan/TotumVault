@@ -35,7 +35,6 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
 
   return (
     <aside className="w-56 sm:w-60 border-r border-slate-200/80 dark:border-theme-border flex flex-col justify-between bg-slate-50/60 dark:bg-theme-bg/40 shrink-0 select-none">
-      {/* Sidebar Header */}
       <div className="p-4 border-b border-slate-200/80 dark:border-theme-border">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center p-0.5 border border-slate-200 dark:border-theme-border bg-white dark:bg-theme-surface shrink-0 shadow-xs">
@@ -47,7 +46,6 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
         </div>
       </div>
 
-      {/* Categories Navigation */}
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto" aria-label="Preferences Categories">
         {SETTINGS_CATEGORIES.map((cat) => {
           const Icon = CATEGORY_ICONS[cat.id];
@@ -75,7 +73,6 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
         })}
       </nav>
 
-      {/* Sidebar Footer */}
       <div className="p-3 border-t border-slate-200/80 dark:border-theme-border text-[11px] text-slate-500 dark:text-theme-text-muted flex items-center justify-between font-mono">
         <span>{currentVersion}</span>
         <span className="text-[10px] text-slate-400">Offline Vault</span>

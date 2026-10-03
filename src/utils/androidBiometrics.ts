@@ -111,9 +111,7 @@ export function androidClearEnrolledKey(): void {
   if (isAndroidBiometricsAvailable()) {
     try {
       window.AndroidBiometrics!.clearEnrolledKey();
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 }
 

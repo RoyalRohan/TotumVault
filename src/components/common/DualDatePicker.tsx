@@ -301,21 +301,16 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         const converted = adToBs(adViewYear, adViewMonth, 15);
         setBsViewYear(converted.year);
         setBsViewMonth(converted.month);
-      } catch {
-        // keep existing
-      }
+      } catch {}
     } else {
       try {
         const converted = bsToAd(bsViewYear, bsViewMonth, 15);
         setAdViewYear(converted.year);
         setAdViewMonth(converted.month);
-      } catch {
-        // keep existing
-      }
+      } catch {}
     }
   };
 
-  // AD Navigation
   const prevAdMonth = () => {
     if (adViewMonth === 1) {
       setAdViewYear((y) => y - 1);
@@ -334,7 +329,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
     }
   };
 
-  // BS Navigation
   const prevBsMonth = () => {
     if (bsViewMonth === 1) {
       if (bsViewYear > START_BS_YEAR) {
@@ -357,13 +351,11 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
     }
   };
 
-  // Select AD date
   const handleSelectAdDate = (day: number) => {
     const formatted = `${adViewYear}-${adViewMonth.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
     onChange(formatted);
   };
 
-  // Select BS date
   const handleSelectBsDate = (day: number) => {
     try {
       const ad = bsToAd(bsViewYear, bsViewMonth, day);
@@ -374,7 +366,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
     }
   };
 
-  // Select Today (local device date only)
   const handleSelectToday = () => {
     const formatted = `${todayAdYear}-${todayAdMonth.toString().padStart(2, "0")}-${todayAdDay.toString().padStart(2, "0")}`;
     onChange(formatted);
@@ -384,12 +375,10 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
     setBsViewMonth(todayBs.month);
   };
 
-  // Clear date
   const handleClear = () => {
     onChange("");
   };
 
-  // Grid calculations for AD
   const adDaysGrid = useMemo(() => {
     const firstDay = new Date(Date.UTC(adViewYear, adViewMonth - 1, 1)).getUTCDay();
     const daysInMonth = new Date(Date.UTC(adViewYear, adViewMonth, 0)).getUTCDate();
@@ -404,7 +393,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
       ariaLabel: string;
     }> = [];
 
-    // Prev month padding
     for (let i = firstDay - 1; i >= 0; i--) {
       days.push({
         day: prevDaysInMonth - i,
@@ -415,15 +403,12 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
       });
     }
 
-    // Current month days
     for (let d = 1; d <= daysInMonth; d++) {
       let bsSubDay: number | undefined;
       try {
         const bs = adToBs(adViewYear, adViewMonth, d);
         bsSubDay = bs.day;
-      } catch {
-        // ignore out of range
-      }
+      } catch {}
 
       const isSelected = Boolean(
         selectedInfo &&
@@ -450,7 +435,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
       });
     }
 
-    // Next month padding to fill complete weeks
     const remaining = (7 - (days.length % 7)) % 7;
     for (let i = 1; i <= remaining; i++) {
       days.push({
@@ -516,15 +500,12 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
       });
     }
 
-    // Current month days
     for (let d = 1; d <= daysInMonth; d++) {
       let adSubDay: number | undefined;
       try {
         const ad = bsToAd(bsViewYear, bsViewMonth, d);
         adSubDay = ad.day;
-      } catch {
-        // ignore
-      }
+      } catch {}
 
       const isSelected = Boolean(
         selectedInfo &&
@@ -551,7 +532,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
       });
     }
 
-    // Next month padding to fill complete weeks
     const remaining = (7 - (days.length % 7)) % 7;
     for (let i = 1; i <= remaining; i++) {
       days.push({
@@ -566,7 +546,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
     return days;
   }, [bsViewYear, bsViewMonth, selectedInfo, todayBs]);
 
-  // Subtitle equivalent range info
   const adEquivalentSubtitle = useMemo(() => {
     try {
       const adStart = bsToAd(bsViewYear, bsViewMonth, 1);
@@ -602,9 +581,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
   // Shared Calendar Body Component
   const renderCalendarContent = (isMobileSheet: boolean = false) => (
     <div className={`w-full max-w-full min-w-0 flex flex-col select-none ${isMobileSheet ? "flex-1 min-h-0" : ""}`}>
-      {/* 1. PINNED HEADER: Title + Close & Segmented Mode Switcher */}
       <div data-calendar-header className="shrink-0 pb-1.5 border-b border-slate-200/80 dark:border-theme-border flex flex-col gap-1.5">
-        {/* Row 1: Title & Close Button */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 min-w-0">
             <CalendarIcon className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0 stroke-[2]" />
@@ -625,7 +602,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
           </button>
         </div>
 
-        {/* Row 2: Full-width Segmented Mode Tabs (AD / BS) */}
         <div data-calendar-tabs className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-theme-bg/80 rounded-xl border border-slate-200/80 dark:border-theme-border w-full gap-1">
           <button
             type="button"
@@ -654,9 +630,7 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         </div>
       </div>
 
-      {/* 2. CALENDAR CORE: Month/Year Nav + Weekday Names + Day Grid + Selected Info */}
       <div className={`py-1 space-y-1 ${isMobileSheet ? "flex-1 min-h-0 overflow-y-auto" : "shrink-0"}`}>
-        {/* Month / Year Navigation */}
         <div data-calendar-nav className="flex items-center justify-between gap-1 w-full shrink-0">
           <button
             type="button"
@@ -668,7 +642,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
             <ChevronLeft className="w-5 h-5 stroke-[2.5]" />
           </button>
 
-          {/* Flexible Month & Year Selectors */}
           <div className="flex items-center justify-center gap-1.5 min-w-0 flex-1 px-0.5">
             {activeTab === "ad" ? (
               <>
@@ -747,19 +720,16 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
           </button>
         </div>
 
-        {/* Subtitle / Equivalent Range */}
         <div className="text-center text-[11px] font-medium text-purple-600 dark:text-purple-400 py-0.5 shrink-0 truncate">
           {activeTab === "ad" ? bsEquivalentSubtitle : adEquivalentSubtitle}
         </div>
 
-        {/* Weekday Names Header */}
         <div data-calendar-weekdays className="grid grid-cols-7 gap-0.5 sm:gap-1 text-center text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted py-0.5 border-b border-slate-200/80 dark:border-theme-border w-full min-w-0 shrink-0">
           {activeTab === "ad"
             ? WEEKDAY_NAMES_SHORT_EN.map((d) => <span key={d} className="truncate">{d}</span>)
             : WEEKDAY_NAMES_SHORT_NE.map((d) => <span key={d} className="truncate">{d}</span>)}
         </div>
 
-        {/* Calendar Day Grid (True responsive 7-column layout with min-w-0 and >=44px touch targets) */}
         <div
           data-calendar-grid
           className="grid grid-cols-7 gap-0.5 sm:gap-1 text-xs w-full min-w-0 py-1 shrink-0"
@@ -816,7 +786,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
           })}
         </div>
 
-        {/* Selected Date Summary Line */}
         {selectedInfo && (
           <div className="py-1 px-2.5 rounded-lg bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200/70 dark:border-purple-500/20 flex items-center justify-between text-xs w-full min-w-0 shrink-0">
             <span className="text-slate-500 dark:text-theme-text-muted text-[10px] font-medium shrink-0">Selected:</span>
@@ -827,7 +796,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         )}
       </div>
 
-      {/* 3. PINNED FOOTER: Action Bar (Today / Clear / Done) */}
       <div data-calendar-footer className="shrink-0 pt-1.5 border-t border-slate-200/80 dark:border-theme-border w-full min-w-0">
         <div className="grid grid-cols-3 gap-1.5 sm:gap-2 w-full min-w-0" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
           <button
@@ -885,7 +853,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         </label>
       )}
 
-      {/* Trigger Button */}
       <div
         onClick={handleOpen}
         role="combobox"
@@ -942,7 +909,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
         </div>
       </div>
 
-      {/* Portaled Calendar Popup / Sheet */}
       {isOpen &&
         typeof document !== "undefined" &&
         createPortal(
@@ -960,14 +926,12 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
               }}
               className="fixed inset-0 z-[70] flex flex-col justify-end bg-black/65 backdrop-blur-xs select-none"
             >
-              {/* Dismissible Backdrop */}
               <div
                 className="fixed inset-0 -z-10"
                 onClick={handleClose}
                 aria-hidden="true"
               />
 
-              {/* Full-width Bottom Sheet Container */}
               <div
                 ref={popoverRef}
                 style={{
@@ -982,7 +946,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
                 aria-label={sheetTitle}
                 onClick={(e) => e.stopPropagation()}
               >
-                {/* Safe-Area-Aware Inner Container */}
                 <div
                   style={{
                     paddingTop: "12px",
@@ -1026,7 +989,6 @@ export const DualDatePicker: React.FC<DualDatePickerProps> = ({
           document.body
         )}
 
-      {/* Dev Diagnostic Mode (Section 22: only rendered during development) */}
       {import.meta.env.DEV && (
         <div
           data-testid="calendar-dev-diagnostic"

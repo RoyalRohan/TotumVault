@@ -33,7 +33,6 @@ export const NotificationPermissionPrompt: React.FC<NotificationPermissionPrompt
 
   return (
     <>
-      {/* 1. Android 13+ In-App Confirmation Popup before System Dialog */}
       {showConfirmModal &&
         createPortal(
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs select-none animate-in fade-in duration-150">
@@ -82,7 +81,6 @@ export const NotificationPermissionPrompt: React.FC<NotificationPermissionPrompt
           document.body
         )}
 
-      {/* 2. Permanent Denial / Settings Fallback Prompt */}
       {showSettingsModal &&
         createPortal(
           <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs select-none animate-in fade-in duration-150">

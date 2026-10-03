@@ -70,7 +70,6 @@ export const DocumentSettings: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Subsection 1: Renewal & Expiry Reminders */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -187,7 +186,6 @@ export const DocumentSettings: React.FC = () => {
         )}
       </div>
 
-      {/* Subsection 2: Calendar & Localization */}
       <div className="space-y-4 pt-5 border-t border-slate-200/80 dark:border-theme-border">
         <div className="flex items-center gap-1.5">
           <Calendar className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
@@ -196,7 +194,6 @@ export const DocumentSettings: React.FC = () => {
           </h4>
         </div>
 
-        {/* Calendar Mode Selector */}
         <div className="space-y-2">
           <span className="text-xs font-semibold text-slate-900 dark:text-theme-text block">
             Calendar
@@ -243,7 +240,6 @@ export const DocumentSettings: React.FC = () => {
           </div>
         </div>
 
-        {/* Numeral System Selector */}
         <div className="space-y-2 pt-1">
           <span className="text-xs font-semibold text-slate-900 dark:text-theme-text block">
             Numerals
@@ -277,7 +273,6 @@ export const DocumentSettings: React.FC = () => {
           </div>
         </div>
 
-        {/* Live Today Preview */}
         {todayInfo && (
           <div className="p-3.5 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-500/20 flex items-center justify-between text-xs">
             <span className="text-slate-500 dark:text-theme-text-muted text-xs font-semibold">

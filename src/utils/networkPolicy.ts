@@ -27,9 +27,7 @@ export function updateCachedAirGap(enabled: boolean): void {
   if (typeof window !== 'undefined') {
     try {
       localStorage.setItem('totumvault_air_gap_mode', enabled ? 'true' : 'false');
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 }
 

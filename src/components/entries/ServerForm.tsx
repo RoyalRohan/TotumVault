@@ -80,7 +80,6 @@ export const ServerForm: React.FC<ServerFormProps> = ({
       onSubmit={handleSubmit}
       submitDisabled={!name.trim()}
     >
-      {/* Name & Environment */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="sm:col-span-2">
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5">
@@ -114,7 +113,6 @@ export const ServerForm: React.FC<ServerFormProps> = ({
         </div>
       </div>
 
-      {/* Connection Group */}
       <FormSection title="Connection" icon={<Network className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
           <div className="sm:col-span-1">
@@ -165,7 +163,6 @@ export const ServerForm: React.FC<ServerFormProps> = ({
         </div>
       </FormSection>
 
-      {/* Authentication Group */}
       <FormSection title="Authentication" icon={<Key className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <div>
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5">
@@ -203,13 +200,10 @@ export const ServerForm: React.FC<ServerFormProps> = ({
         </div>
       </FormSection>
 
-      {/* Tags */}
       <TagEditor tags={tags} onChange={setTags} />
 
-      {/* Custom Fields */}
       <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />
 
-      {/* Notes */}
       <div className="space-y-1.5">
         <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
           Server Notes & Access Instructions

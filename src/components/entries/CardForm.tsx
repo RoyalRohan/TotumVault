@@ -36,7 +36,6 @@ export const CardForm: React.FC<CardFormProps> = ({
 
   const formatCardNumber = (val: string) => {
     const raw = val.replace(/\D/g, '').slice(0, 19);
-    // Auto detect card type
     if (raw.startsWith('4')) setCardType('Visa');
     else if (raw.startsWith('5') || raw.startsWith('2')) setCardType('Mastercard');
     else if (raw.startsWith('34') || raw.startsWith('37')) setCardType('American Express');
@@ -93,7 +92,6 @@ export const CardForm: React.FC<CardFormProps> = ({
       onSubmit={handleSubmit}
       submitDisabled={!cardName.trim()}
     >
-      {/* Card Nickname & Network */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="sm:col-span-2">
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5">
@@ -128,7 +126,6 @@ export const CardForm: React.FC<CardFormProps> = ({
         </div>
       </div>
 
-      {/* Card Details Group */}
       <FormSection title="Card Information" icon={<CreditCard className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <div>
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5">
@@ -151,7 +148,6 @@ export const CardForm: React.FC<CardFormProps> = ({
           copyLabel="Card Number"
         />
 
-        {/* Expiry & Security Codes */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <div>
             <label className="text-[11px] font-bold text-theme-text-muted uppercase tracking-wider block mb-1">
@@ -211,7 +207,6 @@ export const CardForm: React.FC<CardFormProps> = ({
         </div>
       </FormSection>
 
-      {/* Billing Address */}
       <FormSection title="Billing Address" icon={<MapPin className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <textarea
           rows={2}
@@ -222,13 +217,10 @@ export const CardForm: React.FC<CardFormProps> = ({
         />
       </FormSection>
 
-      {/* Tags */}
       <TagEditor tags={tags} onChange={setTags} />
 
-      {/* Custom Fields */}
       <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />
 
-      {/* Notes */}
       <div className="space-y-1.5">
         <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
           Card Notes

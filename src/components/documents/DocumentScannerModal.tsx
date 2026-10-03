@@ -61,20 +61,16 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
 }) => {
   const { saveDocument, addDocumentPage, showToast } = useVault();
 
-  // Mode: 'capture' (camera/file pick), 'crop' (perspective edit), 'metadata' (final form)
   const [step, setStep] = useState<'capture' | 'crop' | 'metadata'>('capture');
   const [sourceMode, setSourceMode] = useState<'camera' | 'upload'>(initialMode);
 
-  // Camera state
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
 
-  // Staged pages for this document
   const [stagedPages, setStagedPages] = useState<StagedPage[]>([]);
 
-  // Crop & perspective adjustment state
   const [rawImageElem, setRawImageElem] = useState<HTMLImageElement | null>(null);
   const [corners, setCorners] = useState<QuadCorners>({
     tl: { x: 0.05, y: 0.05 },
@@ -87,7 +83,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
   const [draggingCorner, setDraggingCorner] = useState<keyof QuadCorners | null>(null);
   const [canvasDim, setCanvasDim] = useState<{ width: number; height: number }>({ width: 800, height: 600 });
 
-  // Refs for canvas and pointer tracking
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragPointerIdRef = useRef<number | null>(null);
@@ -96,7 +91,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const nativeCameraInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Metadata form state
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<DocumentCategoryType>(initialCategory);
   const [description, setDescription] = useState('');
@@ -124,7 +118,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     onCloseSettingsPrompt,
   } = useDocumentNotificationPermission();
 
-  // Stop camera media stream safely
   const stopCameraStream = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
@@ -132,7 +125,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     }
   }, []);
 
-  // Start live camera
   const startCamera = useCallback(async (facing: 'environment' | 'user') => {
     stopCameraStream();
     setCameraError(null);
@@ -142,7 +134,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
         throw new Error('Camera is not supported on this browser or platform');
       }
 
-      // Check permission state safely if navigator.permissions.query is available
       if (typeof navigator !== 'undefined' && navigator.permissions && navigator.permissions.query) {
         try {
           const perm = await navigator.permissions.query({ name: 'camera' as any });
@@ -181,7 +172,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     }
   }, [stopCameraStream]);
 
-  // Effect to manage camera on open/mode switch
   useEffect(() => {
     if (isOpen && step === 'capture' && sourceMode === 'camera') {
       startCamera(facingMode);
@@ -194,7 +184,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     };
   }, [isOpen, step, sourceMode, facingMode, startCamera, stopCameraStream]);
 
-  // Handle Capture Photo from video frame
   const handleCapturePhoto = () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
@@ -212,7 +201,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     loadImageForCropping(dataUrl);
   };
 
-  // Load raw image into memory and initiate corner detection
   const loadImageForCropping = (src: string) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -226,7 +214,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     img.src = src;
   };
 
-  // Handle file uploads (single or multiple)
   const handleFilesSelected = (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
@@ -241,7 +228,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     reader.readAsDataURL(first);
   };
 
-  // Rotate 90 degrees clockwise while preserving quad mapping to the document
   const handleRotate90 = () => {
     setRotation((prev) => (prev + 90) % 360);
     // Rotate normalized quad coordinates clockwise: (x, y) -> (1 - y, x)
@@ -253,7 +239,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     }));
   };
 
-  // Redraw canvas with crop overlay, grid, handles, and magnifying loupe
   useEffect(() => {
     if (step !== 'crop' || !rawImageElem || !canvasRef.current) return;
 
@@ -278,7 +263,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
       setCanvasDim({ width: cw, height: ch });
     }
 
-    // 1. Draw rotated image
     ctx.save();
     ctx.translate(cw / 2, ch / 2);
     ctx.rotate((rotation * Math.PI) / 180);
@@ -287,13 +271,11 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     ctx.drawImage(img, -imgDrawW / 2, -imgDrawH / 2, imgDrawW, imgDrawH);
     ctx.restore();
 
-    // 2. Map quad relative corners to canvas coordinates
     const pTL = { x: corners.tl.x * cw, y: corners.tl.y * ch };
     const pTR = { x: corners.tr.x * cw, y: corners.tr.y * ch };
     const pBR = { x: corners.br.x * cw, y: corners.br.y * ch };
     const pBL = { x: corners.bl.x * cw, y: corners.bl.y * ch };
 
-    // 3. Dark semi-transparent mask outside crop area
     ctx.save();
     ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
     ctx.beginPath();
@@ -305,14 +287,12 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     ctx.closePath();
     ctx.fill('evenodd');
 
-    // 4. Rule-of-thirds alignment grid inside quad
     ctx.save();
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     for (let i = 1; i <= 2; i++) {
       const t = i / 3;
-      // Horizontal grid line
       const hx1 = pTL.x + (pBL.x - pTL.x) * t;
       const hy1 = pTL.y + (pBL.y - pTL.y) * t;
       const hx2 = pTR.x + (pBR.x - pTR.x) * t;
@@ -322,7 +302,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
       ctx.lineTo(hx2, hy2);
       ctx.stroke();
 
-      // Vertical grid line
       const vx1 = pTL.x + (pTR.x - pTL.x) * t;
       const vy1 = pTL.y + (pTR.y - pTL.y) * t;
       const vx2 = pBL.x + (pBR.x - pBL.x) * t;
@@ -334,9 +313,8 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     }
     ctx.restore();
 
-    // 5. Quad border stroke
     ctx.lineWidth = 2.5;
-    ctx.strokeStyle = '#9333ea'; // TotumVault brand purple
+    ctx.strokeStyle = '#9333ea';
     ctx.beginPath();
     ctx.moveTo(pTL.x, pTL.y);
     ctx.lineTo(pTR.x, pTR.y);
@@ -345,7 +323,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     ctx.closePath();
     ctx.stroke();
 
-    // 6. Draw 4 corner handles
     const handleRadius = Math.max(12, Math.round(cw * 0.022));
     const drawHandle = (p: { x: number; y: number }, active: boolean) => {
       if (active) {
@@ -363,7 +340,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
       ctx.strokeStyle = '#9333ea';
       ctx.stroke();
 
-      // Inner center dot
       ctx.beginPath();
       ctx.arc(p.x, p.y, handleRadius * 0.35, 0, Math.PI * 2);
       ctx.fillStyle = '#7e22ce';
@@ -375,7 +351,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     drawHandle(pBR, draggingCorner === 'br');
     drawHandle(pBL, draggingCorner === 'bl');
 
-    // 7. If actively dragging a corner, draw high-precision magnifying Loupe
     if (draggingCorner) {
       const activePoint =
         draggingCorner === 'tl'
@@ -389,13 +364,11 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
       const loupeR = Math.max(42, Math.round(cw * 0.075));
       let loupeY = activePoint.y - loupeR - 35;
       if (loupeY - loupeR < 15) {
-        // Place below if too close to top edge
         loupeY = activePoint.y + loupeR + 35;
       }
       const loupeX = Math.max(loupeR + 15, Math.min(cw - loupeR - 15, activePoint.x));
 
       ctx.save();
-      // Circular clip for loupe
       ctx.beginPath();
       ctx.arc(loupeX, loupeY, loupeR, 0, Math.PI * 2);
       ctx.closePath();
@@ -404,7 +377,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
       ctx.fillStyle = '#000000';
       ctx.fillRect(loupeX - loupeR, loupeY - loupeR, loupeR * 2, loupeR * 2);
 
-      // Draw magnified portion of image (2.2x zoom)
       const zoom = 2.2;
       ctx.save();
       ctx.translate(loupeX, loupeY);
@@ -419,7 +391,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
 
       ctx.restore();
 
-      // Crosshairs inside loupe
       ctx.beginPath();
       ctx.strokeStyle = '#c084fc';
       ctx.lineWidth = 1.5;
@@ -429,15 +400,13 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
       ctx.lineTo(loupeX, loupeY + loupeR * 0.65);
       ctx.stroke();
 
-      // Center dot
       ctx.beginPath();
       ctx.arc(loupeX, loupeY, 2.5, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
 
-      ctx.restore(); // restore clipping
+      ctx.restore();
 
-      // Outer rings of the loupe
       ctx.save();
       ctx.beginPath();
       ctx.arc(loupeX, loupeY, loupeR, 0, Math.PI * 2);
@@ -453,14 +422,12 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     ctx.restore();
   }, [step, rawImageElem, corners, rotation, draggingCorner]);
 
-  // Unified Pointer Events for corner handle manipulation
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-    // Multi-touch cancel
     if (activePointersRef.current.size > 1) {
       setDraggingCorner(null);
       dragPointerIdRef.current = null;
@@ -471,7 +438,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
 
-    // Corner positions in CSS display pixels
     const pTL = { x: corners.tl.x * rect.width, y: corners.tl.y * rect.height };
     const pTR = { x: corners.tr.x * rect.width, y: corners.tr.y * rect.height };
     const pBR = { x: corners.br.x * rect.width, y: corners.br.y * rect.height };
@@ -482,7 +448,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     const distBR = Math.hypot(px - pBR.x, py - pBR.y);
     const distBL = Math.hypot(px - pBL.x, py - pBL.y);
 
-    // Generous touch hit radius: 46px on touch, 28px on mouse
     const hitRadius = e.pointerType === 'touch' ? 46 : 28;
     const minDist = Math.min(distTL, distTR, distBR, distBL);
 
@@ -497,9 +462,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
       dragPointerIdRef.current = e.pointerId;
       try {
         canvas.setPointerCapture(e.pointerId);
-      } catch {
-        // ignore if not supported
-      }
+      } catch {}
     }
   };
 
@@ -511,7 +474,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
       if (!canvas) return;
 
       const rect = canvas.getBoundingClientRect();
-      // Clamp normalized coordinates inside [0.01, 0.99]
       const normX = Math.max(0.01, Math.min(0.99, (e.clientX - rect.left) / rect.width));
       const normY = Math.max(0.01, Math.min(0.99, (e.clientY - rect.top) / rect.height));
 
@@ -530,22 +492,18 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
         if (canvasRef.current?.hasPointerCapture(e.pointerId)) {
           canvasRef.current.releasePointerCapture(e.pointerId);
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
       setDraggingCorner(null);
       dragPointerIdRef.current = null;
     }
   };
 
-  // Apply crop, generate thumbnail, and stage the page
   const handleConfirmCrop = () => {
     if (!rawImageElem) return;
 
     try {
       const cropped = cropQuadToImage(rawImageElem, corners, rotation, enhanceContrast);
 
-      // Create an image element from cropped result to generate miniature thumbnail
       const cropImg = new Image();
       cropImg.onload = () => {
         const thumbUrl = generateThumbnailDataUrl(cropImg, 220);
@@ -562,7 +520,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
         setStagedPages((prev) => [...prev, newPage]);
         setRawImageElem(null);
 
-        // If targetDocumentId is present, or if user already has pages, show review/metadata
         setStep('metadata');
       };
       cropImg.src = cropped.dataUrl;
@@ -571,7 +528,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     }
   };
 
-  // Remove a staged page
   const handleRemoveStagedPage = (id: string) => {
     setStagedPages((prev) => prev.filter((p) => p.id !== id));
     if (stagedPages.length <= 1) {
@@ -579,13 +535,11 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     }
   };
 
-  // Add another page to the document
   const handleAddAnotherPage = () => {
     setRawImageElem(null);
     setStep('capture');
   };
 
-  // Tag management
   const handleAddTag = () => {
     const trimmed = tagInput.trim().toLowerCase();
     if (trimmed && !tags.includes(trimmed)) {
@@ -605,7 +559,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     }
   };
 
-  // Save document or add page to existing document
   const handleSaveAll = async () => {
     if (stagedPages.length === 0) {
       showToast('Please capture or upload at least one page', 'error');
@@ -622,7 +575,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     setIsSaving(true);
     try {
       if (targetDocumentId) {
-        // Adding pages to existing document
         for (let i = 0; i < stagedPages.length; i++) {
           const p = stagedPages[i];
           const pageInput: SavePageInput = {
@@ -638,7 +590,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
         }
         showToast('Document pages added securely', 'success');
       } else {
-        // Saving new document
         const pagesInput: SavePageInput[] = stagedPages.map((p, idx) => ({
           page_number: idx + 1,
           mime_type: p.mimeType,
@@ -696,7 +647,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex flex-col h-screen h-[100dvh] max-h-[100dvh] bg-zinc-950 sm:bg-black/85 sm:backdrop-blur-md sm:flex sm:items-center sm:justify-center sm:p-4 select-none overflow-hidden animate-scale-up">
       <div className="w-full h-full sm:h-auto sm:max-h-[92vh] sm:max-w-3xl glass-panel sm:rounded-2xl shadow-2xl border-0 sm:border border-theme-border flex flex-col overflow-hidden bg-theme-bg/95">
-        {/* Modal Header */}
         <div className="flex items-center justify-between px-3.5 sm:px-5 py-3 border-b border-theme-border shrink-0 bg-theme-surface/70 backdrop-blur-md pt-safe pl-safe pr-safe">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
             <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center shrink-0">
@@ -731,10 +681,8 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
           </button>
         </div>
 
-        {/* STEP 1: CAPTURE OR UPLOAD */}
         {step === 'capture' && (
           <div className="flex-1 min-h-0 flex flex-col justify-between overflow-hidden p-3 sm:p-4 space-y-3 pb-safe pl-safe pr-safe">
-            {/* Mode Switch Tabs: Live Camera vs File Upload */}
             <div className="flex bg-theme-surface p-1 rounded-xl border border-theme-border text-xs font-semibold shrink-0">
               <button
                 type="button"
@@ -762,7 +710,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
               </button>
             </div>
 
-            {/* Camera View */}
             {sourceMode === 'camera' && (
               <div className="flex-1 min-h-0 flex flex-col justify-between relative overflow-hidden">
                 {cameraError ? (
@@ -812,16 +759,13 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                       className="w-full h-full object-cover"
                     />
 
-                    {/* Viewfinder Target Overlay */}
                     <div className="absolute inset-5 sm:inset-8 border-2 border-dashed border-white/40 rounded-xl pointer-events-none flex items-center justify-center">
                       <div className="text-[11px] text-white/80 bg-black/50 px-3 py-1 rounded-full backdrop-blur-sm shadow-md">
                         Align document within frame
                       </div>
                     </div>
 
-                    {/* Camera Controls Overlay */}
                     <div className="absolute bottom-3 inset-x-0 flex items-center justify-center gap-3 sm:gap-5 px-4 pb-safe">
-                      {/* Switch Front/Back Camera */}
                       <button
                         type="button"
                         onClick={() => {
@@ -835,7 +779,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                         <FlipHorizontal className="w-5 h-5" />
                       </button>
 
-                      {/* Shutter Button */}
                       <button
                         type="button"
                         onClick={handleCapturePhoto}
@@ -847,7 +790,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                         </div>
                       </button>
 
-                      {/* Device Native Camera Fallback */}
                       <button
                         type="button"
                         onClick={() => nativeCameraInputRef.current?.click()}
@@ -857,7 +799,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                         <Camera className="w-5 h-5" />
                       </button>
 
-                      {/* File Fallback Icon */}
                       <button
                         type="button"
                         onClick={() => fileInputRef.current?.click()}
@@ -872,7 +813,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
               </div>
             )}
 
-            {/* Upload View */}
             {sourceMode === 'upload' && (
               <div className="flex-1 min-h-0 flex flex-col justify-center gap-3">
                 <div
@@ -910,7 +850,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
               </div>
             )}
 
-            {/* Hidden file inputs */}
             <input
               ref={fileInputRef}
               type="file"
@@ -929,10 +868,8 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
           </div>
         )}
 
-        {/* STEP 2: CROP & PERSPECTIVE WARP (FULL VIEWPORT FIT) */}
         {step === 'crop' && (
           <div className="flex-1 min-h-0 flex flex-col w-full h-full overflow-hidden bg-black/95 select-none animate-scale-up">
-            {/* Crop Toolbar Controls */}
             <div className="px-3 py-2 bg-zinc-900/90 border-b border-zinc-800 shrink-0 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none pl-safe pr-safe">
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
@@ -988,7 +925,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
               </label>
             </div>
 
-            {/* Responsive Quad Display Canvas Area */}
             <div
               ref={containerRef}
               className="flex-1 min-h-0 w-full relative flex items-center justify-center overflow-hidden bg-black/95 p-2 sm:p-4 select-none touch-none"
@@ -1009,7 +945,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
               />
             </div>
 
-            {/* Bottom Actions Bar (Pinned with pb-safe) */}
             <div className="px-3.5 sm:px-5 py-3 bg-zinc-950 border-t border-zinc-800 shrink-0 grid grid-cols-2 gap-3 pb-safe pl-safe pr-safe">
               <button
                 type="button"
@@ -1033,10 +968,8 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
           </div>
         )}
 
-        {/* STEP 3: METADATA & MULTI-PAGE REVIEW */}
         {step === 'metadata' && (
           <div className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-5 space-y-4 pb-safe pl-safe pr-safe animate-scale-up">
-            {/* Multi-page Thumbnails Strip */}
             <div className="p-3.5 rounded-2xl bg-theme-surface border border-theme-border space-y-2">
               <div className="flex items-center justify-between text-xs font-semibold text-theme-text">
                 <div className="flex items-center gap-1.5">
@@ -1078,7 +1011,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                   </div>
                 ))}
 
-                {/* Add Page Card */}
                 <button
                   type="button"
                   onClick={handleAddAnotherPage}
@@ -1090,10 +1022,8 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
               </div>
             </div>
 
-            {/* Metadata Inputs (Only if creating new document) */}
             {!targetDocumentId ? (
               <div className="space-y-3.5">
-                {/* Title & Favorite */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider">
@@ -1123,7 +1053,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                   </div>
                 </div>
 
-                {/* Category Type Chips */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
                     Document Type
@@ -1151,7 +1080,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                   </div>
                 </div>
 
-                {/* Dates: Document Date & Expiry Date (Dual AD + Nepali Bikram Sambat) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1.5">
                     <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
@@ -1242,7 +1170,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                   </div>
                 )}
 
-                {/* Tags */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
                     Tags
@@ -1291,7 +1218,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                   </div>
                 </div>
 
-                {/* Notes / Description */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
                     Description / Notes
@@ -1314,7 +1240,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
               </div>
             )}
 
-            {/* Final Save Button */}
             <div className="pt-2">
               <button
                 type="button"

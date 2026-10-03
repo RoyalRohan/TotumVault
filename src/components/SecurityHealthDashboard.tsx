@@ -38,7 +38,6 @@ export const SecurityHealthDashboard: React.FC = () => {
     return Boolean(e.password && isWeakPassword(e.password));
   });
 
-  // Group passwords to find local duplicates
   const passCounts = new Map<string, number>();
   entries.forEach((e) => {
     if (e.password) {
@@ -54,10 +53,8 @@ export const SecurityHealthDashboard: React.FC = () => {
 
   return (
     <div className="flex-1 overflow-y-auto p-3.5 sm:p-6 space-y-4 sm:space-y-6 select-none bg-theme-bg pb-safe text-theme-text">
-      {/* Dashboard Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          {/* Mobile Back Button */}
           <button
             onClick={() => setActiveCategory('all')}
             className="md:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-theme-surface hover:bg-theme-bg border border-theme-border text-theme-text transition-colors cursor-pointer shrink-0 shadow-sm"
@@ -100,9 +97,7 @@ export const SecurityHealthDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Score & Metrics Section */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Score Ring Card */}
         <div className="bg-theme-surface border border-theme-border p-5 sm:p-6 rounded-2xl flex flex-col items-center justify-center text-center col-span-1 shadow-sm">
           <div className="relative w-20 h-20 flex items-center justify-center mb-3">
             <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
@@ -138,7 +133,6 @@ export const SecurityHealthDashboard: React.FC = () => {
           </span>
         </div>
 
-        {/* Metrics Grid */}
         <div className="col-span-1 sm:col-span-1 lg:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <div className="bg-theme-surface border border-theme-border p-4 sm:p-5 rounded-2xl flex flex-col justify-between shadow-sm">
             <div className="flex items-center justify-between">
@@ -175,14 +169,12 @@ export const SecurityHealthDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Flagged Vulnerabilities with Category Tabs */}
       <div className="space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-xs font-bold text-slate-700 dark:text-theme-text-muted uppercase tracking-wider">
             Flagged Vault Vulnerabilities
           </h3>
 
-          {/* Interactive Filter Tabs */}
           <div className="flex items-center bg-white dark:bg-theme-surface p-1 rounded-xl border border-slate-200 dark:border-theme-border text-xs shadow-2xs">
             <button
               onClick={() => setActiveTab('all')}
@@ -253,7 +245,6 @@ export const SecurityHealthDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Tab Content Display */}
         {activeTab === 'all' && weakEntries.length === 0 && reusedEntries.length === 0 && (
           <div className="p-5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-3 text-emerald-600 dark:text-emerald-300 text-xs">
             <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />

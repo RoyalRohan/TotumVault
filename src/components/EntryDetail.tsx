@@ -143,7 +143,6 @@ export const EntryDetail: React.FC = () => {
     }
   };
 
-  // Render Custom Fields Section
   const renderCustomFields = () => {
     if (!entry.custom_fields || entry.custom_fields.length === 0) return null;
     return (
@@ -198,7 +197,6 @@ export const EntryDetail: React.FC = () => {
     );
   };
 
-  // Render Metadata Footer
   const renderMetadata = () => (
     <div className="flex items-center gap-5 text-xs text-theme-text-muted font-mono pt-2 flex-wrap">
       <div className="flex items-center gap-1.5">
@@ -212,11 +210,6 @@ export const EntryDetail: React.FC = () => {
     </div>
   );
 
-  /* ----------------------------------------------------
-     TYPE-SPECIFIC DETAIL VIEWS
-  ---------------------------------------------------- */
-
-  // 1. LOGIN DETAIL
   const renderLoginDetail = () => {
     const strength = calculatePasswordStrength(entry.password);
     const entropy = calculateEntropy(entry.password);
@@ -365,7 +358,6 @@ export const EntryDetail: React.FC = () => {
     );
   };
 
-  // 2. SECURE NOTE DETAIL
   const renderSecureNoteDetail = () => (
     <div className="space-y-4">
       <div className="bg-theme-surface border border-theme-border rounded-2xl p-4 sm:p-5 space-y-3 shadow-sm">
@@ -457,7 +449,6 @@ export const EntryDetail: React.FC = () => {
     </div>
   );
 
-  // 3. AUTHENTICATOR DETAIL
   const renderAuthenticatorDetail = () => (
     <div className="space-y-4">
       {entry.totp_secret && (
@@ -550,7 +541,6 @@ export const EntryDetail: React.FC = () => {
     </div>
   );
 
-  // 4. CARD DETAIL
   const renderCardDetail = () => {
     const rawCardNum = entry.card_number || entry.password || '';
     const formattedNum = rawCardNum.replace(/\s+/g, '').replace(/(\d{4})/g, '$1 ').trim();
@@ -560,7 +550,6 @@ export const EntryDetail: React.FC = () => {
 
     return (
       <div className="space-y-4">
-        {/* Visual Realistic Payment Card */}
         <div className="relative rounded-2xl p-5 bg-gradient-to-br from-[#1c2028] via-[#171a20] to-[#111318] text-white border border-[#252a33] shadow-xl overflow-hidden min-h-[190px] flex flex-col justify-between select-none">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -614,7 +603,6 @@ export const EntryDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* Security Codes Details */}
         <div className="bg-theme-surface border border-theme-border rounded-2xl p-4 sm:p-5 space-y-3 shadow-sm">
           <h3 className="text-xs font-bold uppercase tracking-wider text-theme-text-muted">
             Security Codes
@@ -711,14 +699,12 @@ export const EntryDetail: React.FC = () => {
     );
   };
 
-  // 5. LICENSE DETAIL
   const renderLicenseDetail = () => {
     const key = entry.license_key || entry.password || '';
     const licenseStatus = getLicenseStatusInfo(entry.license_expires_at);
 
     return (
       <div className="space-y-4">
-        {/* Hero License Key Block */}
         <div className="bg-theme-surface border border-theme-border rounded-2xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between border-b border-theme-border pb-2.5">
             <div className="flex items-center gap-2">
@@ -750,7 +736,6 @@ export const EntryDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* License Metadata */}
         <div className="bg-theme-surface border border-theme-border rounded-2xl p-4 sm:p-5 space-y-3 shadow-sm">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -837,7 +822,6 @@ export const EntryDetail: React.FC = () => {
     );
   };
 
-  // 6. SERVER DETAIL
   const renderServerDetail = () => {
     const host = entry.server_host || entry.url || '';
     const port = entry.server_port || '22';
@@ -847,7 +831,6 @@ export const EntryDetail: React.FC = () => {
 
     return (
       <div className="space-y-4">
-        {/* Connection Header Card */}
         <div className="bg-theme-surface border border-theme-border rounded-2xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
@@ -877,7 +860,6 @@ export const EntryDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* Authentication Card */}
         <div className="bg-theme-surface border border-theme-border rounded-2xl p-4 sm:p-5 space-y-3 shadow-sm">
           <h3 className="text-xs font-bold uppercase tracking-wider text-theme-text-muted">
             Authentication
@@ -969,14 +951,12 @@ export const EntryDetail: React.FC = () => {
     );
   };
 
-  // 7. API CREDENTIAL DETAIL
   const renderApiCredentialDetail = () => {
     const key = entry.api_key || entry.username || '';
     const secret = entry.api_secret || entry.password || '';
 
     return (
       <div className="space-y-4">
-        {/* Service Header */}
         <div className="bg-theme-surface border border-theme-border rounded-2xl p-5 space-y-3 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -1004,7 +984,6 @@ export const EntryDetail: React.FC = () => {
           )}
         </div>
 
-        {/* Keys & Tokens */}
         <div className="bg-theme-surface border border-theme-border rounded-2xl p-4 sm:p-5 space-y-3 shadow-sm">
           <h3 className="text-xs font-bold uppercase tracking-wider text-theme-text-muted">
             Keys & Tokens
@@ -1119,7 +1098,6 @@ export const EntryDetail: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col h-full bg-theme-bg overflow-y-auto select-none">
-      {/* Top Header */}
       <div className="p-3.5 sm:p-5 border-b border-theme-border flex flex-wrap items-center justify-between gap-3 bg-theme-surface/60 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <button
@@ -1213,7 +1191,6 @@ export const EntryDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Content Area */}
       <div className="p-4 sm:p-6 max-w-3xl pb-28 md:pb-8">
         {renderContentByCategory()}
       </div>

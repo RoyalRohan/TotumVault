@@ -17,7 +17,6 @@ export const FolderModals: React.FC = () => {
   const [renameInput, setRenameInput] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
 
-  // Reset delete options whenever a new folder is targeted for deletion
   useEffect(() => {
     if (deletingFolder) {
       setDeleteContents(false);
@@ -25,7 +24,6 @@ export const FolderModals: React.FC = () => {
     }
   }, [deletingFolder]);
 
-  // Sync rename input whenever a new folder is targeted for renaming
   useEffect(() => {
     if (renamingFolder) {
       setRenameInput(renamingFolder.name);
@@ -35,7 +33,6 @@ export const FolderModals: React.FC = () => {
 
   return (
     <>
-      {/* Authoritative Single Folder Deletion Modal */}
       {deletingFolder && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in select-none"
@@ -126,7 +123,6 @@ export const FolderModals: React.FC = () => {
         </div>
       )}
 
-      {/* Authoritative Single Folder Rename Modal */}
       {renamingFolder && (
         <div
           className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-fade-in select-none"

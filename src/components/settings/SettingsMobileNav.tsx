@@ -37,7 +37,6 @@ export const SettingsMobileNav: React.FC<SettingsMobileNavProps> = ({
 
   return (
     <div className="flex flex-col h-full select-none">
-      {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-slate-200/80 dark:border-theme-border shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center p-1 border border-slate-200 dark:border-theme-border bg-white dark:bg-theme-surface shrink-0 shadow-xs">
@@ -59,7 +58,6 @@ export const SettingsMobileNav: React.FC<SettingsMobileNavProps> = ({
         </button>
       </div>
 
-      {/* Categories List */}
       <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
         {SETTINGS_CATEGORIES.map((cat) => {
           const Icon = CATEGORY_ICONS[cat.id];
@@ -86,7 +84,6 @@ export const SettingsMobileNav: React.FC<SettingsMobileNavProps> = ({
         })}
       </div>
 
-      {/* Footer */}
       <div className="p-3 border-t border-slate-200/80 dark:border-theme-border text-center text-xs text-slate-500 dark:text-theme-text-muted font-mono shrink-0">
         <span>TotumVault{currentVersion ? ` ${currentVersion}` : ''} • Offline Security Vault</span>
       </div>

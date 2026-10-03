@@ -52,9 +52,7 @@ export const EntryList: React.FC = () => {
     setIsFolderMenuOpen(false);
   }, [selectedFolderId]);
 
-  // Filter entries based on active category, folder & search query
   const filteredEntries = entries.filter((item) => {
-    // Category match
     if (activeCategory === 'favorites' && !item.favorite) return false;
     if (activeCategory === 'totp' && !item.totp_secret && item.category !== 'totp') return false;
     if (
@@ -67,8 +65,7 @@ export const EntryList: React.FC = () => {
       return false;
     }
 
-    // Subfolder match when on logins view:
-    // If user is searching, do not filter out matching logins from other folders (search finds logins across all subfolders)
+    // When searching, match logins across all subfolders
     if (activeCategory === 'logins' && selectedFolderId && !searchQuery.trim()) {
       if (selectedFolderId === '__unfiled__') {
         if (item.folder_id) return false;
@@ -77,7 +74,6 @@ export const EntryList: React.FC = () => {
       }
     }
 
-    // Search query match (Title, Username, Email, URL, Category, Tags, Host, Vendor, Cardholder, Folder name)
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     const folderName = item.folder_id ? folders.find((f) => f.id === item.folder_id)?.name.toLowerCase() : '';
@@ -172,9 +168,7 @@ export const EntryList: React.FC = () => {
             const u = item.url.startsWith('http') ? item.url : `https://${item.url}`;
             const domain = new URL(u).hostname.replace(/^www\./, '');
             if (domain) return domain;
-          } catch {
-            // fallback
-          }
+          } catch {}
         }
         if (item.username) return item.username;
         if (item.email) return item.email;
@@ -338,7 +332,6 @@ export const EntryList: React.FC = () => {
             : 'hover:bg-slate-100/80 dark:hover:bg-theme-hover text-theme-text-muted'
         }`}
       >
-        {/* Reorder insertion indicator lines */}
         {isDropBefore && (
           <div className="absolute top-0 left-0 right-0 h-0.5 bg-purple-500 z-20 pointer-events-none shadow-xs" />
         )}
@@ -376,7 +369,6 @@ export const EntryList: React.FC = () => {
               {formatSubtitle(item)}
             </p>
 
-            {/* License Expiry Status Pill */}
             {item.category === 'licenses' && (
               <div className="flex items-center gap-1 mt-1">
                 <span
@@ -397,7 +389,6 @@ export const EntryList: React.FC = () => {
               </div>
             )}
 
-            {/* Folder Badge if item belongs to a folder */}
             {item.category === 'logins' && item.folder_id && (
               <div className="flex items-center gap-1 mt-1">
                 <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-purple-100/70 dark:bg-purple-950/40 text-purple-900 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40 font-medium">
@@ -409,7 +400,6 @@ export const EntryList: React.FC = () => {
               </div>
             )}
 
-            {/* Tag Chips Preview */}
             {item.tags && item.tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1.5">
                 {item.tags.slice(0, 2).map((t) => (
@@ -450,7 +440,6 @@ export const EntryList: React.FC = () => {
 
   return (
     <div className="w-full h-full md:border-r border-theme-border bg-theme-surface/40 flex flex-col select-none text-theme-text">
-      {/* List Header */}
       <div className="px-4 py-3 border-b border-theme-border flex items-center justify-between text-xs font-medium bg-theme-surface/60">
         <span className="font-semibold text-theme-text">{getCategoryLabel()}</span>
         <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-theme-elevated border border-theme-border text-theme-text-muted">
@@ -458,7 +447,6 @@ export const EntryList: React.FC = () => {
         </span>
       </div>
 
-      {/* Folder Breadcrumb Filter Header if filtered by folder */}
       {activeCategory === 'logins' && selectedFolderId && (
         <div className="px-4 py-2 bg-purple-50 dark:bg-purple-950/20 border-b border-purple-200 dark:border-purple-800/30 flex items-center justify-between text-xs animate-fade-in relative">
           <div className="flex items-center gap-1.5 text-purple-950 dark:text-purple-200 min-w-0 flex-1 mr-2">
@@ -532,7 +520,6 @@ export const EntryList: React.FC = () => {
         </div>
       )}
 
-      {/* Items Scroll Area */}
       <div className="flex-1 overflow-y-auto divide-y divide-theme-border/60 pb-28 md:pb-4">
         {filteredEntries.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-8 text-center h-full text-theme-text-muted">

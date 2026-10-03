@@ -39,11 +39,9 @@ export const ImportExportModal: React.FC = () => {
     showToast,
   } = useVault();
 
-  // Mode: 'export' or 'import'
   const [mode, setMode] = useState<'export' | 'import'>('export');
   const [exportFormat, setExportFormat] = useState<'tvault' | 'csv'>('tvault');
 
-  // Success state after export
   const [exportSuccess, setExportSuccess] = useState<{
     path: string;
     filename: string;
@@ -52,7 +50,6 @@ export const ImportExportModal: React.FC = () => {
   } | null>(null);
   const [copiedContent, setCopiedContent] = useState(false);
 
-  // Safe Import workflow state
   const [importStep, setImportStep] = useState<'select' | 'preview' | 'confirm_replace' | 'summary'>('select');
   const [selectedFileName, setSelectedFileName] = useState('');
   const [importPath, setImportPath] = useState('');
@@ -69,7 +66,6 @@ export const ImportExportModal: React.FC = () => {
 
   if (!isImportExportOpen) return null;
 
-  // Handle Export: Opens native OS / Android system Save Document dialog
   const handleExport = async () => {
     setIsProcessing(true);
     const date = new Date().toISOString().slice(0, 10);
@@ -148,7 +144,6 @@ export const ImportExportModal: React.FC = () => {
     setTimeout(() => setCopiedContent(false), 3000);
   };
 
-  // Handle native file picker for Restore / Import
   const handleChooseImportFile = async () => {
     const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
 
@@ -243,7 +238,6 @@ export const ImportExportModal: React.FC = () => {
     }
   };
 
-  // Fallback File Selection for Import via HTML5 file input
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -275,7 +269,6 @@ export const ImportExportModal: React.FC = () => {
     }
   };
 
-  // Step 1 -> Step 2: Validate and inspect import data
   const handleAnalyze = async () => {
     const source = importContent || importPath;
     if (!source) {
@@ -300,7 +293,6 @@ export const ImportExportModal: React.FC = () => {
     }
   };
 
-  // Commit the import with user choice: 'add' or 'replace'
   const handleCommit = async (commitMode: 'add' | 'replace') => {
     const source = importContent || importPath;
     if (!source) {
@@ -349,7 +341,6 @@ export const ImportExportModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-md select-none">
       <div className="w-full max-w-lg glass-panel rounded-2xl p-5 sm:p-6 shadow-2xl border border-theme-border animate-scale-up max-h-[92vh] flex flex-col overflow-hidden">
-        {/* Hidden Fallback File Input */}
         <input
           type="file"
           ref={fileInputRef}
@@ -358,7 +349,6 @@ export const ImportExportModal: React.FC = () => {
           className="hidden"
         />
 
-        {/* Modal Header */}
         <div className="flex items-center justify-between pb-3.5 border-b border-theme-border shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-sm shrink-0">
@@ -401,7 +391,6 @@ export const ImportExportModal: React.FC = () => {
           </button>
         </div>
 
-        {/* If Export Success View */}
         {exportSuccess ? (
           <div className="flex-1 overflow-y-auto py-5 space-y-4 pr-0.5 animate-scale-up">
             <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-3.5">
@@ -465,7 +454,6 @@ export const ImportExportModal: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Export / Import Mode Selector (Only on Step 'select') */}
             {importStep === 'select' && (
               <div className="flex bg-theme-surface p-1.5 rounded-xl border border-theme-border my-4 text-sm shrink-0">
                 <button
@@ -495,12 +483,9 @@ export const ImportExportModal: React.FC = () => {
               </div>
             )}
 
-            {/* Content Area */}
             <div className="flex-1 overflow-y-auto space-y-4 pr-0.5 mt-2">
               {mode === 'export' ? (
-                /* EXPORT SECTION */
                 <div className="space-y-4">
-                  {/* Format Choice */}
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
                       Choose Format
@@ -540,7 +525,6 @@ export const ImportExportModal: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Destination Information */}
                   <div className="p-3.5 rounded-xl bg-theme-surface border border-theme-border text-xs space-y-1.5">
                     <div className="flex items-center gap-2 font-semibold text-theme-text">
                       <Folder className="w-4 h-4 stroke-[1.75] text-purple-600 dark:text-purple-400" />
@@ -551,7 +535,6 @@ export const ImportExportModal: React.FC = () => {
                     </p>
                   </div>
 
-                  {/* Security Hint */}
                   {exportFormat === 'csv' ? (
                     <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 text-amber-950 dark:text-amber-300 text-xs flex items-start gap-2.5 font-medium">
                       <AlertTriangle className="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0 mt-0.5 stroke-[1.75]" />
@@ -564,7 +547,6 @@ export const ImportExportModal: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Action Button */}
                   <button
                     type="button"
                     onClick={handleExport}
@@ -576,9 +558,7 @@ export const ImportExportModal: React.FC = () => {
                   </button>
                 </div>
               ) : (
-                /* IMPORT SECTION WITH 4-STEP WIZARD */
                 <div className="space-y-4">
-                  {/* STEP 1: SELECT FILE & ENTER PASSWORD */}
                   {importStep === 'select' && (
                     <div className="space-y-4 animate-scale-up">
                       <div className="space-y-2">
@@ -604,7 +584,6 @@ export const ImportExportModal: React.FC = () => {
                         </button>
                       </div>
 
-                      {/* Password Field (Only for encrypted backup files) */}
                       {detectedType !== 'csv' && selectedFileName && (
                         <div className="space-y-1.5 animate-scale-up">
                           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
@@ -623,7 +602,6 @@ export const ImportExportModal: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Validate & Preview Button */}
                       <button
                         type="button"
                         onClick={handleAnalyze}
@@ -642,10 +620,8 @@ export const ImportExportModal: React.FC = () => {
                     </div>
                   )}
 
-                  {/* STEP 2: PREVIEW & DUPLICATE RESOLUTION */}
                   {importStep === 'preview' && importPreview && (
                     <div className="space-y-4 animate-scale-up">
-                      {/* Top Bar Navigation */}
                       <div className="flex items-center justify-between">
                         <button
                           type="button"
@@ -660,7 +636,6 @@ export const ImportExportModal: React.FC = () => {
                         </span>
                       </div>
 
-                      {/* Stat Tiles */}
                       <div className="grid grid-cols-3 gap-2.5">
                         <div className="p-3 rounded-xl bg-theme-surface border border-theme-border text-center">
                           <span className="text-xl font-bold text-theme-text block">
@@ -686,7 +661,6 @@ export const ImportExportModal: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Category Breakdown & Document Note */}
                       <div className="p-3 rounded-xl bg-theme-surface border border-theme-border space-y-2">
                         <div className="flex items-center justify-between text-xs font-semibold text-theme-text-muted">
                           <span>Categories in File</span>
@@ -709,7 +683,6 @@ export const ImportExportModal: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Conflict / Duplicate Handling */}
                       {importPreview.duplicate_count > 0 ? (
                         <div className="space-y-2.5 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30">
                           <div className="flex items-start justify-between gap-2">
@@ -750,7 +723,6 @@ export const ImportExportModal: React.FC = () => {
                             </div>
                           )}
 
-                          {/* Duplicate Strategy Options */}
                           <div className="pt-2 border-t border-amber-200 dark:border-amber-500/20 space-y-1.5">
                             <label className="text-[11px] font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider block">
                               Duplicate Resolution Strategy
@@ -804,7 +776,6 @@ export const ImportExportModal: React.FC = () => {
                         </div>
                       )}
 
-                      {/* Primary Choice: Add to Existing Vault vs Replace Existing Vault */}
                       <div className="pt-2 space-y-2.5">
                         <button
                           type="button"
@@ -829,7 +800,6 @@ export const ImportExportModal: React.FC = () => {
                     </div>
                   )}
 
-                  {/* STEP 3: EXPLICIT CONFIRMATION FOR REPLACE */}
                   {importStep === 'confirm_replace' && importPreview && (
                     <div className="space-y-4 py-2 animate-scale-up">
                       <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-center space-y-2">
@@ -885,7 +855,6 @@ export const ImportExportModal: React.FC = () => {
                     </div>
                   )}
 
-                  {/* STEP 4: RESULT SUMMARY */}
                   {importStep === 'summary' && importSummary && (
                     <div className="space-y-4 py-2 animate-scale-up">
                       <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-start gap-3.5">

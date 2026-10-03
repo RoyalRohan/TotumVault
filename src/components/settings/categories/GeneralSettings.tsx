@@ -18,7 +18,6 @@ export const GeneralSettings: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Vault Status */}
       <div className="space-y-3">
         <div className="flex items-center gap-1.5">
           <Lock className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
@@ -60,7 +59,6 @@ export const GeneralSettings: React.FC = () => {
         </div>
       </div>
 
-      {/* Active Protections */}
       <div className="border-t border-slate-200/80 dark:border-theme-border pt-5 space-y-3">
         <h4 className="text-sm font-bold text-slate-900 dark:text-theme-text">
           Active Protections
@@ -123,7 +121,6 @@ export const GeneralSettings: React.FC = () => {
         </div>
       </div>
 
-      {/* Application Branding Card */}
       <div className="border-t border-slate-200/80 dark:border-theme-border pt-5">
         <div className="p-4 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-500/20 flex items-center justify-between">
           <div className="flex items-center gap-3">

@@ -39,7 +39,6 @@ export const AuthenticatorForm: React.FC<AuthenticatorFormProps> = ({
   const [previewRemaining, setPreviewRemaining] = useState<number>(30);
   const [secretError, setSecretError] = useState<string | null>(null);
 
-  // Live preview tester
   useEffect(() => {
     let active = true;
     if (!secret.trim()) {
@@ -116,7 +115,6 @@ export const AuthenticatorForm: React.FC<AuthenticatorFormProps> = ({
       onSubmit={handleSubmit}
       submitDisabled={!accountName.trim() || !secret.trim() || Boolean(secretError)}
     >
-      {/* Account Info */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5">
@@ -160,7 +158,6 @@ export const AuthenticatorForm: React.FC<AuthenticatorFormProps> = ({
         />
       </div>
 
-      {/* Secret Key with Validation */}
       <FormSection title="Secret Key & Algorithm" icon={<Clock className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <SecretInput
           label="Base32 Secret Key"
@@ -178,7 +175,6 @@ export const AuthenticatorForm: React.FC<AuthenticatorFormProps> = ({
           </div>
         )}
 
-        {/* Live Code Preview Verification */}
         {previewCode && !secretError && (
           <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 animate-scale-up">
             <div className="flex items-center gap-2.5">
@@ -196,7 +192,6 @@ export const AuthenticatorForm: React.FC<AuthenticatorFormProps> = ({
           </div>
         )}
 
-        {/* Advanced Algorithm Parameters */}
         <div className="grid grid-cols-3 gap-2.5 pt-1">
           <div>
             <label className="text-[11px] font-bold text-theme-text-muted uppercase tracking-wider block mb-1">
@@ -243,13 +238,10 @@ export const AuthenticatorForm: React.FC<AuthenticatorFormProps> = ({
         </div>
       </FormSection>
 
-      {/* Tags */}
       <TagEditor tags={tags} onChange={setTags} />
 
-      {/* Custom Fields */}
       <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />
 
-      {/* Notes */}
       <div className="space-y-1.5">
         <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
           Recovery Notes / Emergency Codes

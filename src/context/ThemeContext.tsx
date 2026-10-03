@@ -73,16 +73,13 @@ const THEME_STORAGE_KEY = 'totumvault_theme_preference';
 const FONT_STORAGE_KEY = 'totumvault_font_preference';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Theme state
   const [theme, setThemeState] = useState<ThemePreference>(() => {
     try {
       const saved = localStorage.getItem(THEME_STORAGE_KEY) || localStorage.getItem('veylock_theme_preference');
       if (saved === 'dark' || saved === 'light' || saved === 'system') {
         return saved;
       }
-    } catch {
-      // Ignore localStorage error
-    }
+    } catch {}
     return 'system';
   });
 
@@ -94,7 +91,6 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return theme === 'light' ? 'light' : 'dark';
   });
 
-  // Font state
   const [font, setFontState] = useState<AppFont>(() => {
     try {
       const savedFont = localStorage.getItem(FONT_STORAGE_KEY);
@@ -107,9 +103,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ) {
         return savedFont;
       }
-    } catch {
-      // Ignore localStorage error
-    }
+    } catch {}
     return 'inter';
   });
 
@@ -134,9 +128,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setThemeState(newTheme);
     try {
       localStorage.setItem(THEME_STORAGE_KEY, newTheme);
-    } catch {
-      // Ignore error
-    }
+    } catch {}
     applyTheme(newTheme);
   }, [applyTheme]);
 
@@ -150,9 +142,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setFontState(newFont);
     try {
       localStorage.setItem(FONT_STORAGE_KEY, newFont);
-    } catch {
-      // Ignore error
-    }
+    } catch {}
     applyFont(newFont);
   }, [applyFont]);
 

@@ -7,7 +7,6 @@ export const AppearanceSettings: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Theme Section */}
       <div className="space-y-3">
         <h4 className="text-sm font-bold text-slate-900 dark:text-theme-text">
           Theme
@@ -54,7 +53,6 @@ export const AppearanceSettings: React.FC = () => {
         </div>
       </div>
 
-      {/* Font Section */}
       <div className="space-y-3 pt-5 border-t border-slate-200/80 dark:border-theme-border">
         <div className="flex items-center gap-1.5">
           <Type className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />

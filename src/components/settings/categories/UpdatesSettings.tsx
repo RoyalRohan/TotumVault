@@ -25,7 +25,6 @@ export const UpdatesSettings: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Subsection 1: Current Version */}
       <div className="p-4 rounded-xl bg-slate-50 dark:bg-theme-surface/70 border border-slate-200/80 dark:border-theme-border flex items-center justify-between">
         <span className="text-xs font-bold text-slate-900 dark:text-theme-text">Current Version</span>
         <span className="text-xs font-mono text-purple-700 dark:text-purple-400 font-bold bg-white dark:bg-theme-surface px-3 py-1 rounded-lg border border-purple-200 dark:border-theme-border">
@@ -33,7 +32,6 @@ export const UpdatesSettings: React.FC = () => {
         </span>
       </div>
 
-      {/* Subsection 2: Automatic Updates */}
       <div className="space-y-3 pt-5 border-t border-slate-200/80 dark:border-theme-border">
         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted block">
           Automatic Updates
@@ -60,7 +58,6 @@ export const UpdatesSettings: React.FC = () => {
         </div>
       </div>
 
-      {/* Subsection 3: Update Check */}
       <div className="space-y-3 pt-5 border-t border-slate-200/80 dark:border-theme-border">
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-theme-text-muted block">
@@ -74,7 +71,6 @@ export const UpdatesSettings: React.FC = () => {
           )}
         </div>
 
-        {/* Air-Gap Active Notice in Updates */}
         {airGapMode && (
           <div className="p-3 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-500/40 text-xs text-purple-900 dark:text-purple-300 flex items-center gap-2.5">
             <WifiOff className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
@@ -98,7 +94,6 @@ export const UpdatesSettings: React.FC = () => {
           </button>
         </div>
 
-        {/* Status indicator when checking */}
         {isCheckingUpdate && (
           <div className="p-3 rounded-xl bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-500/30 text-xs text-purple-800 dark:text-purple-300 flex items-center gap-2.5">
             <RefreshCw className="w-4 h-4 animate-spin text-purple-600 dark:text-purple-400 shrink-0" />
@@ -106,7 +101,6 @@ export const UpdatesSettings: React.FC = () => {
           </div>
         )}
 
-        {/* Up to date state */}
         {updateInfo && !updateInfo.hasUpdate && (
           <div className="p-3.5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-500/30 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2.5">
             <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -114,7 +108,6 @@ export const UpdatesSettings: React.FC = () => {
           </div>
         )}
 
-        {/* Update available card */}
         {updateInfo && updateInfo.hasUpdate && (
           <div className="p-4 rounded-xl bg-purple-50/90 dark:bg-purple-950/30 border border-purple-300 dark:border-purple-500/50 space-y-3 animate-scale-up">
             <div className="flex items-center justify-between">

@@ -14,7 +14,6 @@ export const PrivacyNetworkSettings: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Air-Gap Mode Section */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5">
@@ -64,7 +63,6 @@ export const PrivacyNetworkSettings: React.FC = () => {
           </button>
         </div>
 
-        {/* Network Test */}
         <div className="p-3.5 rounded-xl bg-white dark:bg-theme-surface border border-slate-200/90 dark:border-theme-border space-y-3">
           <div className="flex items-center gap-2">
             <Activity className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />

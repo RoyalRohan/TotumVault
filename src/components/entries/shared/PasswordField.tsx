@@ -91,7 +91,6 @@ export const PasswordField: React.FC<PasswordFieldProps> = ({
         </div>
       </div>
 
-      {/* Live Strength & Entropy Meter */}
       {value && (
         <div className="p-3 rounded-xl bg-theme-elevated border border-theme-border space-y-2 animate-scale-up">
           <div className="flex items-center justify-between text-xs">

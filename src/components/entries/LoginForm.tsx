@@ -81,7 +81,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({
       onSubmit={handleSubmit}
       submitDisabled={!title.trim()}
     >
-      {/* Title, Website & Folder */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="sm:col-span-1">
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5">
@@ -132,7 +131,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         </div>
       </div>
 
-      {/* Account Credentials */}
       <FormSection title="Account Credentials" icon={<User className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -171,7 +169,6 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         />
       </FormSection>
 
-      {/* Two-Factor Authentication */}
       <FormSection title="Two-Factor Authentication" icon={<Clock className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <SecretInput
           label="TOTP / 2FA Secret Key"
@@ -182,13 +179,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({
         />
       </FormSection>
 
-      {/* Tags */}
       <TagEditor tags={tags} onChange={setTags} />
 
-      {/* Custom Fields */}
       <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />
 
-      {/* Secure Notes */}
       <div className="space-y-1.5">
         <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider flex items-center gap-1.5">
           <FileText className="w-3.5 h-3.5 text-emerald-400" />

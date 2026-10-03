@@ -43,7 +43,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Form states
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState<DocumentCategoryType>('other');
   const [documentDate, setDocumentDate] = useState('');
@@ -54,7 +53,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
   const [description, setDescription] = useState('');
   const [favorite, setFavorite] = useState(false);
 
-  // Load document when modal opens
   const loadData = useCallback(async () => {
     if (!documentId || !isOpen) return;
     setIsLoading(true);
@@ -81,7 +79,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
     loadData();
   }, [loadData]);
 
-  // Keyboard Escape
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -160,7 +157,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md select-none animate-scale-up">
       <div className="w-full max-w-lg glass-panel rounded-2xl border border-theme-border bg-theme-bg shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-5 py-3.5 border-b border-theme-border bg-theme-surface/60 shrink-0">
           <div className="flex items-center gap-2">
             <button
@@ -183,7 +179,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
           </button>
         </div>
 
-        {/* Content Form */}
         {isLoading ? (
           <div className="p-12 flex flex-col items-center justify-center gap-3 text-theme-text-muted">
             <div className="w-7 h-7 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
@@ -191,7 +186,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
           </div>
         ) : (
           <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-            {/* Title */}
             <div>
               <label className="text-xs font-semibold text-theme-text block mb-1">
                 Document Title
@@ -209,7 +203,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
               </div>
             </div>
 
-            {/* Document Type */}
             <div>
               <label className="text-xs font-semibold text-theme-text block mb-1.5">
                 Document Type
@@ -237,7 +230,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
               </div>
             </div>
 
-            {/* Issue Date & Expiry Date (Large Dual Calendar) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-theme-text block mb-1">
@@ -261,7 +253,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
                   title="Expiry Date"
                   placeholder="Select expiry date"
                 />
-                {/* Live Expiry Status beneath Expiry Date */}
                 <div className="mt-1.5 px-2 py-1 rounded-lg bg-theme-surface/70 border border-theme-border flex items-center justify-between text-[11px]">
                   <span className="text-theme-text-muted">Status:</span>
                   <span className={expiryInfo.badgeClass}>{expiryInfo.label}</span>
@@ -269,7 +260,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
               </div>
             </div>
 
-            {/* Renewal Reminders Toggle */}
             {expiryDate && (
               <div className="p-3 rounded-xl bg-theme-surface border border-theme-border space-y-2.5">
                 <div className="flex items-center justify-between">
@@ -331,7 +321,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
               </div>
             )}
 
-            {/* Tags */}
             <div>
               <label className="text-xs font-semibold text-theme-text block mb-1">
                 Tags
@@ -383,7 +372,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
               </div>
             </div>
 
-            {/* Description / Notes */}
             <div>
               <label className="text-xs font-semibold text-theme-text block mb-1">
                 Description & Notes
@@ -397,7 +385,6 @@ export const DocumentEditModal: React.FC<DocumentEditModalProps> = ({
               />
             </div>
 
-            {/* Action Buttons */}
             <div className="pt-2 flex items-center justify-end gap-2 border-t border-theme-border">
               <button
                 type="button"

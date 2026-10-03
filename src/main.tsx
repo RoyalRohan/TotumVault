@@ -5,30 +5,25 @@ import { installGlobalFetchAirGapGate } from "./utils/networkPolicy";
 // Initialize early defense-in-depth Air-Gap gate
 installGlobalFetchAirGapGate();
 
-// 1. Inter
 import "@fontsource/inter/400.css";
 import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
 
-// 2. Geist Sans
 import "@fontsource/geist-sans/400.css";
 import "@fontsource/geist-sans/500.css";
 import "@fontsource/geist-sans/600.css";
 import "@fontsource/geist-sans/700.css";
 
-// 3. IBM Plex Sans
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
 import "@fontsource/ibm-plex-sans/700.css";
 
-// 4. JetBrains Mono
 import "@fontsource/jetbrains-mono/400.css";
 import "@fontsource/jetbrains-mono/500.css";
 import "@fontsource/jetbrains-mono/600.css";
 
-// 5. Fira Code
 import "@fontsource/fira-code/400.css";
 import "@fontsource/fira-code/500.css";
 import "@fontsource/fira-code/600.css";
@@ -36,21 +31,16 @@ import "@fontsource/fira-code/600.css";
 import App from "./App";
 import "./index.css";
 
-// Production safety handlers to prevent right-click context menus and unwanted keyboard reloads/inspect triggers
 if (import.meta.env.PROD) {
-  // Disable right-click context menu
   document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-  // Disable common browser-level debug triggers
   document.addEventListener('keydown', (e) => {
-    // Disable F5, Ctrl+R, Cmd+R (Reloading native webview)
     if (
       e.key === 'F5' ||
       ((e.ctrlKey || e.metaKey) && e.key === 'r')
     ) {
       e.preventDefault();
     }
-    // Disable F12, Ctrl+Shift+I, Cmd+Option+I (Inspect Element / DevTools)
     if (
       e.key === 'F12' ||
       ((e.ctrlKey || e.metaKey) && e.key === 'I') ||

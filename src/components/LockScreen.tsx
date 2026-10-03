@@ -59,9 +59,9 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
     setCapsLockOn(e.getModifierState('CapsLock'));
   };
 
-  const handleOpenDeveloper = async (e: React.MouseEvent) => {
+  const handleOpenOfficialSite = async (e: React.MouseEvent) => {
     e.preventDefault();
-    const url = 'https://github.com/RoyalRohan';
+    const url = 'https://totumvault.app';
     try {
       await openUrl(url);
     } catch {
@@ -76,7 +76,6 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
           shake ? 'animate-shake border-rose-500/60 shadow-rose-500/10' : 'animate-scale-up'
         }`}
       >
-        {/* Brand Header */}
         <div className="flex flex-col items-center text-center mb-8">
           <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-2xl shadow-md mb-4 flex items-center justify-center p-1 border border-theme-border bg-theme-surface select-none">
             <img
@@ -112,7 +111,6 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
               </div>
             </div>
 
-            {/* Biometric Unlock Section (Class 3 Strong Biometrics) */}
             {isBiometricEnabled && (
               <div className="space-y-3">
                 {isBiometricLockedOut ? (
@@ -203,17 +201,15 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
         )}
       </div>
 
-      {/* Developer Credit Footer / Watermark */}
       <footer className="mt-6 sm:mt-8 text-center text-xs text-theme-text-muted/60 select-none relative z-10">
-        Developed by{' '}
         <a
-          href="https://github.com/RoyalRohan"
-          onClick={handleOpenDeveloper}
+          href="https://totumvault.app"
+          onClick={handleOpenOfficialSite}
           target="_blank"
           rel="noopener noreferrer"
           className="font-medium text-theme-text-muted hover:text-purple-600 dark:hover:text-purple-400 transition-colors underline underline-offset-4 decoration-theme-border hover:decoration-purple-600 dark:hover:decoration-purple-400 cursor-pointer"
         >
-          Rohan Ghimire
+          totumvault.app
         </a>
       </footer>
     </div>

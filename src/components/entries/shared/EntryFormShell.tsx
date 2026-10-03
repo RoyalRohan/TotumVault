@@ -49,7 +49,6 @@ export const EntryFormShell: React.FC<EntryFormShellProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md select-none">
       <div className="w-full max-w-xl glass-panel rounded-2xl shadow-2xl border border-theme-border animate-scale-up max-h-[94vh] flex flex-col overflow-hidden text-theme-text">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 sm:py-4 border-b border-theme-border bg-theme-surface/50 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-sm shrink-0">
@@ -104,13 +103,11 @@ export const EntryFormShell: React.FC<EntryFormShellProps> = ({
           </div>
         </div>
 
-        {/* Scrollable Form Content */}
         <form onSubmit={onSubmit} className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-4">
             {children}
           </div>
 
-          {/* Footer Actions */}
           <div className="px-4 sm:px-6 py-3 border-t border-theme-border bg-theme-surface/70 flex items-center justify-end gap-2.5 shrink-0">
             <button
               type="button"

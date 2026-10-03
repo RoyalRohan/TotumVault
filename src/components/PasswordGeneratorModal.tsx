@@ -63,7 +63,6 @@ export const PasswordGeneratorModal: React.FC = () => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md select-none">
       <div className="w-full max-w-lg glass-panel rounded-2xl p-4 sm:p-6 shadow-2xl border border-theme-border animate-scale-up max-h-[94vh] overflow-y-auto">
-        {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-theme-border">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-sm">
@@ -82,7 +81,6 @@ export const PasswordGeneratorModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Generated Password Box */}
         <div className="my-5 space-y-2.5">
           <div className="p-4 rounded-xl bg-theme-surface border border-theme-border flex items-center justify-between group gap-2 shadow-sm">
             <span className="font-mono text-base font-semibold text-purple-700 dark:text-purple-300 break-all select-all tracking-wider">
@@ -107,7 +105,6 @@ export const PasswordGeneratorModal: React.FC = () => {
             </div>
           </div>
 
-          {/* Strength Meter */}
           <div className="flex items-center justify-between text-xs px-1 flex-wrap gap-1">
             <div className="flex items-center gap-1.5">
               <span className="text-theme-text-muted">Security Score:</span>
@@ -129,9 +126,7 @@ export const PasswordGeneratorModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Options / Controls */}
         <div className="space-y-4 pt-2">
-          {/* Mode Switcher */}
           <div className="flex bg-theme-surface p-1.5 rounded-xl border border-theme-border text-xs">
             <button
               onClick={() => setConfig({ ...config, passphrase_mode: false })}
@@ -153,7 +148,6 @@ export const PasswordGeneratorModal: React.FC = () => {
 
           {!config.passphrase_mode ? (
             <>
-              {/* Length Slider & Presets */}
               <div className="space-y-2">
                 <div className="flex justify-between text-xs font-bold uppercase tracking-wider text-theme-text-muted">
                   <span>Password Length</span>
@@ -186,7 +180,6 @@ export const PasswordGeneratorModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Toggles */}
               <div className="grid grid-cols-2 gap-2.5 text-xs">
                 <label className="flex items-center gap-2.5 p-2.5 rounded-xl bg-theme-surface border border-theme-border cursor-pointer text-theme-text">
                   <input

@@ -58,10 +58,8 @@ const MainAppContent: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen bg-theme-bg text-theme-text overflow-hidden font-sans select-none flex-col md:flex-row transition-colors duration-150">
-      {/* Navigation Sidebar (Desktop Permanent + Mobile Drawer) */}
       <Sidebar />
 
-      {/* Main Workspace Area */}
       <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden min-w-0">
         {updateInfo?.hasUpdate && (
           <UpdateDialog
@@ -82,8 +80,6 @@ const MainAppContent: React.FC = () => {
             />
           ) : (
             <>
-              {/* On Desktop: Side-by-side (EntryList + EntryDetail) */}
-              {/* On Mobile: EntryList if !selectedEntryId, EntryDetail if selectedEntryId */}
               <div
                 className={`h-full flex flex-col min-w-0 ${
                   selectedEntryId ? 'hidden md:flex md:w-72 lg:w-80 shrink-0' : 'w-full md:w-72 lg:w-80 shrink-0'
@@ -103,18 +99,15 @@ const MainAppContent: React.FC = () => {
           )}
         </div>
 
-        {/* Mobile Bottom Navigation Bar (Hidden when viewing an entry detail or document viewer on mobile) */}
         {!selectedEntryId && (!selectedDocumentId || activeCategory !== 'documents') && <MobileBottomBar />}
       </div>
 
-      {/* Application Modals */}
       <EntryEditorModal />
       <PasswordGeneratorModal />
       <SettingsModal />
       <ImportExportModal />
       <FolderModals />
 
-      {/* Secure Document Vault Modals */}
       <DocumentScannerModal
         isOpen={isScannerOpen}
         onClose={closeScanner}

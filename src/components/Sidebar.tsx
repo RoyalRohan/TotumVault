@@ -63,7 +63,6 @@ export const Sidebar: React.FC = () => {
   const [renamingFolderName, setRenamingFolderName] = useState<string>('');
   const [mobileFolderMenuId, setMobileFolderMenuId] = useState<string | null>(null);
 
-  // Expanded folders state with localStorage persistence
   const [expandedFolderIds, setExpandedFolderIds] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('totumvault_expanded_folders');
@@ -71,9 +70,7 @@ export const Sidebar: React.FC = () => {
         const arr = JSON.parse(saved);
         if (Array.isArray(arr)) return new Set(arr);
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
     return new Set<string>();
   });
 
@@ -82,7 +79,6 @@ export const Sidebar: React.FC = () => {
     if (!isExpandedInitializedRef.current && folders.length > 0) {
       isExpandedInitializedRef.current = true;
       if (localStorage.getItem('totumvault_expanded_folders') === null) {
-        // Expand all folders by default on initial view
         setExpandedFolderIds(new Set(folders.map((f) => f.id)));
       }
     }
@@ -98,14 +94,11 @@ export const Sidebar: React.FC = () => {
       }
       try {
         localStorage.setItem('totumvault_expanded_folders', JSON.stringify(Array.from(next)));
-      } catch {
-        // ignore
-      }
+      } catch {}
       return next;
     });
   };
 
-  // Drag and drop state for folders
   const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
   const [draggedItemType, setDraggedItemType] = useState<'folder' | 'login' | null>(null);
   const [dropTarget, setDropTarget] = useState<{
@@ -242,7 +235,6 @@ export const Sidebar: React.FC = () => {
         }
       }
     } else {
-      // Login item being dragged over folder
       e.dataTransfer.dropEffect = 'move';
       setDropTarget({ folderId: folder.id, position: 'inside', isValid: true });
 
@@ -344,7 +336,6 @@ export const Sidebar: React.FC = () => {
     return entries.filter((e) => e.category === cat).length;
   };
 
-  // Minimal, consistent line-based monochrome icons with uniform stroke width
   const navItems: { id: CategoryType; label: string; icon: React.ReactNode }[] = [
     { id: 'all', label: 'All Items', icon: <Layers className="w-4 h-4 stroke-[1.75]" /> },
     { id: 'favorites', label: 'Favorites', icon: <Star className="w-4 h-4 stroke-[1.75]" /> },
@@ -390,7 +381,6 @@ export const Sidebar: React.FC = () => {
 
           return (
             <div key={folder.id} className="group/folder relative">
-              {/* Top insertion line for sibling reordering */}
               {!isMobile && isDropTarget && dropPos === 'before' && isDropValid && (
                 <div className="absolute -top-0.5 left-2 right-2 h-0.5 bg-purple-500 rounded-full z-20 pointer-events-none shadow-xs" />
               )}
@@ -422,7 +412,6 @@ export const Sidebar: React.FC = () => {
                 }}
               >
                 <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  {/* Expand/Collapse Chevron or alignment spacer */}
                   {hasChildren ? (
                     <button
                       type="button"
@@ -558,12 +547,10 @@ export const Sidebar: React.FC = () => {
                 </div>
               </div>
 
-              {/* Bottom insertion line for sibling reordering */}
               {!isMobile && isDropTarget && dropPos === 'after' && isDropValid && (
                 <div className="absolute -bottom-0.5 left-2 right-2 h-0.5 bg-purple-500 rounded-full z-20 pointer-events-none shadow-xs" />
               )}
 
-              {/* Recursively render child folders only if expanded */}
               {hasChildren && isExpanded && renderFolderTree(folder.id, depth + 1, isMobile)}
             </div>
           );
@@ -574,7 +561,6 @@ export const Sidebar: React.FC = () => {
 
   const renderSidebarBody = (isMobile: boolean = false) => (
     <div className="flex flex-col h-full select-none text-theme-text">
-      {/* Brand Header */}
       <div className="p-4 border-b border-theme-border flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center p-0.5 border border-theme-border bg-theme-surface shrink-0 shadow-sm">
@@ -613,7 +599,6 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation List */}
       <div className="flex-1 overflow-y-auto px-2.5 py-3 space-y-1">
         <span className="text-xs font-bold text-theme-text-muted uppercase tracking-wider px-3 mb-1.5 block">
           Categories
@@ -738,10 +723,8 @@ export const Sidebar: React.FC = () => {
                 </div>
               </div>
 
-              {/* Subfolders under Logins */}
               {isLoginsItem && isLoginsExpanded && (
                 <div className="pl-3 pr-1 py-1 space-y-1 border-l-2 border-slate-200 dark:border-theme-border ml-5 mt-0.5 animate-fade-in">
-                  {/* Unfiled Category Link if folders exist */}
                   {folders.length > 0 && (
                     <div
                       onDragOver={(e) => {
@@ -792,10 +775,8 @@ export const Sidebar: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Render Folder Tree */}
                   {renderFolderTree(null, 0, isMobile)}
 
-                  {/* Root drop zone when dragging nested folder */}
                   {!isMobile && (draggedFolderId || draggedItemType) && (
                     <div
                       onDragOver={(e) => {
@@ -835,7 +816,6 @@ export const Sidebar: React.FC = () => {
                     </div>
                   )}
 
-                  {/* New Folder Form or Button */}
                   {isCreatingFolder ? (
                     <form
                       onSubmit={async (e) => {
@@ -912,7 +892,6 @@ export const Sidebar: React.FC = () => {
         })}
       </div>
 
-      {/* Footer Status, Backup & Settings */}
       <div className="p-3 border-t border-theme-border space-y-1 bg-theme-surface/80 pb-safe">
         <button
           onClick={() => {
@@ -941,12 +920,10 @@ export const Sidebar: React.FC = () => {
 
   return (
     <>
-      {/* Desktop Sidebar (Permanent) */}
       <aside className="hidden md:flex w-64 bg-theme-surface/70 backdrop-blur-xl border-r border-theme-border flex-col h-full select-none shrink-0">
         {renderSidebarBody(false)}
       </aside>
 
-      {/* Mobile Off-Canvas Drawer */}
       {isMobileNavOpen && (
         <div className="fixed inset-0 z-50 md:hidden flex">
           <div

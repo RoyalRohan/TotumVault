@@ -60,7 +60,6 @@ export const SecureNoteForm: React.FC<SecureNoteFormProps> = ({
       onSubmit={handleSubmit}
       submitDisabled={!title.trim()}
     >
-      {/* Title */}
       <div>
         <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5">
           Note Title <span className="text-rose-400">*</span>
@@ -76,7 +75,6 @@ export const SecureNoteForm: React.FC<SecureNoteFormProps> = ({
         />
       </div>
 
-      {/* Large Comfortable Note Area */}
       <div className="space-y-1.5 flex-1">
         <div className="flex items-center justify-between">
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider flex items-center gap-1.5">
@@ -117,10 +115,8 @@ export const SecureNoteForm: React.FC<SecureNoteFormProps> = ({
         />
       </div>
 
-      {/* Tags */}
       <TagEditor tags={tags} onChange={setTags} />
 
-      {/* Optional Metadata / Custom Fields */}
       <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />
     </EntryFormShell>
   );

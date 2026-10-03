@@ -80,7 +80,6 @@ export const TotpViewer: React.FC<TotpViewerProps> = ({ secret, digits, period, 
   return (
     <div className="p-4 rounded-2xl bg-theme-surface border border-theme-border shadow-sm flex items-center justify-between">
       <div className="flex items-center gap-4">
-        {/* Countdown Ring */}
         <div className="relative w-9 h-9 flex items-center justify-center shrink-0">
           <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
             <path

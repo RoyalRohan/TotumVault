@@ -37,7 +37,6 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
   };
 
   const handleLater = () => {
-    // Dismiss for the current session
     sessionStorage.setItem('totumvault_dismissed_update_session', updateInfo.latestVersion);
     onClose();
   };
@@ -50,7 +49,6 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div className="bg-white dark:bg-theme-surface border border-slate-200 dark:border-theme-border rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col">
-        {/* Header */}
         <div className="px-6 py-5 border-b border-slate-100 dark:border-theme-border/60 flex items-center justify-between bg-slate-50/50 dark:bg-theme-bg/30">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
@@ -81,7 +79,6 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
           )}
         </div>
 
-        {/* Content */}
         <div className="p-6 space-y-4 max-h-80 overflow-y-auto">
           {errorMessage && (
             <div className="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 text-xs text-rose-700 dark:text-rose-400 flex items-start gap-2.5">
@@ -102,7 +99,6 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
             </div>
           </div>
 
-          {/* Progress Section */}
           {isUpdating && (
             <div className="space-y-2 pt-2">
               <div className="flex items-center justify-between text-xs font-semibold text-slate-700 dark:text-theme-text">
@@ -122,7 +118,6 @@ export const UpdateDialog: React.FC<UpdateDialogProps> = ({
           )}
         </div>
 
-        {/* Footer Actions */}
         <div className="px-6 py-4 border-t border-slate-100 dark:border-theme-border/60 bg-slate-50/50 dark:bg-theme-bg/30 flex items-center justify-between gap-3">
           <button
             type="button"

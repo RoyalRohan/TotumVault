@@ -56,12 +56,10 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
     }
   };
 
-  // Local filter states
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title' | 'title_desc' | 'expiry'>('newest');
 
-  // Menu, Edit & Delete modal states
   const [activeMenuDocId, setActiveMenuDocId] = useState<string | null>(null);
   const [editingDocId, setEditingDocId] = useState<string | null>(null);
   const [deletingDoc, setDeletingDoc] = useState<{ id: string; title: string } | null>(null);
@@ -71,7 +69,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
   const addMenuRef = useRef<HTMLDivElement>(null);
   const cardMenuRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdowns on outside click
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
@@ -85,7 +82,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, []);
 
-  // Mouse wheel and drag horizontal scrolling for category filter chips
   const {
     scrollRef: chipsScrollRef,
     canScrollLeft,
@@ -95,11 +91,9 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
     isDragging,
   } = useHorizontalScroll<HTMLDivElement>();
 
-  // Filter & sort documents
   const filteredDocuments = useMemo(() => {
     let list = [...documents];
 
-    // Search query filter (matches title, description, tags, doc_type, and AD / BS dates)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter((doc) => {
@@ -138,14 +132,12 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
       });
     }
 
-    // Category filter
     if (selectedCategory === 'favorites') {
       list = list.filter((doc) => doc.favorite);
     } else if (selectedCategory !== 'all') {
       list = list.filter((doc) => doc.doc_type.toLowerCase() === selectedCategory.toLowerCase());
     }
 
-    // Sorting
     list.sort((a, b) => {
       if (sortBy === 'newest') {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -166,10 +158,8 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
     return list;
   }, [documents, searchQuery, selectedCategory, sortBy]);
 
-  // Counts for filter chips
   const favoritesCount = useMemo(() => documents.filter((d) => d.favorite).length, [documents]);
 
-  // Confirm and execute document deletion
   const handleConfirmDelete = async () => {
     if (!deletingDoc) return;
     setIsDeleting(true);
@@ -185,11 +175,9 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
 
   return (
     <div className="flex-1 min-h-0 min-w-0 w-full flex flex-col h-full overflow-hidden bg-theme-bg select-none">
-      {/* HEADER SECTION */}
       <div className="px-3.5 sm:px-5 py-3 sm:py-3.5 border-b border-theme-border shrink-0 bg-theme-surface/50 backdrop-blur-md">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            {/* Mobile Navigation Drawer Button */}
             <button
               type="button"
               onClick={() => setIsMobileNavOpen(true)}
@@ -208,7 +196,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
             </span>
           </div>
 
-          {/* Primary Add Document Button with 2-option choice */}
           <div className="relative shrink-0" ref={addMenuRef}>
             <button
               type="button"
@@ -219,7 +206,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
               <span>Add Document</span>
             </button>
 
-            {/* Quick Choice Dropdown */}
             {showAddMenu && (
               <div className="absolute right-0 mt-1.5 w-44 rounded-2xl border border-theme-border bg-theme-surface shadow-2xl p-1.5 z-30 animate-scale-up text-xs font-medium">
                 <button
@@ -249,9 +235,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
           </div>
         </div>
 
-        {/* SEARCH & FILTERS BAR */}
         <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-          {/* Search Field */}
           <div className="relative flex-1 max-w-md w-full">
             <Search className="w-4 h-4 text-theme-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
@@ -285,9 +269,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
             )}
           </div>
 
-          {/* View Toggle & Sort Controls */}
           <div className="flex items-center justify-end gap-2 shrink-0">
-            {/* Sort Dropdown */}
             <div className="relative">
               <select
                 value={sortBy}
@@ -303,7 +285,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
               <ArrowUpDown className="w-3.5 h-3.5 text-theme-text-muted absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             </div>
 
-            {/* View Mode Toggle */}
             <div className="flex bg-theme-surface border border-theme-border rounded-xl p-0.5">
               <button
                 type="button"
@@ -335,7 +316,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
           </div>
         </div>
 
-        {/* Category Filter Chips Bar */}
         <div className="relative mt-2.5 flex items-center group -mx-3.5 px-3.5 sm:mx-0 sm:px-0">
           {canScrollLeft && (
             <button
@@ -426,7 +406,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
         </div>
       </div>
 
-      {/* DOCUMENT LIST / GRID VIEWPORT */}
       <div
         className="flex-1 min-h-0 overflow-y-auto p-3.5 sm:p-5 pb-28 sm:pb-8 pb-safe pl-safe pr-safe overscroll-y-contain focus:outline-none"
         tabIndex={0}
@@ -434,7 +413,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
         aria-label="Documents library"
       >
         {filteredDocuments.length === 0 ? (
-          /* EMPTY STATE */
           <div className="h-full flex flex-col items-center justify-center p-8 text-center max-w-sm mx-auto space-y-4">
             <div className="w-16 h-16 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shadow-inner">
               <FileText className="w-8 h-8 stroke-[1.75]" />
@@ -500,7 +478,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                   className="glass-panel group relative rounded-2xl border border-theme-border hover:border-purple-500/50 p-3 flex flex-col justify-between transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer bg-theme-surface/70"
                 >
                   <div>
-                    {/* Thumbnail Container */}
                     <div className="relative aspect-[4/3] rounded-xl overflow-hidden bg-black/60 border border-theme-border flex items-center justify-center group-hover:border-purple-500/30 transition-colors">
                       {doc.thumbnail_data ? (
                         <img
@@ -514,7 +491,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                         </div>
                       )}
 
-                      {/* Favorite Button */}
                       <button
                         type="button"
                         onClick={(e) => {
@@ -532,7 +508,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                         <Star className={`w-3.5 h-3.5 ${doc.favorite ? 'fill-amber-400' : ''}`} />
                       </button>
 
-                      {/* Page Count Badge (Multi-page indicator) */}
                       {doc.page_count > 1 && (
                         <div className="absolute bottom-2 right-2">
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-black/75 text-white backdrop-blur-md border border-white/10 shadow-xs">
@@ -543,20 +518,16 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                       )}
                     </div>
 
-                    {/* Metadata: 1. Title, 2. Type, 3. Expiry / Status */}
                     <div className="mt-2.5 space-y-1">
-                      {/* 1. DOCUMENT TITLE */}
                       <h4 className="text-sm font-bold text-theme-text truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                         {doc.title}
                       </h4>
 
-                      {/* 2. DOCUMENT TYPE */}
                       <div className="flex items-center gap-1 text-xs text-theme-text-muted">
                         <CatIcon className="w-3 h-3 text-purple-600 dark:text-purple-400 shrink-0" />
                         <span className="truncate">{catConfig.label}</span>
                       </div>
 
-                      {/* 3. EXPIRY / STATUS */}
                       <div className="pt-0.5">
                         <span className={`text-[11px] block truncate ${expiryInfo.badgeClass}`}>
                           {expiryInfo.label}
@@ -565,7 +536,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                     </div>
                   </div>
 
-                  {/* Card Footer: Date & 3-dot Menu */}
                   <div className="mt-3 pt-2 border-t border-theme-border/60 flex items-center justify-between text-[11px] text-theme-text-muted relative">
                     <span className="truncate">
                       {doc.document_date
@@ -573,7 +543,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                         : new Date(doc.created_at).toLocaleDateString()}
                     </span>
 
-                    {/* 3-Dot Menu Button */}
                     <div className="relative" ref={isMenuOpen ? cardMenuRef : undefined}>
                       <button
                         type="button"
@@ -588,7 +557,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                         <MoreVertical className="w-4 h-4" />
                       </button>
 
-                      {/* 3-Dot Action Menu */}
                       {isMenuOpen && (
                         <div
                           onClick={(e) => e.stopPropagation()}
@@ -662,7 +630,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                   className="glass-panel group rounded-xl border border-theme-border hover:border-purple-500/50 p-3 flex items-center justify-between gap-3 transition-all hover:bg-theme-surface/70 cursor-pointer bg-theme-surface/60"
                 >
                   <div className="flex items-center gap-3 min-w-0">
-                    {/* Thumbnail */}
                     <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-black/60 border border-theme-border shrink-0 flex items-center justify-center">
                       {doc.thumbnail_data ? (
                         <img
@@ -675,7 +642,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                       )}
                     </div>
 
-                    {/* Metadata details */}
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <h4 className="text-sm font-bold text-theme-text truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
@@ -706,7 +672,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                     </div>
                   </div>
 
-                  {/* Right Actions: Favorite & 3-Dot Menu */}
                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
@@ -733,7 +698,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                         <MoreVertical className="w-4 h-4" />
                       </button>
 
-                      {/* 3-Dot Action Menu */}
                       {isMenuOpen && (
                         <div className="absolute right-0 top-full mt-1 w-36 rounded-2xl border border-theme-border bg-theme-surface shadow-2xl p-1 z-30 animate-scale-up text-xs font-medium">
                           <button
@@ -791,7 +755,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
         )}
       </div>
 
-      {/* Edit Document Modal */}
       {editingDocId && (
         <DocumentEditModal
           documentId={editingDocId}
@@ -800,7 +763,6 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
         />
       )}
 
-      {/* Delete Document Confirmation Dialog */}
       {deletingDoc && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md select-none animate-scale-up">
           <div className="w-full max-w-sm glass-panel rounded-2xl p-5 border border-theme-border bg-theme-bg shadow-2xl space-y-4">

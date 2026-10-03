@@ -72,7 +72,6 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
       onSubmit={handleSubmit}
       submitDisabled={!productName.trim()}
     >
-      {/* Product Name & Vendor */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block mb-1.5">
@@ -103,7 +102,6 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
         </div>
       </div>
 
-      {/* License Key Hero Field */}
       <FormSection title="Activation Details" icon={<Key className="w-3.5 h-3.5 stroke-[1.75] text-purple-600 dark:text-purple-400" />}>
         <SecretInput
           label="License Key / Serial Number"
@@ -167,13 +165,10 @@ export const LicenseForm: React.FC<LicenseFormProps> = ({
         </div>
       </FormSection>
 
-      {/* Tags */}
       <TagEditor tags={tags} onChange={setTags} />
 
-      {/* Custom Fields */}
       <CustomFieldsEditor fields={customFields} onChange={setCustomFields} />
 
-      {/* Notes */}
       <div className="space-y-1.5">
         <label className="text-xs font-bold text-theme-text-muted uppercase tracking-wider block">
           Registration & Activation Notes

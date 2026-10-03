@@ -52,7 +52,6 @@ export const SetupVaultModal: React.FC<SetupVaultModalProps> = ({ isOpen, onClos
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-md">
       <div className="w-full max-w-lg glass-panel rounded-2xl p-4 sm:p-6 shadow-2xl border border-theme-border animate-scale-up max-h-[94vh] overflow-y-auto">
-        {/* Header */}
         <div className="flex items-center gap-3.5 mb-5 pb-4 border-b border-theme-border">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center p-1 border border-theme-border bg-theme-surface shrink-0 shadow-sm">
             <img src={logoImg} alt="TotumVault" className="w-full h-full object-cover rounded-[10px]" />
@@ -63,7 +62,6 @@ export const SetupVaultModal: React.FC<SetupVaultModalProps> = ({ isOpen, onClos
           </div>
         </div>
 
-        {/* Security Alert Warning */}
         <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/20 text-xs mb-5 space-y-1.5 shadow-2xs">
           <div className="flex items-center gap-1.5 font-bold text-amber-900 dark:text-amber-400">
             <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
@@ -107,7 +105,6 @@ export const SetupVaultModal: React.FC<SetupVaultModalProps> = ({ isOpen, onClos
               </button>
             </div>
 
-            {/* Password Strength Visualizer */}
             {password && (
               <div className="mt-2.5 p-3 rounded-xl bg-theme-surface border border-theme-border space-y-2 animate-scale-up">
                 <div className="flex items-center justify-between text-xs">

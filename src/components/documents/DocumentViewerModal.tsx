@@ -53,18 +53,15 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const [activeImageData, setActiveImageData] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Zoom and pan state
   const [zoomScale, setZoomScale] = useState<number>(1);
   const [panOffset, setPanOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState<boolean>(false);
   const panStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const [viewRotation, setViewRotation] = useState<number>(0);
 
-  // Touch gesture refs (pinch-to-zoom & double-tap)
   const lastTouchDistanceRef = useRef<number | null>(null);
   const lastTapTimeRef = useRef<number>(0);
 
-  // UI Drawer / Modal states
   const [showInfoPanel, setShowInfoPanel] = useState<boolean>(false);
   const [showDeleteDocConfirm, setShowDeleteDocConfirm] = useState<boolean>(false);
   const [showDeletePageConfirm, setShowDeletePageConfirm] = useState<boolean>(false);
@@ -73,10 +70,8 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
 
   const mobileMenuRef = useRef<HTMLDivElement>(null);
 
-  // Mouse wheel horizontal scrolling for thumbnails
   const { scrollRef: thumbnailsScrollRef } = useHorizontalScroll<HTMLDivElement>();
 
-  // Close mobile dropdown on outside click
   useEffect(() => {
     const handleOutside = (e: MouseEvent) => {
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(e.target as Node)) {
@@ -87,7 +82,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
-  // Load document details
   const loadDocument = useCallback(async () => {
     if (!documentId) return;
     setIsLoading(true);
@@ -113,7 +107,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     loadDocument();
   }, [loadDocument]);
 
-  // Load specific page when page index changes
   const switchPage = async (index: number) => {
     if (!documentDetail || index < 0 || index >= documentDetail.pages.length) return;
     setCurrentPageIndex(index);
@@ -130,7 +123,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     }
   };
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -153,7 +145,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [documentDetail, currentPageIndex, isEditing, showDeleteDocConfirm, showDeletePageConfirm, showInfoPanel, onClose]);
 
-  // Zoom controls
   const handleZoomIn = () => setZoomScale((s) => Math.min(4, s + 0.25));
   const handleZoomOut = () => setZoomScale((s) => Math.max(0.5, s - 0.25));
   const handleResetZoom = () => {
@@ -162,7 +153,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     setViewRotation(0);
   };
 
-  // Mouse pan controls
   const handleMouseDown = (e: React.MouseEvent) => {
     if (zoomScale <= 1) return;
     setIsPanning(true);
@@ -179,7 +169,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
 
   const handleMouseUp = () => setIsPanning(false);
 
-  // Touch controls: 2-finger pinch-to-zoom & 1-finger pan & double-tap
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
       const t1 = e.touches[0];
@@ -232,7 +221,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     setIsPanning(false);
   };
 
-  // Favorite toggle
   const handleToggleFavorite = async () => {
     if (!documentDetail) return;
     await toggleDocumentFavorite(documentDetail.metadata.id);
@@ -246,7 +234,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     );
   };
 
-  // Delete single page action
   const handleDeletePage = async () => {
     if (!documentDetail || documentDetail.pages.length <= 1) {
       showToast('Cannot delete the only page in document', 'error');
@@ -265,7 +252,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     }
   };
 
-  // Reorder page action
   const handleMovePage = async (direction: 'left' | 'right') => {
     if (!documentDetail || documentDetail.pages.length <= 1) return;
 
@@ -286,7 +272,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     }
   };
 
-  // Delete entire document action
   const handleDeleteDocument = async () => {
     if (!documentDetail) return;
     try {
@@ -298,7 +283,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     }
   };
 
-  // Download currently displayed decrypted page image to local filesystem
   const handleDownloadPage = async () => {
     if (!activeImageData || !documentDetail) return;
 
@@ -341,9 +325,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col h-screen h-[100dvh] max-h-[100dvh] bg-black/95 backdrop-blur-md select-none overflow-hidden animate-scale-up">
-      {/* TOP HEADER: < Back | Title | [Edit] [Delete] */}
       <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 bg-zinc-950/90 border-b border-zinc-800/80 backdrop-blur-lg shrink-0 z-20 pt-safe pl-safe pr-safe">
-        {/* Left: Back & Title */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             type="button"
@@ -374,9 +356,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           </div>
         </div>
 
-        {/* Right: Actions */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Zoom controls */}
           <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-0.5">
             <button
               type="button"
@@ -406,7 +386,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             </button>
           </div>
 
-          {/* Rotate */}
           <button
             type="button"
             onClick={() => setViewRotation((r) => (r + 90) % 360)}
@@ -417,7 +396,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             <RotateCw className="w-4 h-4" />
           </button>
 
-          {/* Desktop primary actions: [Edit] [Download] [Favorite] [Delete] [Info] */}
           <div className="hidden sm:flex items-center gap-1.5">
             <button
               type="button"
@@ -473,7 +451,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             </button>
           </div>
 
-          {/* Mobile 3-dot dropdown menu */}
           <div className="relative sm:hidden" ref={mobileMenuRef}>
             <button
               type="button"
@@ -548,7 +525,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         </div>
       </div>
 
-      {/* CENTER VIEWPORT: HERO DOCUMENT IMAGE */}
       <div
         className="flex-1 min-h-0 w-full relative overflow-hidden flex items-center justify-center p-2 sm:p-4 bg-zinc-950 select-none touch-none cursor-grab active:cursor-grabbing"
         onMouseDown={handleMouseDown}
@@ -583,7 +559,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           <div className="text-zinc-500 text-xs">No image available</div>
         )}
 
-        {/* Previous / Next Page Overlay Arrows */}
         {documentDetail && documentDetail.pages.length > 1 && (
           <>
             {currentPageIndex > 0 && (
@@ -618,7 +593,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           </>
         )}
 
-        {/* METADATA INFO DRAWER */}
         {showInfoPanel && documentDetail && (
           <div className="fixed inset-x-0 bottom-0 sm:inset-y-0 sm:right-0 sm:left-auto w-full sm:w-96 max-h-[80dvh] sm:max-h-full bg-zinc-900/98 sm:bg-zinc-900/95 border-t sm:border-t-0 sm:border-l border-zinc-800 rounded-t-2xl sm:rounded-none backdrop-blur-2xl p-4 sm:p-5 overflow-y-auto space-y-4 shadow-2xl z-30 animate-scale-up pt-safe pb-safe pl-safe pr-safe">
             <div className="w-10 h-1 rounded-full bg-zinc-700 mx-auto -mt-1 mb-2 sm:hidden" />
@@ -647,7 +621,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             </div>
 
             <div className="space-y-3.5 text-xs text-zinc-300">
-              {/* Title & Type */}
               <div>
                 <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
                   Title
@@ -660,7 +633,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                 </span>
               </div>
 
-              {/* Expiry Status Banner */}
               {expiryInfo && (
                 <div className="p-3 rounded-xl bg-zinc-950/70 border border-zinc-800 space-y-1">
                   <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block">
@@ -677,7 +649,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                 </div>
               )}
 
-              {/* Issue Date */}
               {documentDetail.metadata.document_date && (
                 <div>
                   <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
@@ -698,7 +669,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                 </div>
               )}
 
-              {/* Tags */}
               {documentDetail.metadata.tags && documentDetail.metadata.tags.length > 0 && (
                 <div>
                   <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-1">
@@ -717,7 +687,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                 </div>
               )}
 
-              {/* Description / Notes (only displayed when present) */}
               {documentDetail.metadata.description && (
                 <div>
                   <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider block mb-0.5">
@@ -729,7 +698,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                 </div>
               )}
 
-              {/* Action Buttons in Drawer */}
               <div className="pt-3 border-t border-zinc-800 flex gap-2">
                 <button
                   type="button"
@@ -753,9 +721,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         )}
       </div>
 
-      {/* BOTTOM TOOLBAR: MULTI-PAGE THUMBNAILS & PAGE REORDER / DELETE */}
       <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-zinc-950/90 border-t border-zinc-800/80 backdrop-blur-lg shrink-0 z-20 flex flex-col sm:flex-row items-center justify-between gap-2 pb-safe pl-safe pr-safe">
-        {/* Thumbnails strip */}
         <div ref={thumbnailsScrollRef} className="flex items-center gap-2 overflow-x-auto max-w-full sm:max-w-xl py-1 scrollbar-none select-none">
           {documentDetail?.pages.map((page, idx) => (
             <button
@@ -787,7 +753,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             </button>
           ))}
 
-          {/* Add Page Button */}
           {documentDetail && (
             <button
               type="button"
@@ -802,10 +767,8 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
           )}
         </div>
 
-        {/* Page management controls */}
         {documentDetail && documentDetail.pages.length > 1 && (
           <div className="flex items-center gap-2 text-xs shrink-0">
-            {/* Reorder Left / Right */}
             <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-0.5">
               <button
                 type="button"
@@ -830,7 +793,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
               </button>
             </div>
 
-            {/* Delete Current Page */}
             <button
               type="button"
               onClick={() => setShowDeletePageConfirm(true)}
@@ -845,7 +807,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         )}
       </div>
 
-      {/* Edit Document Modal */}
       {isEditing && (
         <DocumentEditModal
           documentId={documentDetail?.metadata.id || null}
@@ -855,7 +816,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         />
       )}
 
-      {/* CONFIRM DELETE ENTIRE DOCUMENT MODAL */}
       {showDeleteDocConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md select-none animate-scale-up">
           <div className="w-full max-w-sm glass-panel rounded-2xl p-5 border border-zinc-800 bg-zinc-900 shadow-2xl space-y-4">
@@ -890,7 +850,6 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
         </div>
       )}
 
-      {/* CONFIRM DELETE SINGLE PAGE MODAL */}
       {showDeletePageConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md select-none animate-scale-up">
           <div className="w-full max-w-sm glass-panel rounded-2xl p-5 border border-zinc-800 bg-zinc-900 shadow-2xl space-y-4">

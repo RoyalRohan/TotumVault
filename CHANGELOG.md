@@ -6,6 +6,8 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 ## [2.0.0] — 2026-10-03
 
+TotumVault v2.0.0 is a milestone release delivering robust offline capabilities, local background notifications, dual-calendar support, strict air-gap isolation, and comprehensive system hardening. This release consolidates all major features developed from v1.3.2 through v2.0.0 into a unified, production-grade local-first security platform.
+
 ### Added
 
 - **Real Offline Android Document Expiry Notification Pipeline**:
@@ -14,21 +16,51 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
   - Concurrent SQLite WAL mode support (`OPEN_READWRITE or ENABLE_WRITE_AHEAD_LOGGING`) eliminating lock contention against the Rust backend.
   - DST-safe day-difference calculation (`Math.round`) ensuring exact milestone countdown delivery (5, 4, 3, 2, 1 days before, expiry day, and post-expiry single alert).
   - End-to-end 30-second scheduled test alarm (`Test 30s Alarm`) in Document Settings to verify background wakeups and receiver delivery on physical devices and emulators.
-  - Contextual in-app notification permission explanation modal triggered immediately upon setting document expiry or enabling reminders.
+  - Contextual in-app notification permission explanation modal (`NotificationPermissionPrompt`) triggered immediately upon setting document expiry or enabling reminders.
   - Safe technical diagnostic logging (`REMINDER:` prefix) with zero sensitive data or credential leakage.
+
+- **Collision-Aware Dual Calendar System (Gregorian AD + Nepali Bikram Sambat BS)**:
+  - Accurate offline bidirectional conversion between Gregorian (AD) and Nepali Bikram Sambat (BS) calendars.
+  - Responsive BS and AD calendar date pickers with zero horizontal overflow across 320px–1920px viewports.
+  - Full touch-target compliance guaranteeing 44px–48px minimum hit areas on desktop and mobile.
+  - Dynamic variable month-length calculation for BS calendar months based on historical and astronomical Nepali calendar tables.
+  - Integrated dual AD/BS date presentation across Document & Bill expiry tracking, Software Licenses, and item forms.
+  - User preference setting for default calendar format (Gregorian AD or Nepali BS) across the application.
+
+- **Application-Level Air-Gap Mode & Network Isolation**:
+  - Strict network policy isolation service blocking outbound network requests when Air-Gap Mode is enabled.
+  - Synchronous early fetch gate interception and backend policy verification.
+  - Safe air-gap test command (`test_air_gap_blocking`) guaranteeing zero network bytes transmitted.
+  - Real-time event notifications (`totumvault://air-gap-changed`) synchronizing network status across desktop and mobile.
+
+- **Production Preferences & Settings Architecture**:
+  - Re-architected settings modal into 7 dedicated categories: General, Appearance, Security, Privacy & Network, Documents & Expiry, Data Management, and Updates.
+  - Responsive desktop sidebar navigation with instant section switching and status badges.
+  - Mobile-optimized segmented tab navigation with compact overview and bottom vault status.
+  - Strictly single-source update toggle eliminating duplicate controls.
+  - Dynamic authoritative app version resolution bound directly to `get_app_version()`.
 
 - **Unified Single Documents Search & Navigation**:
   - Context-aware global header unmounting in Documents view, establishing a single authoritative search and filter toolbar.
   - Keyboard shortcut navigation (`Ctrl+K` / `⌘K` to focus, `Escape` to clear/blur) and mobile drawer menu integration.
 
-- **Collision-Aware Dual Calendar System (BS + AD)**:
-  - Responsive Bikram Sambat (BS) and Gregorian (AD) calendar date pickers with zero horizontal overflow across 320px–1920px viewports.
-  - Full touch-target compliance guaranteeing 44px–48px minimum hit areas on desktop and mobile.
+- **Hardened Multi-Tier Secure Clipboard Engine**:
+  - Concurrency-safe clipboard auto-clear with atomic operation mutex serialization (`op_mutex`) and monotonic generation reservation (`pending_generation`).
+  - Android native bridge support with `EXTRA_IS_SENSITIVE` flag (Android 13+) preventing clipboard previews and cloud sync.
+  - Native Tauri secure clipboard pipeline registering cryptographic HMAC session in native Rust with `ZeroizeOnDrop`.
+  - Multi-tier fallback pipeline (Android native, Tauri plugin, Web API, DOM execCommand) ensuring reliable clipboard clearing across all environments.
+
+- **Production Codebase Hardening & Official Portal Branding**:
+  - Official portal branding: Updated Lock Screen to link directly to `totumvault.app`.
+  - Cleaned up redundant placeholder text, verbose comments, TODOs, and vibe-coded commentary across 43 codebase files.
+  - Strictly preserved genuine technical, cryptographic, and architectural invariant comments.
 
 ### Fixed
 
 - **Android Scheduled Notification Delivery**: Resolved runtime failure where scheduled alarms could not locate `vault.sqlite` in `context.dataDir`.
 - **Documents Duplicate Search Input**: Resolved layout defect where global vault search and document library search rendered concurrently.
+- **Secure Clipboard Auto-Clear**: Hardened auto-clear timers and generation tracking for atomic clipboard purging.
+- **Version Reporting Consistency**: Eliminated hardcoded version fallback strings across all settings and navigation components.
 
 ## [1.3.4] — 2026-09-29
 
