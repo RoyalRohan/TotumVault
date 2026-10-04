@@ -124,16 +124,19 @@ jobs:
           if [ -n "$CUSTOM_KEYSTORE_B64" ]; then
             echo "Using custom release keystore from GitHub Secrets..."
             echo "$CUSTOM_KEYSTORE_B64" | base64 -d > release.keystore
-            echo "KEYSTORE_PASS=${CUSTOM_KEYSTORE_PASS:-totumvault2026}" >> $GITHUB_ENV
-            echo "KEY_ALIAS=${CUSTOM_KEY_ALIAS:-totumvault}" >> $GITHUB_ENV
-            echo "KEY_PASS=${CUSTOM_KEY_PASS:-totumvault2026}" >> $GITHUB_ENV
+            KEYSTORE_PASS="${CUSTOM_KEYSTORE_PASS:-totumvault2026}"
+            KEY_ALIAS="${CUSTOM_KEY_ALIAS:-totumvault}"
+            KEY_PASS="${CUSTOM_KEY_PASS:-totumvault2026}"
           else
             echo "Using permanent repository release keystore (scripts/android/totumvault-release.jks)..."
             cp scripts/android/totumvault-release.jks release.keystore
-            echo "KEYSTORE_PASS=totumvault2026" >> $GITHUB_ENV
-            echo "KEY_ALIAS=totumvault" >> $GITHUB_ENV
-            echo "KEY_PASS=totumvault2026" >> $GITHUB_ENV
+            KEYSTORE_PASS="totumvault2026"
+            KEY_ALIAS="totumvault"
+            KEY_PASS="totumvault2026"
           fi
+          echo "KEYSTORE_PASS=$KEYSTORE_PASS" >> $GITHUB_ENV
+          echo "KEY_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
+          echo "KEY_PASS=$KEY_PASS" >> $GITHUB_ENV
           # Verify keystore integrity and output certificate fingerprint for auditability
           keytool -list -v -keystore release.keystore -storepass "$KEYSTORE_PASS" -alias "$KEY_ALIAS" | grep -E "Alias name|Owner|SHA256:"
 
