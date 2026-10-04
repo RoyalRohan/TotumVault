@@ -114,9 +114,31 @@ jobs:
           cp -rf src-tauri/icons/android/* src-tauri/gen/android/app/src/main/res/
           npx tauri icon src/assets/logo.png
 
+      - name: Prepare Android Release Keystore
+        env:
+          CUSTOM_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          CUSTOM_KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          CUSTOM_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          CUSTOM_KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$CUSTOM_KEYSTORE_B64" ]; then
+            echo "Using custom release keystore from GitHub Secrets..."
+            echo "$CUSTOM_KEYSTORE_B64" | base64 -d > release.keystore
+            echo "KEYSTORE_PASS=${CUSTOM_KEYSTORE_PASS:-totumvault2026}" >> $GITHUB_ENV
+            echo "KEY_ALIAS=${CUSTOM_KEY_ALIAS:-totumvault}" >> $GITHUB_ENV
+            echo "KEY_PASS=${CUSTOM_KEY_PASS:-totumvault2026}" >> $GITHUB_ENV
+          else
+            echo "Using permanent repository release keystore (scripts/android/totumvault-release.jks)..."
+            cp scripts/android/totumvault-release.jks release.keystore
+            echo "KEYSTORE_PASS=totumvault2026" >> $GITHUB_ENV
+            echo "KEY_ALIAS=totumvault" >> $GITHUB_ENV
+            echo "KEY_PASS=totumvault2026" >> $GITHUB_ENV
+          fi
+          # Verify keystore integrity and output certificate fingerprint for auditability
+          keytool -list -v -keystore release.keystore -storepass "$KEYSTORE_PASS" -alias "$KEY_ALIAS" | grep -E "Alias name|Owner|SHA256:"
+
       - name: Build & Package Android APKs
         run: |
-          keytool -genkey -v -keystore release.keystore -alias totumvault -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=TotumVault, OU=Security, O=TotumVault, L=City, S=State, C=US"
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -n 1)
           mkdir -p release-apks
 
@@ -124,14 +146,36 @@ jobs:
             local dest_name="$1"
             local found_apk=$(find src-tauri/gen/android/app/build/outputs/apk -type f -name "*.apk" | head -n 1)
             if [ -n "$found_apk" ]; then
-              echo "Signing $found_apk as $dest_name..."
-              $BUILD_TOOLS_DIR/apksigner sign --ks release.keystore --ks-pass pass:android --key-pass pass:android "$found_apk"
-              $BUILD_TOOLS_DIR/apksigner verify "$found_apk"
+              echo "Processing $found_apk as $dest_name..."
+
+              # 1. 4-byte ZipAlign
+              if [ -f "$BUILD_TOOLS_DIR/zipalign" ]; then
+                echo "Aligning $found_apk with zipalign..."
+                $BUILD_TOOLS_DIR/zipalign -f -v 4 "$found_apk" "${found_apk}.aligned"
+                mv -f "${found_apk}.aligned" "$found_apk"
+              fi
+
+              # 2. Sign APK with permanent release keystore
+              echo "Signing $found_apk with permanent keystore..."
+              $BUILD_TOOLS_DIR/apksigner sign \
+                --ks release.keystore \
+                --ks-pass pass:"$KEYSTORE_PASS" \
+                --key-pass pass:"$KEY_PASS" \
+                --ks-key-alias "$KEY_ALIAS" \
+                --v1-signing-enabled true \
+                --v2-signing-enabled true \
+                --v3-signing-enabled true \
+                "$found_apk"
+
+              # 3. Verify signatures and output details
+              $BUILD_TOOLS_DIR/apksigner verify --verbose "$found_apk"
+
               cp -f "$found_apk" "release-apks/$dest_name"
               echo "Successfully packaged release-apks/$dest_name"
               rm -rf src-tauri/gen/android/app/build/outputs/apk/*
             else
-              echo "Warning: No APK found for $dest_name"
+              echo "Error: No APK found for $dest_name"
+              exit 1
             fi
           }
 

@@ -121,7 +121,28 @@ if (fs.existsSync(receiverSrc)) {
   }
 }
 
-// Patch build.gradle.kts / build.gradle to ensure androidx.biometric dependency is added
+// Extract app version and calculate Android versionCode
+const tauriConfPath = path.resolve(__dirname, '../src-tauri/tauri.conf.json');
+let appVersion = '2.0.0';
+if (fs.existsSync(tauriConfPath)) {
+  try {
+    const tauriConf = JSON.parse(fs.readFileSync(tauriConfPath, 'utf8'));
+    if (tauriConf.version) {
+      appVersion = tauriConf.version;
+    }
+  } catch (e) {
+    console.warn(`[patch-android-manifest] Failed to read tauri.conf.json version: ${e.message}`);
+  }
+}
+
+const semverParts = appVersion.split('.').map(n => parseInt(n, 10) || 0);
+const major = semverParts[0] || 1;
+const minor = semverParts[1] || 0;
+const patch = semverParts[2] || 0;
+// Standard Android versionCode: major * 1000000 + minor * 1000 + patch (e.g. 2.0.0 -> 2000000)
+const calculatedVersionCode = major * 1000000 + minor * 1000 + patch;
+
+// Patch build.gradle.kts / build.gradle to ensure androidx.biometric dependency, versionCode, and versionName are updated
 const gradlePaths = [
   path.resolve(__dirname, '../src-tauri/gen/android/app/build.gradle.kts'),
   path.resolve(__dirname, '../src-tauri/gen/android/app/build.gradle'),
@@ -130,17 +151,50 @@ const gradlePaths = [
 for (const gPath of gradlePaths) {
   if (fs.existsSync(gPath)) {
     let gContent = fs.readFileSync(gPath, 'utf8');
+    let gradleModified = false;
+
+    // Ensure versionCode is up-to-date and monotonically increasing
+    if (/versionCode\s*=\s*\d+/.test(gContent)) {
+      gContent = gContent.replace(/versionCode\s*=\s*\d+/, `versionCode = ${calculatedVersionCode}`);
+      gradleModified = true;
+    } else if (/versionCode\s+\d+/.test(gContent)) {
+      gContent = gContent.replace(/versionCode\s+\d+/, `versionCode ${calculatedVersionCode}`);
+      gradleModified = true;
+    }
+
+    // Ensure versionName matches tauri.conf.json
+    if (/versionName\s*=\s*"[^"]*"/.test(gContent)) {
+      gContent = gContent.replace(/versionName\s*=\s*"[^"]*"/, `versionName = "${appVersion}"`);
+      gradleModified = true;
+    } else if (/versionName\s+"[^"]*"/.test(gContent)) {
+      gContent = gContent.replace(/versionName\s+"[^"]*"/, `versionName "${appVersion}"`);
+      gradleModified = true;
+    }
+
     if (!gContent.includes('androidx.biometric:biometric')) {
       if (gContent.includes('dependencies {')) {
         const depLine = gPath.endsWith('.kts')
           ? '    implementation("androidx.biometric:biometric:1.2.0-alpha05")'
           : "    implementation 'androidx.biometric:biometric:1.2.0-alpha05'";
         gContent = gContent.replace('dependencies {', `dependencies {\n${depLine}`);
-        fs.writeFileSync(gPath, gContent, 'utf8');
-        console.log(`[patch-android-manifest] Added androidx.biometric dependency to ${gPath}`);
+        gradleModified = true;
       }
     }
+
+    if (gradleModified) {
+      fs.writeFileSync(gPath, gContent, 'utf8');
+      console.log(`[patch-android-manifest] Updated Gradle build configuration (versionCode=${calculatedVersionCode}, versionName="${appVersion}") in ${gPath}`);
+    }
   }
+}
+
+// Copy permanent release keystore into Android project if present
+const permanentKeystoreSrc = path.resolve(__dirname, 'android/totumvault-release.jks');
+const genAndroidDir = path.resolve(__dirname, '../src-tauri/gen/android');
+if (fs.existsSync(permanentKeystoreSrc) && fs.existsSync(genAndroidDir)) {
+  const destKeystore = path.join(genAndroidDir, 'release.keystore');
+  fs.copyFileSync(permanentKeystoreSrc, destKeystore);
+  console.log(`[patch-android-manifest] Copied permanent release keystore to ${destKeystore}`);
 }
 
 // Check and patch MainActivity.kt for FLAG_SECURE screen protection and native AndroidBiometricsBridge

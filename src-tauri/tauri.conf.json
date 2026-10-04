@@ -32,6 +32,10 @@
       "nsis",
       "dmg"
     ],
+    "android": {
+      "minSdkVersion": 24,
+      "versionCode": 2000000
+    },
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",
