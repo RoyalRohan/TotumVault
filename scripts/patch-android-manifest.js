@@ -123,7 +123,7 @@ if (fs.existsSync(receiverSrc)) {
 
 // Extract app version and calculate Android versionCode
 const tauriConfPath = path.resolve(__dirname, '../src-tauri/tauri.conf.json');
-let appVersion = '2.0.0';
+let appVersion = '2.0.1';
 if (fs.existsSync(tauriConfPath)) {
   try {
     const tauriConf = JSON.parse(fs.readFileSync(tauriConfPath, 'utf8'));

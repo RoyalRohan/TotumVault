@@ -175,6 +175,7 @@ pub fn run() {
             commands::list_documents,
             commands::get_document,
             commands::get_document_page_data,
+            commands::export_document_page,
             commands::save_document,
             commands::add_document_page,
             commands::delete_document,

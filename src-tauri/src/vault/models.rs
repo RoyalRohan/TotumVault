@@ -242,6 +242,8 @@ pub struct BackupPageItem {
     pub document_id: String,
     pub page_number: usize,
     pub mime_type: String,
+    #[serde(default)]
+    pub file_name: Option<String>,
     pub width: u32,
     pub height: u32,
     pub file_size: usize,
@@ -318,6 +320,12 @@ pub struct DocumentMetadata {
     pub created_at: String,
     pub updated_at: String,
     pub thumbnail_data: Option<String>,
+    #[serde(default)]
+    pub primary_mime_type: Option<String>,
+    #[serde(default)]
+    pub primary_file_name: Option<String>,
+    #[serde(default)]
+    pub total_file_size: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -326,6 +334,8 @@ pub struct DocumentPage {
     pub document_id: String,
     pub page_number: usize,
     pub mime_type: String,
+    #[serde(default)]
+    pub file_name: Option<String>,
     pub width: u32,
     pub height: u32,
     pub file_size: usize,
@@ -345,6 +355,8 @@ pub struct SavePageInput {
     pub id: Option<String>,
     pub page_number: usize,
     pub mime_type: String,
+    #[serde(default)]
+    pub file_name: Option<String>,
     pub width: u32,
     pub height: u32,
     pub file_size: usize,

@@ -691,6 +691,7 @@ impl VaultManager {
                     document_id: p.document_id,
                     page_number: p.page_number,
                     mime_type: p.mime_type,
+                    file_name: p.file_name,
                     width: p.width,
                     height: p.height,
                     file_size: p.file_size,
@@ -819,6 +820,7 @@ impl VaultManager {
                     &page.document_id,
                     page.page_number,
                     &page.mime_type,
+                    page.file_name.as_deref(),
                     page.width,
                     page.height,
                     page.file_size,
@@ -949,43 +951,9 @@ impl VaultManager {
                     }
                 }
 
-                // Re-encrypt documents into current vault
+                // Re-encrypt documents into current vault preserving original MIME types and filenames
                 for doc in imported_docs {
-                    let mut re_encrypted_pages = Vec::new();
-                    for page in doc.pages {
-                        if let Ok(raw_image) = decrypt_bytes(&b_vek.0, &page.nonce_b64, &page.encrypted_blob_b64) {
-                            let thumb = if let (Some(t_nonce), Some(t_blob)) = (&page.thumbnail_nonce_b64, &page.thumbnail_blob_b64) {
-                                decrypt_bytes(&b_vek.0, t_nonce, t_blob).ok().map(|tb| format!("data:image/jpeg;base64,{}", BASE64.encode(tb)))
-                            } else {
-                                None
-                            };
-
-                            re_encrypted_pages.push(SavePageInput {
-                                id: Some(page.id),
-                                page_number: page.page_number,
-                                mime_type: page.mime_type,
-                                width: page.width,
-                                height: page.height,
-                                file_size: page.file_size,
-                                image_data: format!("data:{};base64,{}", "image/jpeg", BASE64.encode(raw_image)),
-                                thumbnail_data: thumb,
-                            });
-                        }
-                    }
-
-                    let save_input = SaveDocumentInput {
-                        id: Some(doc.id),
-                        title: doc.title,
-                        doc_type: doc.doc_type,
-                        description: doc.description,
-                        tags: doc.tags,
-                        document_date: doc.document_date,
-                        expiry_date: doc.expiry_date,
-                        favorite: doc.favorite,
-                        reminder_enabled: doc.reminder_enabled,
-                        pages: re_encrypted_pages,
-                    };
-
+                    let save_input = build_reencrypted_document_input(doc, b_vek, false);
                     if self.save_document(save_input).is_ok() {
                         summary.documents_imported += 1;
                     }
@@ -1045,44 +1013,10 @@ impl VaultManager {
                 }
             }
 
-            // If backup contains documents, re-encrypt and add them
+            // If backup contains documents, re-encrypt and add them preserving MIME types and filenames
             if let Some(b_vek) = backup_vek {
                 for doc in imported_docs {
-                    let mut re_encrypted_pages = Vec::new();
-                    for page in doc.pages {
-                        if let Ok(raw_image) = decrypt_bytes(&b_vek.0, &page.nonce_b64, &page.encrypted_blob_b64) {
-                            let thumb = if let (Some(t_nonce), Some(t_blob)) = (&page.thumbnail_nonce_b64, &page.thumbnail_blob_b64) {
-                                decrypt_bytes(&b_vek.0, t_nonce, t_blob).ok().map(|tb| format!("data:image/jpeg;base64,{}", BASE64.encode(tb)))
-                            } else {
-                                None
-                            };
-
-                            re_encrypted_pages.push(SavePageInput {
-                                id: None, // fresh ID to avoid conflict
-                                page_number: page.page_number,
-                                mime_type: page.mime_type,
-                                width: page.width,
-                                height: page.height,
-                                file_size: page.file_size,
-                                image_data: format!("data:{};base64,{}", "image/jpeg", BASE64.encode(raw_image)),
-                                thumbnail_data: thumb,
-                            });
-                        }
-                    }
-
-                    let save_input = SaveDocumentInput {
-                        id: None,
-                        title: doc.title,
-                        doc_type: doc.doc_type,
-                        description: doc.description,
-                        tags: doc.tags,
-                        document_date: doc.document_date,
-                        expiry_date: doc.expiry_date,
-                        favorite: doc.favorite,
-                        reminder_enabled: doc.reminder_enabled,
-                        pages: re_encrypted_pages,
-                    };
-
+                    let save_input = build_reencrypted_document_input(doc, &b_vek, true);
                     if self.save_document(save_input).is_ok() {
                         summary.documents_imported += 1;
                     }
@@ -1137,6 +1071,9 @@ impl VaultManager {
                 created_at: d.created_at,
                 updated_at: d.updated_at,
                 thumbnail_data,
+                primary_mime_type: d.first_page_mime_type,
+                primary_file_name: d.first_page_file_name,
+                total_file_size: Some(d.total_file_size),
             });
         }
 
@@ -1175,16 +1112,19 @@ impl VaultManager {
                 document_id: p.document_id,
                 page_number: p.page_number,
                 mime_type: p.mime_type,
+                file_name: p.file_name,
                 width: p.width,
                 height: p.height,
                 file_size: p.file_size,
                 created_at: p.created_at,
-                image_data: None, // full image data loaded on-demand per page
+                image_data: None, // full file/image data loaded on-demand per page
                 thumbnail_data,
             });
         }
 
         let first_thumb = pages.first().and_then(|p| p.thumbnail_data.clone());
+        let first_mime = pages.first().map(|p| p.mime_type.clone()).or(d.first_page_mime_type);
+        let first_name = pages.first().and_then(|p| p.file_name.clone()).or(d.first_page_file_name);
         let metadata = DocumentMetadata {
             id: d.id,
             title: d.title,
@@ -1201,13 +1141,17 @@ impl VaultManager {
             created_at: d.created_at,
             updated_at: d.updated_at,
             thumbnail_data: first_thumb,
+            primary_mime_type: first_mime,
+            primary_file_name: first_name,
+            total_file_size: Some(d.total_file_size),
         };
 
         self.touch_activity();
         Ok(DocumentDetail { metadata, pages })
     }
 
-    pub fn get_document_page_data(&mut self, page_id: &str) -> Result<String, String> {
+    /// Decrypts raw bytes and MIME type for a stored document page or attachment.
+    pub fn get_document_page_raw(&mut self, page_id: &str) -> Result<(String, Vec<u8>), String> {
         self.check_auto_lock();
         let key = self
             .active_key
@@ -1220,7 +1164,12 @@ impl VaultManager {
 
         let bytes = decrypt_bytes(&key.0, &page.nonce_b64, &page.encrypted_blob_b64)?;
         self.touch_activity();
-        Ok(format!("data:{};base64,{}", page.mime_type, BASE64.encode(bytes)))
+        Ok((page.mime_type, bytes))
+    }
+
+    pub fn get_document_page_data(&mut self, page_id: &str) -> Result<String, String> {
+        let (mime_type, bytes) = self.get_document_page_raw(page_id)?;
+        Ok(format!("data:{};base64,{}", mime_type, BASE64.encode(bytes)))
     }
 
     pub fn save_document(&mut self, input: SaveDocumentInput) -> Result<String, String> {
@@ -1272,42 +1221,14 @@ impl VaultManager {
             &now,
         )?;
 
-        // If pages provided, save / encrypt pages
+        // If pages provided, save / encrypt pages via shared helper
         for (idx, page_input) in input.pages.into_iter().enumerate() {
-            let page_id = page_input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
-            let (mime, raw_bytes) = decode_image_payload(&page_input.image_data, &page_input.mime_type)?;
-
-            let encrypted_page = encrypt_bytes(&key.0, &raw_bytes)?;
-
-            let (thumb_nonce, thumb_blob) = if let Some(ref thumb_data) = page_input.thumbnail_data {
-                let (_, thumb_bytes) = decode_image_payload(thumb_data, "image/jpeg")?;
-                let enc_thumb = encrypt_bytes(&key.0, &thumb_bytes)?;
-                (Some(enc_thumb.nonce_b64), Some(enc_thumb.ciphertext_b64))
-            } else {
-                (None, None)
-            };
-
             let page_num = if page_input.page_number > 0 {
                 page_input.page_number
             } else {
                 idx + 1
             };
-
-            save_document_page_record(
-                &conn,
-                &page_id,
-                &doc_id,
-                page_num,
-                &mime,
-                page_input.width,
-                page_input.height,
-                raw_bytes.len(),
-                &encrypted_page.nonce_b64,
-                &encrypted_page.ciphertext_b64,
-                thumb_nonce.as_deref(),
-                thumb_blob.as_deref(),
-                &now,
-            )?;
+            encrypt_and_save_page(&conn, &key.0, &doc_id, page_num, page_input, &now)?;
         }
 
         self.touch_activity();
@@ -1324,36 +1245,9 @@ impl VaultManager {
         let conn = init_db(&self.db_path)?;
         let existing_pages = get_document_pages_by_doc_id(&conn, document_id)?;
         let next_page_num = existing_pages.len() + 1;
-
-        let page_id = page_input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
         let now = Utc::now().to_rfc3339();
-        let (mime, raw_bytes) = decode_image_payload(&page_input.image_data, &page_input.mime_type)?;
 
-        let encrypted_page = encrypt_bytes(&key.0, &raw_bytes)?;
-
-        let (thumb_nonce, thumb_blob) = if let Some(ref thumb_data) = page_input.thumbnail_data {
-            let (_, thumb_bytes) = decode_image_payload(thumb_data, "image/jpeg")?;
-            let enc_thumb = encrypt_bytes(&key.0, &thumb_bytes)?;
-            (Some(enc_thumb.nonce_b64), Some(enc_thumb.ciphertext_b64))
-        } else {
-            (None, None)
-        };
-
-        save_document_page_record(
-            &conn,
-            &page_id,
-            document_id,
-            next_page_num,
-            &mime,
-            page_input.width,
-            page_input.height,
-            raw_bytes.len(),
-            &encrypted_page.nonce_b64,
-            &encrypted_page.ciphertext_b64,
-            thumb_nonce.as_deref(),
-            thumb_blob.as_deref(),
-            &now,
-        )?;
+        let page_id = encrypt_and_save_page(&conn, &key.0, document_id, next_page_num, page_input, &now)?;
 
         // Update document updated_at
         conn.execute(
@@ -1419,15 +1313,123 @@ impl VaultManager {
     }
 }
 
-fn decode_image_payload(input: &str, default_mime: &str) -> Result<(String, Vec<u8>), String> {
-    let mut mime = default_mime.to_string();
+fn build_reencrypted_document_input(
+    doc: BackupDocumentItem,
+    backup_key: &VaultKey,
+    fresh_ids: bool,
+) -> SaveDocumentInput {
+    let mut re_encrypted_pages = Vec::new();
+    for page in doc.pages {
+        if let Ok(raw_bytes) = decrypt_bytes(&backup_key.0, &page.nonce_b64, &page.encrypted_blob_b64) {
+            let thumb = if let (Some(t_nonce), Some(t_blob)) =
+                (&page.thumbnail_nonce_b64, &page.thumbnail_blob_b64)
+            {
+                decrypt_bytes(&backup_key.0, t_nonce, t_blob)
+                    .ok()
+                    .filter(|tb| !tb.is_empty())
+                    .map(|tb| format!("data:image/jpeg;base64,{}", BASE64.encode(tb)))
+            } else {
+                None
+            };
+
+            let mime = if page.mime_type.trim().is_empty() {
+                "application/octet-stream".to_string()
+            } else {
+                page.mime_type.clone()
+            };
+
+            re_encrypted_pages.push(SavePageInput {
+                id: if fresh_ids { None } else { Some(page.id) },
+                page_number: page.page_number,
+                mime_type: mime.clone(),
+                file_name: page.file_name,
+                width: page.width,
+                height: page.height,
+                file_size: page.file_size,
+                image_data: format!("data:{};base64,{}", mime, BASE64.encode(raw_bytes)),
+                thumbnail_data: thumb,
+            });
+        }
+    }
+
+    SaveDocumentInput {
+        id: if fresh_ids { None } else { Some(doc.id) },
+        title: doc.title,
+        doc_type: doc.doc_type,
+        description: doc.description,
+        tags: doc.tags,
+        document_date: doc.document_date,
+        expiry_date: doc.expiry_date,
+        favorite: doc.favorite,
+        reminder_enabled: doc.reminder_enabled,
+        pages: re_encrypted_pages,
+    }
+}
+
+fn encrypt_and_save_page(
+    conn: &rusqlite::Connection,
+    key: &[u8; 32],
+    document_id: &str,
+    page_number: usize,
+    page_input: SavePageInput,
+    now: &str,
+) -> Result<String, String> {
+    let page_id = page_input.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+    let (mime, raw_bytes) = decode_data_payload(&page_input.image_data, &page_input.mime_type)?;
+    let encrypted_page = encrypt_bytes(key, &raw_bytes)?;
+
+    let (thumb_nonce, thumb_blob) = if let Some(ref thumb_data) = page_input.thumbnail_data {
+        let trimmed = thumb_data.trim();
+        if trimmed.is_empty() {
+            (None, None)
+        } else {
+            let (_, thumb_bytes) = decode_data_payload(trimmed, "image/jpeg")?;
+            if thumb_bytes.is_empty() {
+                (None, None)
+            } else {
+                let enc_thumb = encrypt_bytes(key, &thumb_bytes)?;
+                (Some(enc_thumb.nonce_b64), Some(enc_thumb.ciphertext_b64))
+            }
+        }
+    } else {
+        (None, None)
+    };
+
+    let clean_file_name = page_input
+        .file_name
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    save_document_page_record(
+        conn,
+        &page_id,
+        document_id,
+        page_number,
+        &mime,
+        clean_file_name,
+        page_input.width,
+        page_input.height,
+        raw_bytes.len(),
+        &encrypted_page.nonce_b64,
+        &encrypted_page.ciphertext_b64,
+        thumb_nonce.as_deref(),
+        thumb_blob.as_deref(),
+        now,
+    )?;
+
+    Ok(page_id)
+}
+
+fn decode_data_payload(input: &str, preferred_mime: &str) -> Result<(String, Vec<u8>), String> {
+    let mut parsed_mime = String::new();
     let base64_str = if let Some(stripped) = input.strip_prefix("data:") {
         if let Some(comma_pos) = stripped.find(',') {
             let meta = &stripped[..comma_pos];
             if let Some(semi_pos) = meta.find(';') {
-                mime = meta[..semi_pos].to_string();
+                parsed_mime = meta[..semi_pos].trim().to_string();
             } else {
-                mime = meta.to_string();
+                parsed_mime = meta.trim().to_string();
             }
             &stripped[comma_pos + 1..]
         } else {
@@ -1437,9 +1439,21 @@ fn decode_image_payload(input: &str, default_mime: &str) -> Result<(String, Vec<
         input
     };
 
+    // Preserve explicit domain MIME types (e.g. .docx, .pdf) over empty or generic FileReader data-URI headers
+    let pref = preferred_mime.trim();
+    let final_mime = if !pref.is_empty() && pref != "application/octet-stream" {
+        pref.to_string()
+    } else if !parsed_mime.is_empty() {
+        parsed_mime
+    } else {
+        "application/octet-stream".to_string()
+    };
+
     let cleaned: String = base64_str.chars().filter(|c| !c.is_whitespace()).collect();
-    let bytes = BASE64.decode(&cleaned).map_err(|e| format!("Invalid base64 image data: {}", e))?;
-    Ok((mime, bytes))
+    let bytes = BASE64
+        .decode(&cleaned)
+        .map_err(|e| format!("Invalid base64 document payload: {}", e))?;
+    Ok((final_mime, bytes))
 }
 
 pub type SharedVaultManager = Arc<Mutex<VaultManager>>;
@@ -1476,6 +1490,7 @@ mod tests {
                     id: None,
                     page_number: 1,
                     mime_type: "image/jpeg".to_string(),
+                    file_name: Some("passport_front.jpg".to_string()),
                     width: 800,
                     height: 600,
                     file_size: 1234,
@@ -1486,6 +1501,7 @@ mod tests {
                     id: None,
                     page_number: 2,
                     mime_type: "image/jpeg".to_string(),
+                    file_name: Some("passport_back.jpg".to_string()),
                     width: 800,
                     height: 600,
                     file_size: 1234,
@@ -1502,16 +1518,19 @@ mod tests {
         assert_eq!(docs.len(), 1);
         assert_eq!(docs[0].title, "Passport");
         assert_eq!(docs[0].page_count, 2);
+        assert_eq!(docs[0].primary_mime_type.as_deref(), Some("image/jpeg"));
+        assert_eq!(docs[0].primary_file_name.as_deref(), Some("passport_front.jpg"));
         assert!(docs[0].favorite);
         assert!(docs[0].thumbnail_data.is_some());
 
         let detail = mgr.get_document(&doc_id).expect("get_document failed");
         assert_eq!(detail.pages.len(), 2);
+        assert_eq!(detail.pages[0].file_name.as_deref(), Some("passport_front.jpg"));
         let page1_id = &detail.pages[0].id;
 
         let page1_data = mgr.get_document_page_data(page1_id).expect("get_page_data failed");
         assert!(page1_data.starts_with("data:image/jpeg;base64,"));
-        let decoded = decode_image_payload(&page1_data, "image/jpeg").unwrap();
+        let decoded = decode_data_payload(&page1_data, "image/jpeg").unwrap();
         assert_eq!(decoded.1, b"fake jpeg page 1");
 
         // Toggle favorite
@@ -1624,6 +1643,7 @@ mod tests {
                     id: None,
                     page_number: 1,
                     mime_type: "image/jpeg".to_string(),
+                    file_name: Some("deed.jpg".to_string()),
                     width: 1000,
                     height: 1000,
                     file_size: 200,
@@ -1634,22 +1654,90 @@ mod tests {
         };
         mgr1.save_document(doc).unwrap();
 
+        let multi_doc = SaveDocumentInput {
+            id: None,
+            title: "Employment Pack".to_string(),
+            doc_type: "contract".to_string(),
+            description: "Signed PDF + Word contract".to_string(),
+            tags: vec!["work".to_string()],
+            document_date: None,
+            expiry_date: None,
+            favorite: false,
+            reminder_enabled: false,
+            pages: vec![
+                SavePageInput {
+                    id: None,
+                    page_number: 1,
+                    mime_type: "application/pdf".to_string(),
+                    file_name: Some("offer_letter.pdf".to_string()),
+                    width: 0,
+                    height: 0,
+                    file_size: 15,
+                    // Simulate Android FileReader omitting or returning generic data-URI header
+                    image_data: format!("data:application/octet-stream;base64,{}", BASE64.encode(b"%PDF-1.7 sample")),
+                    thumbnail_data: Some("".to_string()),
+                },
+                SavePageInput {
+                    id: None,
+                    page_number: 2,
+                    mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_string(),
+                    file_name: Some("nda.docx".to_string()),
+                    width: 0,
+                    height: 0,
+                    file_size: 12,
+                    image_data: format!("data:;base64,{}", BASE64.encode(b"PK\x03\x04fake docx")),
+                    thumbnail_data: None,
+                },
+            ],
+        };
+        mgr1.save_document(multi_doc).unwrap();
+
         let backup_json = mgr1.export_backup_string().expect("export backup failed");
         assert!(backup_json.contains("TOTUMVAULT_VAULT_V1"));
 
-        // Restore into new vault manager
+        // Restore into new vault manager and also test commit_import preserves exact non-image MIME types & filenames
         let test_dir2 = get_test_dir("roundtrip_2");
         let mut mgr2 = VaultManager::new(test_dir2.clone());
         mgr2.import_backup(&backup_json, "mypassword123").expect("import backup failed");
+
+        let docs2 = mgr2.list_documents().expect("mgr2 docs");
+        assert_eq!(docs2.len(), 2);
+        let emp_meta = docs2.iter().find(|d| d.title == "Employment Pack").unwrap();
+        assert_eq!(emp_meta.primary_mime_type.as_deref(), Some("application/pdf"));
+        assert_eq!(emp_meta.primary_file_name.as_deref(), Some("offer_letter.pdf"));
+        assert!(emp_meta.thumbnail_data.is_none()); // empty string thumbnail should never become empty base64 thumb
+
+        // Test commit_import ("add" mode re-encryption) preserves application/pdf and .docx MIME types!
+        let test_dir4 = get_test_dir("roundtrip_4");
+        let mut mgr4 = VaultManager::new(test_dir4.clone());
+        mgr4.create_vault("destpassword").unwrap();
+        let tmp_backup = test_dir4.join("test_multi.tvault");
+        fs::write(&tmp_backup, &backup_json).unwrap();
+        let import_res = mgr4.commit_import(ImportCommitOptions {
+            src_path: backup_json.clone(),
+            master_password: Some("mypassword123".to_string()),
+            mode: "add".to_string(),
+            duplicate_strategy: "keep_existing".to_string(),
+        }).unwrap();
+        assert_eq!(import_res.documents_imported, 2);
+        let mgr4_docs = mgr4.list_documents().unwrap();
+        let mgr4_emp = mgr4_docs.iter().find(|d| d.title == "Employment Pack").unwrap();
+        let mgr4_detail = mgr4.get_document(&mgr4_emp.id).unwrap();
+        assert_eq!(mgr4_detail.pages[0].mime_type, "application/pdf");
+        assert_eq!(mgr4_detail.pages[0].file_name.as_deref(), Some("offer_letter.pdf"));
+        assert_eq!(mgr4_detail.pages[1].mime_type, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        assert_eq!(mgr4_detail.pages[1].file_name.as_deref(), Some("nda.docx"));
+        let raw_pdf = mgr4.get_document_page_raw(&mgr4_detail.pages[0].id).unwrap();
+        assert_eq!(raw_pdf.0, "application/pdf");
+        assert_eq!(raw_pdf.1, b"%PDF-1.7 sample");
+        let _ = fs::remove_dir_all(test_dir4);
 
         let entries2 = mgr2.get_entries().expect("mgr2 entries");
         assert_eq!(entries2.len(), 1);
         assert_eq!(entries2[0].title, "ProtonMail");
 
-        let docs2 = mgr2.list_documents().expect("mgr2 docs");
-        assert_eq!(docs2.len(), 1);
-        assert_eq!(docs2[0].title, "House Deed");
-        assert_eq!(docs2[0].page_count, 1);
+        let deed_meta = docs2.iter().find(|d| d.title == "House Deed").unwrap();
+        assert_eq!(deed_meta.page_count, 1);
 
         // Also test backwards compatibility with legacy VEYLOCK_VAULT_V1 backup
         let legacy_backup_json = backup_json.replace("TOTUMVAULT_VAULT_V1", "VEYLOCK_VAULT_V1");

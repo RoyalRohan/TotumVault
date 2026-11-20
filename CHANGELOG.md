@@ -4,6 +4,27 @@ All notable changes to TotumVault are documented here.
 
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [2.0.1] — 2026-11-20
+
+TotumVault v2.0.1 introduces encrypted multi-format document storage and offline in-app viewing across desktop and Android, enabling users to securely upload, organize, preview, and export PDFs, Word documents, spreadsheets, presentations, text files, and arbitrary attachments alongside camera scans.
+
+### Added
+- **Multi-Format Encrypted Document Vault (`Documents`)**:
+  - **Upload PDF, Office, Text & Arbitrary Files**: Support for uploading PDF (`.pdf`), Word (`.docx`, `.doc`, `.odt`, `.rtf`), spreadsheets (`.xlsx`, `.ods`, `.csv`, `.tsv`), presentations (`.pptx`), plain text/code/config (`.txt`, `.md`, `.json`, `.xml`), and any general binary attachment alongside existing JPEG/PNG/WebP/HEIC scans.
+  - **Mixed Batch Staging & Smart Metadata**: Select multiple heterogeneous files and images in a single upload (`accept="*/*"` for full Android file picker compatibility), automatically infer document titles from the first filename, display format badges on cards/list rows/page strips, and search documents by original filename or format badge.
+  - **100% Offline In-App Reader & Preview Engine**:
+    - **PDF Viewer**: Bundled offline `pdfjs-dist` page-by-page canvas renderer running in-process without external workers or network calls, plus automatic Page 1 thumbnail generation on upload.
+    - **Word & Text Reader**: Offline `.docx` conversion (`mammoth`) rendered through a strict DOM allowlist HTML sanitizer with light/dark paper mode toggle, font zoom, word count, and one-click copy, plus dedicated `.odt`, `.rtf`, Markdown, JSON, XML, and plain-text viewers.
+    - **Spreadsheet & Slide Viewers**: Offline multi-sheet interactive table viewer for `.xlsx`, `.ods`, `.csv`, and `.tsv` files, slide-card reader for `.pptx` presentations, and encrypted file metadata/download cards for generic binaries.
+  - **Format-Aware Native Export (`export_document_page`)**: Save decrypted document pages and binary files directly with their original filenames and extensions on both desktop and Android (`content://` URIs).
+
+### Changed
+- **Encrypted Page Schema & Metadata**: Extended SQLite `document_pages` with backward-compatible `file_name` migration and enriched `DocumentMetadata` with `primary_mime_type`, `primary_file_name`, and `total_file_size`.
+- **Mobile Viewer Touch Scrolling**: Scoped canvas pinch/pan touch locking (`touch-none`) strictly to image and PDF canvases so Word, spreadsheet, slide, and text readers scroll natively on Android phones and tablets.
+
+### Fixed
+- **Encrypted Backup (`.tvault`) Multi-Format Roundtrip**: Fixed backup import re-encryption overwriting non-image page MIME types as `image/jpeg` and dropping `file_name`; imported `.tvault` archives now preserve exact document MIME types and filenames across backup/restore.
+
 ## [2.0.0] — 2026-10-03
 
 TotumVault v2.0.0 is a milestone release delivering robust offline capabilities, local background notifications, dual-calendar support, strict air-gap isolation, and comprehensive system hardening. This release consolidates all major features developed from v1.3.2 through v2.0.0 into a unified, production-grade local-first security platform.

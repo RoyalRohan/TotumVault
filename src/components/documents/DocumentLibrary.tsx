@@ -20,7 +20,13 @@ import {
   Menu,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
-import { DOCUMENT_CATEGORIES, getCategoryConfig, getDocumentExpiryDisplay } from './documentUtils';
+import {
+  DOCUMENT_CATEGORIES,
+  formatBytes,
+  getCategoryConfig,
+  getDocumentExpiryDisplay,
+} from './documentUtils';
+import { getFileTypeBadge } from './fileFormatUtils';
 import { useHorizontalScroll } from '../../utils/useHorizontalScroll';
 import { formatDisplayDate, getDualDateInfo } from '../../utils/nepaliCalendar';
 import { DocumentEditModal } from './DocumentEditModal';
@@ -97,10 +103,15 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       list = list.filter((doc) => {
+        const badge = doc.primary_mime_type || doc.primary_file_name
+          ? getFileTypeBadge(doc.primary_mime_type, doc.primary_file_name)
+          : null;
         if (
           doc.title.toLowerCase().includes(q) ||
           doc.description.toLowerCase().includes(q) ||
           doc.doc_type.toLowerCase().includes(q) ||
+          (doc.primary_file_name && doc.primary_file_name.toLowerCase().includes(q)) ||
+          (badge && (badge.shortLabel.toLowerCase().includes(q) || badge.label.toLowerCase().includes(q))) ||
           doc.tags.some((t) => t.toLowerCase().includes(q))
         ) {
           return true;
@@ -427,7 +438,7 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
               </h3>
               <p className="text-xs text-theme-text-muted mt-1">
                 {documents.length === 0
-                  ? 'Keep personal IDs, bills, and warranties safe and offline.'
+                  ? 'Keep personal IDs, bills, PDFs, Word docs, and files safe offline.'
                   : 'Try selecting another category or clearing your search.'}
               </p>
             </div>
@@ -473,6 +484,11 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
               const catConfig = getCategoryConfig(doc.doc_type);
               const CatIcon = catConfig.icon;
               const expiryInfo = getDocumentExpiryDisplay(doc.expiry_date);
+              const fileBadge =
+                doc.primary_mime_type || doc.primary_file_name
+                  ? getFileTypeBadge(doc.primary_mime_type, doc.primary_file_name)
+                  : null;
+              const showFileBadge = Boolean(fileBadge && fileBadge.kind !== 'image');
               const isMenuOpen = activeMenuDocId === doc.id;
 
               return (
@@ -489,10 +505,36 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                           alt={doc.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
+                      ) : showFileBadge && fileBadge ? (
+                        <div className="w-full h-full flex flex-col items-center justify-center p-3 gap-1.5 bg-slate-100/90 dark:bg-zinc-900/90">
+                          <span
+                            className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold border shadow-2xs ${fileBadge.badgeBg} ${fileBadge.badgeText} ${fileBadge.badgeBorder}`}
+                          >
+                            {fileBadge.shortLabel}
+                          </span>
+                          {doc.primary_file_name && (
+                            <span className="text-[10px] text-theme-text-muted truncate max-w-[90%]">
+                              {doc.primary_file_name}
+                            </span>
+                          )}
+                          {doc.total_file_size ? (
+                            <span className="text-[10px] text-theme-text-muted/80 font-mono">
+                              {formatBytes(doc.total_file_size)}
+                            </span>
+                          ) : null}
+                        </div>
                       ) : (
                         <div className="flex flex-col items-center gap-2 text-theme-text-muted">
                           <CatIcon className="w-8 h-8 opacity-40 text-purple-600 dark:text-purple-400 stroke-[1.75]" />
                         </div>
+                      )}
+
+                      {showFileBadge && doc.thumbnail_data && fileBadge && (
+                        <span
+                          className={`absolute top-2 left-2 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold border backdrop-blur-md shadow-xs bg-black/75 text-white border-white/15`}
+                        >
+                          {fileBadge.shortLabel}
+                        </span>
                       )}
 
                       <button
@@ -625,6 +667,11 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
               const catConfig = getCategoryConfig(doc.doc_type);
               const CatIcon = catConfig.icon;
               const expiryInfo = getDocumentExpiryDisplay(doc.expiry_date);
+              const fileBadge =
+                doc.primary_mime_type || doc.primary_file_name
+                  ? getFileTypeBadge(doc.primary_mime_type, doc.primary_file_name)
+                  : null;
+              const showFileBadge = Boolean(fileBadge && fileBadge.kind !== 'image');
               const isMenuOpen = activeMenuDocId === doc.id;
 
               return (
@@ -641,6 +688,14 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                           alt={doc.title}
                           className="w-full h-full object-cover"
                         />
+                      ) : showFileBadge && fileBadge ? (
+                        <div className="w-full h-full flex items-center justify-center bg-slate-100 dark:bg-zinc-900">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border ${fileBadge.badgeBg} ${fileBadge.badgeText} ${fileBadge.badgeBorder}`}
+                          >
+                            {fileBadge.shortLabel}
+                          </span>
+                        </div>
                       ) : (
                         <CatIcon className="w-5 h-5 opacity-40 text-purple-600 dark:text-purple-400 stroke-[1.75]" />
                       )}
@@ -654,6 +709,13 @@ export const DocumentLibrary: React.FC<DocumentLibraryProps> = ({
                         <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 shrink-0">
                           {catConfig.label}
                         </span>
+                        {showFileBadge && fileBadge && (
+                          <span
+                            className={`hidden sm:inline text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${fileBadge.badgeBg} ${fileBadge.badgeText} ${fileBadge.badgeBorder}`}
+                          >
+                            {fileBadge.shortLabel}
+                          </span>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 text-xs text-theme-text-muted mt-0.5 truncate">

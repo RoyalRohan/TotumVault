@@ -276,6 +276,9 @@ export interface DocumentMetadata {
   created_at: string;
   updated_at: string;
   thumbnail_data?: string;
+  primary_mime_type?: string;
+  primary_file_name?: string;
+  total_file_size?: number;
 }
 
 export interface DocumentPage {
@@ -283,6 +286,7 @@ export interface DocumentPage {
   document_id: string;
   page_number: number;
   mime_type: string;
+  file_name?: string;
   width: number;
   height: number;
   file_size: number;
@@ -300,6 +304,7 @@ export interface SavePageInput {
   id?: string;
   page_number: number;
   mime_type: string;
+  file_name?: string;
   width: number;
   height: number;
   file_size: number;

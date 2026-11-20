@@ -1,7 +1,7 @@
 {
   "name": "totumvault",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -24,7 +24,10 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.12.0",
     "clsx": "^2.1.1",
+    "jszip": "^3.10.2",
     "lucide-react": "^1.31.0",
+    "mammoth": "^1.13.0",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwind-merge": "^3.6.0"

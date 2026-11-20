@@ -170,6 +170,7 @@ interface VaultContextType {
   toggleDocumentFavorite: (id: string) => Promise<void>;
   getDocumentDetail: (id: string) => Promise<DocumentDetail>;
   getDocumentPageData: (pageId: string) => Promise<string>;
+  exportDocumentPage: (pageId: string, destPath: string) => Promise<void>;
 
   documentRemindersEnabled: boolean;
   setDocumentRemindersEnabled: (enabled: boolean) => Promise<void>;
@@ -1300,6 +1301,10 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return await invoke<string>('get_document_page_data', { pageId });
   }, []);
 
+  const exportDocumentPage = useCallback(async (pageId: string, destPath: string): Promise<void> => {
+    await invoke('export_document_page', { pageId, destPath });
+  }, []);
+
   const analyzeImport = useCallback(async (srcPathOrContent: string, password?: string): Promise<ImportPreview> => {
     try {
       return await invoke<ImportPreview>('analyze_import', {
@@ -1490,6 +1495,7 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         toggleDocumentFavorite,
         getDocumentDetail,
         getDocumentPageData,
+        exportDocumentPage,
         analyzeImport,
         commitImport,
         folders,

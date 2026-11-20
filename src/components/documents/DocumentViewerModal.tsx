@@ -18,7 +18,19 @@ import {
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
 import { DocumentDetail } from '../../types';
-import { getCategoryConfig, getDocumentExpiryDisplay } from './documentUtils';
+import {
+  formatBytes,
+  getCategoryConfig,
+  getDocumentExpiryDisplay,
+} from './documentUtils';
+import {
+  buildDownloadFileName,
+  dataUrlToUint8Array,
+  getFileTypeBadge,
+  isImageMimeType,
+  resolveDocumentMimeType,
+} from './fileFormatUtils';
+import { DocumentFilePreview } from './DocumentFilePreview';
 import { formatDisplayDate, getDualDateInfo } from '../../utils/nepaliCalendar';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
@@ -39,6 +51,7 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const {
     getDocumentDetail,
     getDocumentPageData,
+    exportDocumentPage,
     deleteDocument,
     deleteDocumentPage,
     reorderDocumentPages,
@@ -286,42 +299,56 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
   const handleDownloadPage = async () => {
     if (!activeImageData || !documentDetail) return;
 
+    const activePage = documentDetail.pages[currentPageIndex];
+    if (!activePage) return;
+
     const isMultiPage = documentDetail.pages.length > 1;
     const pageNum = currentPageIndex + 1;
-    const cleanTitle = documentDetail.metadata.title.toLowerCase().replace(/[^a-z0-9]/g, '_');
-    const filename = isMultiPage ? `${cleanTitle}_p${pageNum}.jpg` : `${cleanTitle}.jpg`;
+    const badge = getFileTypeBadge(activePage.mime_type, activePage.file_name);
+    const filename = buildDownloadFileName(
+      documentDetail.metadata.title,
+      activePage.mime_type,
+      activePage.file_name,
+      pageNum,
+      isMultiPage
+    );
 
     try {
       const selectedPath = await save({
         defaultPath: filename,
-        filters: [{ name: 'JPEG Image (*.jpg)', extensions: ['jpg', 'jpeg'] }],
+        filters: [
+          { name: badge.filterName, extensions: [badge.extension] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
       });
 
       if (!selectedPath) return;
 
-      const base64Data = activeImageData.includes(',')
-        ? activeImageData.split(',')[1]
-        : activeImageData;
-
-      const binaryStr = atob(base64Data);
-      const bytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++) {
-        bytes[i] = binaryStr.charCodeAt(i);
+      try {
+        await exportDocumentPage(activePage.id, selectedPath);
+      } catch {
+        const bytes = dataUrlToUint8Array(activeImageData);
+        await writeFile(selectedPath, bytes);
       }
-
-      await writeFile(selectedPath, bytes);
-      showToast(isMultiPage ? `Page ${pageNum} downloaded` : 'Document downloaded', 'success');
+      showToast(isMultiPage ? `Attachment ${pageNum} saved` : 'Document saved', 'success');
     } catch (err: any) {
-      showToast(err?.toString() || 'Failed to download image', 'error');
+      showToast(err?.toString() || 'Failed to download file', 'error');
     }
   };
 
   if (!documentId) return null;
 
+  const activePage = documentDetail?.pages[currentPageIndex];
+  const activeMime = activePage ? resolveDocumentMimeType(activePage.file_name, activePage.mime_type) : '';
+  const activeBadge = activePage ? getFileTypeBadge(activeMime, activePage.file_name) : null;
+  const isImageOrPdf = activePage
+    ? isImageMimeType(activeMime, activePage.file_name) || activeBadge?.kind === 'pdf'
+    : true;
+
   const categoryConfig = documentDetail ? getCategoryConfig(documentDetail.metadata.doc_type) : null;
   const expiryInfo = documentDetail ? getDocumentExpiryDisplay(documentDetail.metadata.expiry_date) : null;
   const isMultiPage = (documentDetail?.pages.length ?? 1) > 1;
-  const downloadLabel = isMultiPage ? 'Download Page' : 'Download';
+  const downloadLabel = isMultiPage ? 'Download File' : 'Download';
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col h-screen h-[100dvh] max-h-[100dvh] bg-black/95 backdrop-blur-md select-none overflow-hidden animate-scale-up">
@@ -351,7 +378,15 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             </div>
             <p className="text-[11px] text-zinc-400 truncate">
               {documentDetail
-                ? `Page ${currentPageIndex + 1} of ${documentDetail.pages.length}`
+                ? [
+                    isMultiPage
+                      ? `Page ${currentPageIndex + 1} of ${documentDetail.pages.length}`
+                      : activeBadge?.label || 'Document',
+                    activePage?.file_name && activePage.file_name,
+                    activePage?.file_size ? formatBytes(activePage.file_size) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' • ')
                 : 'Decrypting...'}
             </p>
           </div>
@@ -387,15 +422,17 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setViewRotation((r) => (r + 90) % 360)}
-            className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
-            title="Rotate 90°"
-            aria-label="Rotate 90 degrees"
-          >
-            <RotateCw className="w-4 h-4" />
-          </button>
+          {isImageOrPdf && (
+            <button
+              type="button"
+              onClick={() => setViewRotation((r) => (r + 90) % 360)}
+              className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+              title="Rotate 90°"
+              aria-label="Rotate 90 degrees"
+            >
+              <RotateCw className="w-4 h-4" />
+            </button>
+          )}
 
           <div className="hidden sm:flex items-center gap-1.5">
             <button
@@ -528,37 +565,36 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
     </div>
 
       <div
-        className="flex-1 min-h-0 w-full relative overflow-hidden flex items-center justify-center p-2 sm:p-4 bg-zinc-950 select-none touch-none cursor-grab active:cursor-grabbing"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
+        className={`flex-1 min-h-0 w-full relative overflow-hidden flex items-center justify-center p-2 sm:p-4 bg-zinc-950 select-none ${
+          isImageOrPdf ? 'touch-none cursor-grab active:cursor-grabbing' : ''
+        }`}
+        onMouseDown={isImageOrPdf ? handleMouseDown : undefined}
+        onMouseMove={isImageOrPdf ? handleMouseMove : undefined}
+        onMouseUp={isImageOrPdf ? handleMouseUp : undefined}
+        onMouseLeave={isImageOrPdf ? handleMouseUp : undefined}
+        onTouchStart={isImageOrPdf ? handleTouchStart : undefined}
+        onTouchMove={isImageOrPdf ? handleTouchMove : undefined}
+        onTouchEnd={isImageOrPdf ? handleTouchEnd : undefined}
       >
         {isLoading ? (
           <div className="flex flex-col items-center gap-3 text-zinc-400">
             <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-            <span className="text-xs">Loading page...</span>
+            <span className="text-xs">Loading document...</span>
           </div>
-        ) : activeImageData ? (
-          <div
-            style={{
-              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoomScale}) rotate(${viewRotation}deg)`,
-              transition: isPanning ? 'none' : 'transform 0.15s ease-out',
-            }}
-            className="max-h-full max-w-full flex items-center justify-center select-none shadow-2xl rounded-lg overflow-hidden border border-zinc-800/60"
-          >
-            <img
-              src={activeImageData}
-              alt={`Page ${currentPageIndex + 1}`}
-              className="max-h-[calc(100vh-170px)] sm:max-h-[calc(100vh-160px)] max-w-[95vw] sm:max-w-[90vw] object-contain pointer-events-none select-none"
-              draggable={false}
-            />
-          </div>
+        ) : activeImageData && activePage ? (
+          <DocumentFilePreview
+            dataUrl={activeImageData}
+            mimeType={activePage.mime_type}
+            fileName={activePage.file_name}
+            fileSize={activePage.file_size}
+            zoomScale={zoomScale}
+            viewRotation={viewRotation}
+            panOffset={panOffset}
+            isPanning={isPanning}
+            onDownload={handleDownloadPage}
+          />
         ) : (
-          <div className="text-zinc-500 text-xs">No image available</div>
+          <div className="text-zinc-500 text-xs">No file preview available</div>
         )}
 
         {documentDetail && documentDetail.pages.length > 1 && (
@@ -725,35 +761,40 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
 
       <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-zinc-950/90 border-t border-zinc-800/80 backdrop-blur-lg shrink-0 z-20 flex flex-col sm:flex-row items-center justify-between gap-2 pb-safe pl-safe pr-safe">
         <div ref={thumbnailsScrollRef} className="flex items-center gap-2 overflow-x-auto max-w-full sm:max-w-xl py-1 scrollbar-none select-none">
-          {documentDetail?.pages.map((page, idx) => (
-            <button
-              key={page.id}
-              type="button"
-              onClick={() => switchPage(idx)}
-              className={`relative shrink-0 w-11 sm:w-12 h-14 sm:h-16 rounded-lg overflow-hidden border-2 transition-all cursor-pointer bg-black ${
-                currentPageIndex === idx
-                  ? 'border-purple-500 scale-105 shadow-md shadow-purple-500/20'
-                  : 'border-zinc-800 opacity-60 hover:opacity-100'
-              }`}
-              title={`Page ${idx + 1}`}
-              aria-label={`Jump to Page ${idx + 1}`}
-            >
-              {page.thumbnail_data ? (
-                <img
-                  src={page.thumbnail_data}
-                  alt={`Page ${idx + 1}`}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-[10px] text-zinc-400">
-                  p.{idx + 1}
-                </div>
-              )}
-              <span className="absolute bottom-0 inset-x-0 bg-black/75 text-[9px] font-bold text-center text-white py-0.5">
-                {idx + 1}
-              </span>
-            </button>
-          ))}
+          {documentDetail?.pages.map((page, idx) => {
+            const pBadge = getFileTypeBadge(page.mime_type, page.file_name);
+            return (
+              <button
+                key={page.id}
+                type="button"
+                onClick={() => switchPage(idx)}
+                className={`relative shrink-0 w-11 sm:w-12 h-14 sm:h-16 rounded-lg overflow-hidden border-2 transition-all cursor-pointer bg-zinc-950 ${
+                  currentPageIndex === idx
+                    ? 'border-purple-500 scale-105 shadow-md shadow-purple-500/20'
+                    : 'border-zinc-800 opacity-60 hover:opacity-100'
+                }`}
+                title={page.file_name || `Page ${idx + 1}`}
+                aria-label={`Jump to ${page.file_name || `Page ${idx + 1}`}`}
+              >
+                {page.thumbnail_data ? (
+                  <img
+                    src={page.thumbnail_data}
+                    alt={page.file_name || `Page ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center p-1">
+                    <span className={`text-[9px] font-mono font-bold px-1 py-0.5 rounded border ${pBadge.badgeBg} ${pBadge.badgeText} ${pBadge.badgeBorder}`}>
+                      {pBadge.shortLabel}
+                    </span>
+                  </div>
+                )}
+                <span className="absolute bottom-0 inset-x-0 bg-black/75 text-[9px] font-bold text-center text-white py-0.5">
+                  {idx + 1}
+                </span>
+              </button>
+            );
+          })}
 
           {documentDetail && (
             <button

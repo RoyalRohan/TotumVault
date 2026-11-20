@@ -25,7 +25,16 @@ import {
   cropQuadToImage,
   generateThumbnailDataUrl,
   getDocumentExpiryDisplay,
+  formatBytes,
 } from './documentUtils';
+import {
+  MAX_DOCUMENT_FILE_SIZE_BYTES,
+  getFileTypeBadge,
+  isImageMimeType,
+  resolveDocumentMimeType,
+  suggestTitleFromFileName,
+} from './fileFormatUtils';
+import { extractPdfMetadataAndThumbnail } from './documentPreviewEngine';
 import { DocumentCategoryType, SavePageInput } from '../../types';
 import { DualDatePicker } from '../common/DualDatePicker';
 import {
@@ -49,6 +58,7 @@ interface StagedPage {
   width: number;
   height: number;
   mimeType: string;
+  fileName?: string;
   fileSize: number;
 }
 
@@ -70,6 +80,8 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
 
   const [stagedPages, setStagedPages] = useState<StagedPage[]>([]);
+  const [isProcessingFiles, setIsProcessingFiles] = useState<boolean>(false);
+  const [pendingCropFileName, setPendingCropFileName] = useState<string | undefined>(undefined);
 
   const [rawImageElem, setRawImageElem] = useState<HTMLImageElement | null>(null);
   const [corners, setCorners] = useState<QuadCorners>({
@@ -173,6 +185,12 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
   }, [stopCameraStream]);
 
   useEffect(() => {
+    if (isOpen) {
+      setSourceMode(initialMode);
+    }
+  }, [isOpen, initialMode]);
+
+  useEffect(() => {
     if (isOpen && step === 'capture' && sourceMode === 'camera') {
       startCamera(facingMode);
     } else {
@@ -183,6 +201,39 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
       stopCameraStream();
     };
   }, [isOpen, step, sourceMode, facingMode, startCamera, stopCameraStream]);
+
+  const readFileAsTypedDataUrl = (file: File, mimeType: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const raw = reader.result as string;
+        if (!raw) {
+          reject(new Error(`Could not read ${file.name}`));
+          return;
+        }
+        const commaIdx = raw.indexOf(',');
+        const payload = commaIdx >= 0 ? raw.slice(commaIdx + 1) : raw;
+        resolve(`data:${mimeType};base64,${payload}`);
+      };
+      reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+      reader.readAsDataURL(file);
+    });
+
+  const loadImageDimensionsAndThumb = (
+    src: string
+  ): Promise<{ width: number; height: number; thumbnailUrl: string }> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        resolve({
+          width: img.naturalWidth || img.width || 0,
+          height: img.naturalHeight || img.height || 0,
+          thumbnailUrl: generateThumbnailDataUrl(img, 220),
+        });
+      };
+      img.onerror = () => resolve({ width: 0, height: 0, thumbnailUrl: '' });
+      img.src = src;
+    });
 
   const handleCapturePhoto = () => {
     if (!videoRef.current) return;
@@ -198,6 +249,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     ctx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
     const dataUrl = snapCanvas.toDataURL('image/jpeg', 0.95);
     stopCameraStream();
+    setPendingCropFileName(`scan_${Date.now()}.jpg`);
     loadImageForCropping(dataUrl);
   };
 
@@ -211,21 +263,100 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
       setRotation(0);
       setStep('crop');
     };
+    img.onerror = () => {
+      showToast('Could not decode image preview.', 'error');
+    };
     img.src = src;
   };
 
-  const handleFilesSelected = (files: FileList | null) => {
+  const handleFilesSelected = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
-    const first = files[0];
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const src = e.target?.result as string;
-      if (src) {
-        loadImageForCropping(src);
+    const fileList = Array.from(files);
+
+    // Clear input elements immediately so re-selecting the same file always triggers onChange
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (nativeCameraInputRef.current) nativeCameraInputRef.current.value = '';
+
+    for (const f of fileList) {
+      if (f.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
+        showToast(
+          `"${f.name}" is ${formatBytes(f.size)}. Maximum supported file size is 50 MB.`,
+          'error'
+        );
+        return;
       }
-    };
-    reader.readAsDataURL(first);
+    }
+
+    // Single raster image: enter interactive perspective crop & enhance flow
+    if (fileList.length === 1) {
+      const onlyFile = fileList[0];
+      const mimeType = resolveDocumentMimeType(onlyFile.name, onlyFile.type);
+      if (isImageMimeType(mimeType, onlyFile.name)) {
+        try {
+          const dataUrl = await readFileAsTypedDataUrl(onlyFile, mimeType);
+          setPendingCropFileName(onlyFile.name);
+          if (!targetDocumentId && !title.trim()) {
+            setTitle(suggestTitleFromFileName(onlyFile.name));
+          }
+          loadImageForCropping(dataUrl);
+        } catch (err: any) {
+          showToast(err?.message || 'Failed to load image.', 'error');
+        }
+        return;
+      }
+    }
+
+    // PDF, Word (.docx/.doc), Spreadsheets, Text, or Batch Multi-file Upload
+    setIsProcessingFiles(true);
+    try {
+      const newPages: StagedPage[] = [];
+
+      for (const file of fileList) {
+        const mimeType = resolveDocumentMimeType(file.name, file.type);
+        const dataUrl = await readFileAsTypedDataUrl(file, mimeType);
+
+        let thumbnailUrl = '';
+        let width = 0;
+        let height = 0;
+
+        if (mimeType === 'application/pdf') {
+          const buf = await file.arrayBuffer();
+          const pdfMeta = await extractPdfMetadataAndThumbnail(new Uint8Array(buf));
+          thumbnailUrl = pdfMeta.thumbnailUrl;
+          width = pdfMeta.width;
+          height = pdfMeta.height;
+        } else if (isImageMimeType(mimeType, file.name)) {
+          const imgMeta = await loadImageDimensionsAndThumb(dataUrl);
+          thumbnailUrl = imgMeta.thumbnailUrl;
+          width = imgMeta.width;
+          height = imgMeta.height;
+        }
+
+        newPages.push({
+          id: `page_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          dataUrl,
+          thumbnailUrl,
+          width,
+          height,
+          mimeType,
+          fileName: file.name,
+          fileSize: file.size || Math.round((dataUrl.length * 3) / 4),
+        });
+      }
+
+      if (newPages.length > 0) {
+        setStagedPages((prev) => [...prev, ...newPages]);
+        if (!targetDocumentId && !title.trim()) {
+          setTitle(suggestTitleFromFileName(fileList[0].name));
+        }
+        setStep('metadata');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to read selected file(s).', 'error');
+    } finally {
+      setIsProcessingFiles(false);
+    }
   };
 
   const handleRotate90 = () => {
@@ -514,11 +645,13 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
           width: cropped.width,
           height: cropped.height,
           mimeType: cropped.mimeType,
+          fileName: pendingCropFileName,
           fileSize: Math.round((cropped.dataUrl.length * 3) / 4),
         };
 
         setStagedPages((prev) => [...prev, newPage]);
         setRawImageElem(null);
+        setPendingCropFileName(undefined);
 
         setStep('metadata');
       };
@@ -574,31 +707,24 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
 
     setIsSaving(true);
     try {
+      const toPageInput = (p: StagedPage, pageNumber: number): SavePageInput => ({
+        page_number: pageNumber,
+        mime_type: p.mimeType,
+        file_name: p.fileName,
+        width: p.width,
+        height: p.height,
+        file_size: p.fileSize,
+        image_data: p.dataUrl,
+        thumbnail_data: p.thumbnailUrl || undefined,
+      });
+
       if (targetDocumentId) {
         for (let i = 0; i < stagedPages.length; i++) {
-          const p = stagedPages[i];
-          const pageInput: SavePageInput = {
-            page_number: i + 1,
-            mime_type: p.mimeType,
-            width: p.width,
-            height: p.height,
-            file_size: p.fileSize,
-            image_data: p.dataUrl,
-            thumbnail_data: p.thumbnailUrl,
-          };
-          await addDocumentPage(targetDocumentId, pageInput);
+          await addDocumentPage(targetDocumentId, toPageInput(stagedPages[i], i + 1));
         }
-        showToast('Document pages added securely', 'success');
+        showToast('Document files added securely', 'success');
       } else {
-        const pagesInput: SavePageInput[] = stagedPages.map((p, idx) => ({
-          page_number: idx + 1,
-          mime_type: p.mimeType,
-          width: p.width,
-          height: p.height,
-          file_size: p.fileSize,
-          image_data: p.dataUrl,
-          thumbnail_data: p.thumbnailUrl,
-        }));
+        const pagesInput: SavePageInput[] = stagedPages.map((p, idx) => toPageInput(p, idx + 1));
 
         await saveDocument({
           title: title.trim(),
@@ -628,8 +754,11 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
   const handleCloseModal = () => {
     stopCameraStream();
     setStep('capture');
+    setSourceMode(initialMode);
     setStagedPages([]);
     setRawImageElem(null);
+    setPendingCropFileName(undefined);
+    setIsProcessingFiles(false);
     setTitle('');
     setDescription('');
     setDocumentDate('');
@@ -818,32 +947,61 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
             {sourceMode === 'upload' && (
               <div className="flex-1 min-h-0 flex flex-col justify-center gap-3">
                 <div
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => !isProcessingFiles && fileInputRef.current?.click()}
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
-                    handleFilesSelected(e.dataTransfer.files);
+                    if (!isProcessingFiles) {
+                      handleFilesSelected(e.dataTransfer.files);
+                    }
                   }}
-                  className="flex-1 p-6 sm:p-10 rounded-2xl border-2 border-dashed border-theme-border hover:border-purple-500/60 bg-theme-surface/40 hover:bg-theme-surface transition-all flex flex-col items-center justify-center gap-3 cursor-pointer group text-center"
+                  className="flex-1 p-5 sm:p-10 rounded-2xl border-2 border-dashed border-theme-border hover:border-purple-500/60 bg-theme-surface/40 hover:bg-theme-surface transition-all flex flex-col items-center justify-center gap-3 cursor-pointer group text-center"
                 >
-                  <div className="w-14 h-14 rounded-2xl bg-purple-500/10 group-hover:bg-purple-500/20 text-purple-400 flex items-center justify-center transition-colors shadow-sm">
-                    <Upload className="w-7 h-7" />
-                  </div>
-                  <div>
-                    <span className="text-sm font-semibold text-theme-text block">
-                      Tap or drag document photos here
-                    </span>
-                    <span className="text-xs text-theme-text-muted mt-1 block">
-                      Supports JPEG, PNG, and WEBP images from device gallery or storage
-                    </span>
-                  </div>
+                  {isProcessingFiles ? (
+                    <>
+                      <div className="w-10 h-10 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                      <div>
+                        <span className="text-sm font-semibold text-theme-text block">
+                          Preparing document preview...
+                        </span>
+                        <span className="text-xs text-theme-text-muted mt-1 block">
+                          Processing files locally offline
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-14 h-14 rounded-2xl bg-purple-500/10 group-hover:bg-purple-500/20 text-purple-400 flex items-center justify-center transition-colors shadow-sm">
+                        <Upload className="w-7 h-7" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <span className="text-sm font-semibold text-theme-text block">
+                          Tap or drag documents &amp; photos here
+                        </span>
+                        <span className="text-xs text-theme-text-muted block">
+                          Upload PDF, Word (.docx / .doc), Excel (.xlsx / .csv), PowerPoint, Text, or Images (max 50 MB each)
+                        </span>
+                        <div className="flex flex-wrap items-center justify-center gap-1.5 pt-2">
+                          {['PDF', 'DOCX / DOC', 'XLSX / CSV', 'PPTX', 'TXT / MD', 'JPG / PNG'].map((fmt) => (
+                            <span
+                              key={fmt}
+                              className="px-2 py-0.5 rounded-md text-[10px] font-mono font-semibold bg-theme-bg/80 border border-theme-border text-theme-text-muted"
+                            >
+                              {fmt}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex justify-center shrink-0">
                   <button
                     type="button"
                     onClick={() => nativeCameraInputRef.current?.click()}
-                    className="py-2.5 px-4 rounded-xl bg-theme-surface hover:bg-theme-bg border border-theme-border text-theme-text text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors"
+                    disabled={isProcessingFiles}
+                    className="py-2.5 px-4 rounded-xl bg-theme-surface hover:bg-theme-bg border border-theme-border text-theme-text text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-50"
                   >
                     <Camera className="w-4 h-4 text-emerald-500" />
                     <span>Take Photo with Device Camera</span>
@@ -855,7 +1013,8 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              multiple
+              accept="*/*"
               onChange={(e) => handleFilesSelected(e.target.files)}
               className="hidden"
             />
@@ -976,7 +1135,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
               <div className="flex items-center justify-between text-xs font-semibold text-theme-text">
                 <div className="flex items-center gap-1.5">
                   <Layers className="w-4 h-4 text-purple-400" />
-                  <span>Document Pages ({stagedPages.length})</span>
+                  <span>Files &amp; Pages ({stagedPages.length})</span>
                 </div>
                 <button
                   type="button"
@@ -984,42 +1143,64 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                   className="text-xs text-purple-400 hover:text-purple-300 font-semibold flex items-center gap-1 cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
-                  <span>Add Another Page</span>
+                  <span>Add File / Page</span>
                 </button>
               </div>
 
               <div className="flex items-center gap-3 overflow-x-auto py-2 scrollbar-none">
-                {stagedPages.map((page, idx) => (
-                  <div
-                    key={page.id}
-                    className="relative shrink-0 w-22 sm:w-24 h-28 sm:h-32 rounded-xl overflow-hidden border-2 border-theme-border bg-black group shadow-sm"
-                  >
-                    <img
-                      src={page.thumbnailUrl}
-                      alt={`Page ${idx + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                    <span className="absolute bottom-1 left-1 text-[10px] font-bold text-white bg-black/70 px-1.5 py-0.5 rounded backdrop-blur-sm">
-                      p. {idx + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveStagedPage(page.id)}
-                      className="absolute top-1 right-1 p-1 rounded-full bg-rose-600/80 hover:bg-rose-600 text-white transition-opacity cursor-pointer shadow-sm"
-                      title="Delete page"
+                {stagedPages.map((page, idx) => {
+                  const badge = getFileTypeBadge(page.mimeType, page.fileName);
+                  return (
+                    <div
+                      key={page.id}
+                      title={page.fileName || `Page ${idx + 1}`}
+                      className="relative shrink-0 w-24 sm:w-26 h-28 sm:h-32 rounded-xl overflow-hidden border-2 border-theme-border bg-zinc-950 group shadow-sm"
                     >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
+                      {page.thumbnailUrl ? (
+                        <img
+                          src={page.thumbnailUrl}
+                          alt={page.fileName || `Page ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center gap-1.5 bg-theme-surface">
+                          <span
+                            className={`px-2 py-1 rounded-lg text-[11px] font-mono font-bold border ${badge.badgeBg} ${badge.badgeText} ${badge.badgeBorder}`}
+                          >
+                            {badge.shortLabel}
+                          </span>
+                          {page.fileName && (
+                            <span className="text-[10px] text-theme-text-muted truncate max-w-full px-1">
+                              {page.fileName}
+                            </span>
+                          )}
+                          <span className="text-[9px] text-theme-text-muted/70 font-mono">
+                            {formatBytes(page.fileSize)}
+                          </span>
+                        </div>
+                      )}
+                      <span className="absolute bottom-1 left-1 text-[10px] font-bold text-white bg-black/75 px-1.5 py-0.5 rounded backdrop-blur-sm">
+                        {badge.kind !== 'image' ? badge.shortLabel : `p. ${idx + 1}`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveStagedPage(page.id)}
+                        className="absolute top-1 right-1 p-1 rounded-full bg-rose-600/80 hover:bg-rose-600 text-white transition-opacity cursor-pointer shadow-sm"
+                        title="Remove file"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
 
                 <button
                   type="button"
                   onClick={handleAddAnotherPage}
-                  className="shrink-0 w-22 sm:w-24 h-28 sm:h-32 rounded-xl border-2 border-dashed border-theme-border hover:border-purple-500/60 bg-theme-surface/50 hover:bg-theme-surface flex flex-col items-center justify-center gap-1.5 text-theme-text-muted hover:text-purple-400 transition-colors cursor-pointer"
+                  className="shrink-0 w-24 sm:w-26 h-28 sm:h-32 rounded-xl border-2 border-dashed border-theme-border hover:border-purple-500/60 bg-theme-surface/50 hover:bg-theme-surface flex flex-col items-center justify-center gap-1.5 text-theme-text-muted hover:text-purple-400 transition-colors cursor-pointer"
                 >
                   <Plus className="w-5 h-5" />
-                  <span className="text-[11px] font-semibold">+ Add Page</span>
+                  <span className="text-[11px] font-semibold text-center px-1">+ Add File</span>
                 </button>
               </div>
             </div>

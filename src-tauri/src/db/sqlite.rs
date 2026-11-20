@@ -64,6 +64,7 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
             document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
             page_number INTEGER NOT NULL DEFAULT 1,
             mime_type TEXT NOT NULL DEFAULT 'image/jpeg',
+            file_name TEXT,
             width INTEGER NOT NULL DEFAULT 0,
             height INTEGER NOT NULL DEFAULT 0,
             file_size INTEGER NOT NULL DEFAULT 0,
@@ -103,6 +104,23 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
         if !cols.contains(&"last_reminder_date".to_string()) {
             conn.execute("ALTER TABLE documents ADD COLUMN last_reminder_date TEXT", [])
                 .map_err(|e| format!("Failed to add last_reminder_date column: {}", e))?;
+        }
+    }
+
+    // Backward-safe migration: add file_name column to document_pages for multi-format attachment names
+    {
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(document_pages)")
+            .map_err(|e| format!("Failed to inspect document_pages table: {}", e))?;
+        let cols = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .map_err(|e| format!("Failed to query document_pages table_info: {}", e))?
+            .filter_map(Result::ok)
+            .collect::<Vec<String>>();
+
+        if !cols.contains(&"file_name".to_string()) {
+            conn.execute("ALTER TABLE document_pages ADD COLUMN file_name TEXT", [])
+                .map_err(|e| format!("Failed to add file_name column: {}", e))?;
         }
     }
 
@@ -235,6 +253,9 @@ pub struct RawDbDocumentRecord {
     pub page_count: usize,
     pub first_page_thumbnail_nonce: Option<String>,
     pub first_page_thumbnail_blob: Option<String>,
+    pub first_page_mime_type: Option<String>,
+    pub first_page_file_name: Option<String>,
+    pub total_file_size: usize,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -278,15 +299,46 @@ pub fn save_document_record(
     Ok(())
 }
 
+fn map_document_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RawDbDocumentRecord> {
+    let fav_int: i32 = row.get(7)?;
+    let rem_int: i32 = row.get(8)?;
+    let last_milestone: Option<i32> = row.get(9)?;
+    let last_date: Option<String> = row.get(10)?;
+    let page_count_i: i64 = row.get(13)?;
+    let total_size_i: i64 = row.get(18)?;
+    Ok(RawDbDocumentRecord {
+        id: row.get(0)?,
+        title: row.get(1)?,
+        doc_type: row.get(2)?,
+        description: row.get(3)?,
+        tags: row.get(4)?,
+        document_date: row.get(5)?,
+        expiry_date: row.get(6)?,
+        is_favorite: fav_int != 0,
+        reminder_enabled: rem_int != 0,
+        last_reminder_milestone: last_milestone,
+        last_reminder_date: last_date,
+        created_at: row.get(11)?,
+        updated_at: row.get(12)?,
+        page_count: page_count_i as usize,
+        first_page_thumbnail_nonce: row.get(14)?,
+        first_page_thumbnail_blob: row.get(15)?,
+        first_page_mime_type: row.get(16)?,
+        first_page_file_name: row.get(17)?,
+        total_file_size: total_size_i.max(0) as usize,
+    })
+}
+
 pub fn get_all_documents(conn: &Connection) -> Result<Vec<RawDbDocumentRecord>, String> {
-    // Join with document_pages to get page count and first page thumbnail
+    // Join with document_pages to get page count, total size, primary file metadata, and thumbnail
     let mut stmt = conn
         .prepare(
             "SELECT d.id, d.title, d.doc_type, d.description, d.tags, d.document_date, d.expiry_date, 
                     d.is_favorite, d.reminder_enabled, d.last_reminder_milestone, d.last_reminder_date,
                     d.created_at, d.updated_at,
                     (SELECT COUNT(*) FROM document_pages WHERE document_id = d.id) as page_count,
-                    p.thumbnail_nonce_b64, p.thumbnail_blob_b64
+                    p.thumbnail_nonce_b64, p.thumbnail_blob_b64, p.mime_type, p.file_name,
+                    COALESCE((SELECT SUM(file_size) FROM document_pages WHERE document_id = d.id), 0) as total_file_size
              FROM documents d
              LEFT JOIN document_pages p ON p.document_id = d.id AND p.page_number = 1
              ORDER BY d.updated_at DESC"
@@ -294,31 +346,7 @@ pub fn get_all_documents(conn: &Connection) -> Result<Vec<RawDbDocumentRecord>, 
         .map_err(|e| format!("Failed to prepare documents query: {}", e))?;
 
     let rows = stmt
-        .query_map([], |row| {
-            let fav_int: i32 = row.get(7)?;
-            let rem_int: i32 = row.get(8)?;
-            let last_milestone: Option<i32> = row.get(9)?;
-            let last_date: Option<String> = row.get(10)?;
-            let page_count_i: i64 = row.get(13)?;
-            Ok(RawDbDocumentRecord {
-                id: row.get(0)?,
-                title: row.get(1)?,
-                doc_type: row.get(2)?,
-                description: row.get(3)?,
-                tags: row.get(4)?,
-                document_date: row.get(5)?,
-                expiry_date: row.get(6)?,
-                is_favorite: fav_int != 0,
-                reminder_enabled: rem_int != 0,
-                last_reminder_milestone: last_milestone,
-                last_reminder_date: last_date,
-                created_at: row.get(11)?,
-                updated_at: row.get(12)?,
-                page_count: page_count_i as usize,
-                first_page_thumbnail_nonce: row.get(14)?,
-                first_page_thumbnail_blob: row.get(15)?,
-            })
-        })
+        .query_map([], map_document_row)
         .map_err(|e| format!("Error executing documents query: {}", e))?;
 
     let mut records = Vec::new();
@@ -335,7 +363,8 @@ pub fn get_document_record(conn: &Connection, id: &str) -> Result<Option<RawDbDo
                     d.is_favorite, d.reminder_enabled, d.last_reminder_milestone, d.last_reminder_date,
                     d.created_at, d.updated_at,
                     (SELECT COUNT(*) FROM document_pages WHERE document_id = d.id) as page_count,
-                    p.thumbnail_nonce_b64, p.thumbnail_blob_b64
+                    p.thumbnail_nonce_b64, p.thumbnail_blob_b64, p.mime_type, p.file_name,
+                    COALESCE((SELECT SUM(file_size) FROM document_pages WHERE document_id = d.id), 0) as total_file_size
              FROM documents d
              LEFT JOIN document_pages p ON p.document_id = d.id AND p.page_number = 1
              WHERE d.id = ?1"
@@ -347,29 +376,8 @@ pub fn get_document_record(conn: &Connection, id: &str) -> Result<Option<RawDbDo
         .map_err(|e| format!("Failed to query document: {}", e))?;
 
     if let Some(row) = rows.next().map_err(|e| format!("Error fetching document row: {}", e))? {
-        let fav_int: i32 = row.get(7).map_err(|e| format!("Error getting fav: {}", e))?;
-        let rem_int: i32 = row.get(8).map_err(|e| format!("Error getting reminder: {}", e))?;
-        let last_milestone: Option<i32> = row.get(9).map_err(|e| format!("Error getting last milestone: {}", e))?;
-        let last_date: Option<String> = row.get(10).map_err(|e| format!("Error getting last date: {}", e))?;
-        let page_count_i: i64 = row.get(13).map_err(|e| format!("Error getting count: {}", e))?;
-        Ok(Some(RawDbDocumentRecord {
-            id: row.get(0).map_err(|e| format!("Error getting id: {}", e))?,
-            title: row.get(1).map_err(|e| format!("Error getting title: {}", e))?,
-            doc_type: row.get(2).map_err(|e| format!("Error getting doc_type: {}", e))?,
-            description: row.get(3).map_err(|e| format!("Error getting description: {}", e))?,
-            tags: row.get(4).map_err(|e| format!("Error getting tags: {}", e))?,
-            document_date: row.get(5).map_err(|e| format!("Error getting doc_date: {}", e))?,
-            expiry_date: row.get(6).map_err(|e| format!("Error getting exp_date: {}", e))?,
-            is_favorite: fav_int != 0,
-            reminder_enabled: rem_int != 0,
-            last_reminder_milestone: last_milestone,
-            last_reminder_date: last_date,
-            created_at: row.get(11).map_err(|e| format!("Error getting created_at: {}", e))?,
-            updated_at: row.get(12).map_err(|e| format!("Error getting updated_at: {}", e))?,
-            page_count: page_count_i as usize,
-            first_page_thumbnail_nonce: row.get(14).map_err(|e| format!("Error getting thumb nonce: {}", e))?,
-            first_page_thumbnail_blob: row.get(15).map_err(|e| format!("Error getting thumb blob: {}", e))?,
-        }))
+        let rec = map_document_row(row).map_err(|e| format!("Error mapping document row: {}", e))?;
+        Ok(Some(rec))
     } else {
         Ok(None)
     }
@@ -409,6 +417,7 @@ pub struct RawDbDocumentPageRecord {
     pub document_id: String,
     pub page_number: usize,
     pub mime_type: String,
+    pub file_name: Option<String>,
     pub width: u32,
     pub height: u32,
     pub file_size: usize,
@@ -419,6 +428,28 @@ pub struct RawDbDocumentPageRecord {
     pub created_at: String,
 }
 
+fn map_document_page_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<RawDbDocumentPageRecord> {
+    let page_num: i64 = row.get(2)?;
+    let width: i64 = row.get(4)?;
+    let height: i64 = row.get(5)?;
+    let file_size: i64 = row.get(6)?;
+    Ok(RawDbDocumentPageRecord {
+        id: row.get(0)?,
+        document_id: row.get(1)?,
+        page_number: page_num as usize,
+        mime_type: row.get(3)?,
+        width: width as u32,
+        height: height as u32,
+        file_size: file_size as usize,
+        nonce_b64: row.get(7)?,
+        encrypted_blob_b64: row.get(8)?,
+        thumbnail_nonce_b64: row.get(9)?,
+        thumbnail_blob_b64: row.get(10)?,
+        created_at: row.get(11)?,
+        file_name: row.get(12)?,
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn save_document_page_record(
     conn: &Connection,
@@ -426,6 +457,7 @@ pub fn save_document_page_record(
     document_id: &str,
     page_number: usize,
     mime_type: &str,
+    file_name: Option<&str>,
     width: u32,
     height: u32,
     file_size: usize,
@@ -437,8 +469,8 @@ pub fn save_document_page_record(
 ) -> Result<(), String> {
     conn.execute(
         "INSERT OR REPLACE INTO document_pages 
-        (id, document_id, page_number, mime_type, width, height, file_size, nonce_b64, encrypted_blob_b64, thumbnail_nonce_b64, thumbnail_blob_b64, created_at)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        (id, document_id, page_number, mime_type, width, height, file_size, nonce_b64, encrypted_blob_b64, thumbnail_nonce_b64, thumbnail_blob_b64, created_at, file_name)
+        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             id,
             document_id,
@@ -452,6 +484,7 @@ pub fn save_document_page_record(
             thumbnail_nonce_b64,
             thumbnail_blob_b64,
             created_at,
+            file_name,
         ],
     )
     .map_err(|e| format!("Failed to save document page record: {}", e))?;
@@ -462,7 +495,7 @@ pub fn get_document_pages_by_doc_id(conn: &Connection, document_id: &str) -> Res
     let mut stmt = conn
         .prepare(
             "SELECT id, document_id, page_number, mime_type, width, height, file_size, 
-                    nonce_b64, encrypted_blob_b64, thumbnail_nonce_b64, thumbnail_blob_b64, created_at
+                    nonce_b64, encrypted_blob_b64, thumbnail_nonce_b64, thumbnail_blob_b64, created_at, file_name
              FROM document_pages 
              WHERE document_id = ?1 
              ORDER BY page_number ASC"
@@ -470,26 +503,7 @@ pub fn get_document_pages_by_doc_id(conn: &Connection, document_id: &str) -> Res
         .map_err(|e| format!("Failed to prepare pages query: {}", e))?;
 
     let rows = stmt
-        .query_map(params![document_id], |row| {
-            let page_num: i64 = row.get(2)?;
-            let width: i64 = row.get(4)?;
-            let height: i64 = row.get(5)?;
-            let file_size: i64 = row.get(6)?;
-            Ok(RawDbDocumentPageRecord {
-                id: row.get(0)?,
-                document_id: row.get(1)?,
-                page_number: page_num as usize,
-                mime_type: row.get(3)?,
-                width: width as u32,
-                height: height as u32,
-                file_size: file_size as usize,
-                nonce_b64: row.get(7)?,
-                encrypted_blob_b64: row.get(8)?,
-                thumbnail_nonce_b64: row.get(9)?,
-                thumbnail_blob_b64: row.get(10)?,
-                created_at: row.get(11)?,
-            })
-        })
+        .query_map(params![document_id], map_document_page_row)
         .map_err(|e| format!("Error executing pages query: {}", e))?;
 
     let mut records = Vec::new();
@@ -503,7 +517,7 @@ pub fn get_document_page_record(conn: &Connection, page_id: &str) -> Result<Opti
     let mut stmt = conn
         .prepare(
             "SELECT id, document_id, page_number, mime_type, width, height, file_size, 
-                    nonce_b64, encrypted_blob_b64, thumbnail_nonce_b64, thumbnail_blob_b64, created_at
+                    nonce_b64, encrypted_blob_b64, thumbnail_nonce_b64, thumbnail_blob_b64, created_at, file_name
              FROM document_pages 
              WHERE id = ?1"
         )
@@ -514,24 +528,8 @@ pub fn get_document_page_record(conn: &Connection, page_id: &str) -> Result<Opti
         .map_err(|e| format!("Failed to query page: {}", e))?;
 
     if let Some(row) = rows.next().map_err(|e| format!("Error fetching page row: {}", e))? {
-        let page_num: i64 = row.get(2).map_err(|e| format!("Error: {}", e))?;
-        let width: i64 = row.get(4).map_err(|e| format!("Error: {}", e))?;
-        let height: i64 = row.get(5).map_err(|e| format!("Error: {}", e))?;
-        let file_size: i64 = row.get(6).map_err(|e| format!("Error: {}", e))?;
-        Ok(Some(RawDbDocumentPageRecord {
-            id: row.get(0).map_err(|e| format!("Error: {}", e))?,
-            document_id: row.get(1).map_err(|e| format!("Error: {}", e))?,
-            page_number: page_num as usize,
-            mime_type: row.get(3).map_err(|e| format!("Error: {}", e))?,
-            width: width as u32,
-            height: height as u32,
-            file_size: file_size as usize,
-            nonce_b64: row.get(7).map_err(|e| format!("Error: {}", e))?,
-            encrypted_blob_b64: row.get(8).map_err(|e| format!("Error: {}", e))?,
-            thumbnail_nonce_b64: row.get(9).map_err(|e| format!("Error: {}", e))?,
-            thumbnail_blob_b64: row.get(10).map_err(|e| format!("Error: {}", e))?,
-            created_at: row.get(11).map_err(|e| format!("Error: {}", e))?,
-        }))
+        let rec = map_document_page_row(row).map_err(|e| format!("Error mapping page row: {}", e))?;
+        Ok(Some(rec))
     } else {
         Ok(None)
     }

@@ -151,7 +151,7 @@ pub fn get_vault_health(state: State<'_, SharedVaultManager>) -> Result<VaultHea
     Ok(evaluate_vault_health(&entries))
 }
 
-fn write_to_destination(app: &tauri::AppHandle, path: &str, data: &str) -> Result<(), String> {
+fn write_bytes_to_destination(app: &tauri::AppHandle, path: &str, data: &[u8]) -> Result<(), String> {
     if path.starts_with("content://") {
         #[cfg(target_os = "android")]
         {
@@ -169,7 +169,7 @@ fn write_to_destination(app: &tauri::AppHandle, path: &str, data: &str) -> Resul
                 .fs()
                 .open(target, opts)
                 .map_err(|e| format!("Failed to open destination URI: {}", e))?;
-            file.write_all(data.as_bytes())
+            file.write_all(data)
                 .map_err(|e| format!("Failed to write data: {}", e))?;
             file.flush()
                 .map_err(|e| format!("Failed to flush data: {}", e))?;
@@ -189,6 +189,10 @@ fn write_to_destination(app: &tauri::AppHandle, path: &str, data: &str) -> Resul
         }
     }
     fs::write(p, data).map_err(|e| format!("Failed to write file to disk ({}): {}", path, e))
+}
+
+fn write_to_destination(app: &tauri::AppHandle, path: &str, data: &str) -> Result<(), String> {
+    write_bytes_to_destination(app, path, data.as_bytes())
 }
 
 fn read_from_source(app: &tauri::AppHandle, src: &str) -> Result<String, String> {
@@ -373,6 +377,20 @@ pub fn get_document_page_data(
 ) -> Result<String, String> {
     let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
     manager.get_document_page_data(&page_id)
+}
+
+#[tauri::command]
+pub fn export_document_page(
+    app: tauri::AppHandle,
+    state: State<'_, SharedVaultManager>,
+    page_id: String,
+    dest_path: String,
+) -> Result<(), String> {
+    let (_mime, raw_bytes) = {
+        let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+        manager.get_document_page_raw(&page_id)?
+    };
+    write_bytes_to_destination(&app, &dest_path, &raw_bytes)
 }
 
 #[tauri::command]
