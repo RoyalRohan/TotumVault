@@ -1,5 +1,8 @@
 use std::fs;
+use std::io::Read;
+use std::path::Path;
 use std::sync::Arc;
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 #[cfg(not(target_os = "android"))]
 use tauri::Manager;
 use tauri::Emitter;
@@ -232,9 +235,117 @@ fn read_from_source(app: &tauri::AppHandle, src: &str) -> Result<String, String>
     fs::read_to_string(src).map_err(|e| format!("Failed to read file from {}: {}", src, e))
 }
 
+#[derive(serde::Serialize)]
+pub struct BinarySourceFileData {
+    pub file_name: String,
+    pub file_size: usize,
+    pub data_b64: String,
+}
+
+const MAX_BINARY_SOURCE_BYTES: usize = 50 * 1024 * 1024;
+
+fn read_capped_binary_stream(
+    reader: &mut impl Read,
+    max_bytes: usize,
+    file_name: &str,
+) -> Result<Vec<u8>, String> {
+    let mut buf = Vec::new();
+    let limit = (max_bytes as u64).saturating_add(1);
+    reader
+        .take(limit)
+        .read_to_end(&mut buf)
+        .map_err(|e| format!("Failed to read \"{}\": {}", file_name, e))?;
+    if buf.len() > max_bytes {
+        return Err(format!(
+            "\"{}\" exceeds the maximum supported file size of 50 MB.",
+            file_name
+        ));
+    }
+    Ok(buf)
+}
+
+fn read_binary_from_source(app: &tauri::AppHandle, src: &str) -> Result<BinarySourceFileData, String> {
+    if src.starts_with("content://") {
+        #[cfg(target_os = "android")]
+        {
+            use std::str::FromStr;
+            use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
+
+            let fallback_name = src
+                .rsplit('/')
+                .next()
+                .filter(|s| !s.is_empty())
+                .unwrap_or("document")
+                .to_string();
+
+            let mut opts = OpenOptions::new();
+            opts.read(true);
+
+            let source = FilePath::from_str(src)
+                .map_err(|e| format!("Failed to parse source URI: {}", e))?;
+
+            let mut file = app
+                .fs()
+                .open(source, opts)
+                .map_err(|e| format!("Failed to open source URI: {}", e))?;
+
+            let bytes = read_capped_binary_stream(&mut file, MAX_BINARY_SOURCE_BYTES, &fallback_name)?;
+            let file_size = bytes.len();
+            return Ok(BinarySourceFileData {
+                file_name: fallback_name,
+                file_size,
+                data_b64: BASE64.encode(&bytes),
+            });
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = app;
+            return Err("Content URIs are only supported on Android".to_string());
+        }
+    }
+
+    let p = Path::new(src);
+    let meta = fs::metadata(p).map_err(|e| format!("Failed to inspect file \"{}\": {}", src, e))?;
+    if !meta.is_file() {
+        return Err("Folders cannot be uploaded directly. Please select or drop files.".to_string());
+    }
+    let file_name = p
+        .file_name()
+        .and_then(|n| n.to_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("document")
+        .to_string();
+
+    if meta.len() > MAX_BINARY_SOURCE_BYTES as u64 {
+        return Err(format!(
+            "\"{}\" exceeds the maximum supported file size of 50 MB.",
+            file_name
+        ));
+    }
+
+    let mut file = fs::File::open(p)
+        .map_err(|e| format!("Failed to open file \"{}\": {}", file_name, e))?;
+    let bytes = read_capped_binary_stream(&mut file, MAX_BINARY_SOURCE_BYTES, &file_name)?;
+    let file_size = bytes.len();
+
+    Ok(BinarySourceFileData {
+        file_name,
+        file_size,
+        data_b64: BASE64.encode(&bytes),
+    })
+}
+
 #[tauri::command]
 pub fn read_source_file(app: tauri::AppHandle, path: String) -> Result<String, String> {
     read_from_source(&app, &path)
+}
+
+#[tauri::command]
+pub fn read_binary_source_file(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<BinarySourceFileData, String> {
+    read_binary_from_source(&app, &path)
 }
 
 fn resolve_save_path(app: &tauri::AppHandle, custom_path: Option<&str>, ext: &str) -> Result<String, String> {
@@ -1096,5 +1207,18 @@ mod tests {
         assert_eq!(records[1][0], "Google, Inc.");
         assert_eq!(records[1][1], "user@example.com");
         assert_eq!(records[1][2], "p@ss\"word");
+    }
+
+    #[test]
+    fn test_read_capped_binary_stream_enforces_limit_and_roundtrips() {
+        let pdf_sample = b"%PDF-1.4\n%test\n%%EOF";
+        let mut cursor = std::io::Cursor::new(pdf_sample);
+        let read_back = read_capped_binary_stream(&mut cursor, 1024, "sample.pdf").unwrap();
+        assert_eq!(read_back, pdf_sample);
+
+        let oversized = vec![0x25u8; 64];
+        let mut big_cursor = std::io::Cursor::new(oversized);
+        let err = read_capped_binary_stream(&mut big_cursor, 32, "huge.pdf").unwrap_err();
+        assert!(err.contains("exceeds the maximum supported file size"));
     }
 }

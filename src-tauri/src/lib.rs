@@ -188,6 +188,7 @@ pub fn run() {
             commands::test_document_reminder,
             commands::schedule_test_document_reminder,
             commands::read_source_file,
+            commands::read_binary_source_file,
             commands::get_app_version,
             commands::get_login_folders,
             commands::create_login_folder,

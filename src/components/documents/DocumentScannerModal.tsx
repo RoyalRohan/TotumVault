@@ -18,6 +18,9 @@ import {
   Bell,
 } from 'lucide-react';
 import { useVault } from '../../context/VaultContext';
+import { invoke } from '@tauri-apps/api/core';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { open } from '@tauri-apps/plugin-dialog';
 import {
   DOCUMENT_CATEGORIES,
   QuadCorners,
@@ -62,6 +65,21 @@ interface StagedPage {
   fileSize: number;
 }
 
+interface BinarySourceFileData {
+  file_name: string;
+  file_size: number;
+  data_b64: string;
+}
+
+interface NormalizedUploadSource {
+  name: string;
+  size: number;
+  mimeType: string;
+  loadDataUrl: () => Promise<string>;
+}
+
+const MAX_SIZE_LIMIT_MB = 50;
+
 export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
   isOpen,
   onClose,
@@ -81,7 +99,12 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
 
   const [stagedPages, setStagedPages] = useState<StagedPage[]>([]);
   const [isProcessingFiles, setIsProcessingFiles] = useState<boolean>(false);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const [pendingCropFileName, setPendingCropFileName] = useState<string | undefined>(undefined);
+
+  const isProcessingFilesRef = useRef<boolean>(false);
+  isProcessingFilesRef.current = isProcessingFiles;
+  const handleNativePathsRef = useRef<(paths: string[]) => Promise<void>>(async () => {});
 
   const [rawImageElem, setRawImageElem] = useState<HTMLImageElement | null>(null);
   const [corners, setCorners] = useState<QuadCorners>({
@@ -269,64 +292,45 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     img.src = src;
   };
 
-  const handleFilesSelected = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-
-    const fileList = Array.from(files);
-
-    // Clear input elements immediately so re-selecting the same file always triggers onChange
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    if (nativeCameraInputRef.current) nativeCameraInputRef.current.value = '';
-
-    for (const f of fileList) {
-      if (f.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
-        showToast(
-          `"${f.name}" is ${formatBytes(f.size)}. Maximum supported file size is 50 MB.`,
-          'error'
-        );
-        return;
-      }
-    }
+  const processUploadSources = async (sources: NormalizedUploadSource[]) => {
+    if (sources.length === 0) return;
 
     // Single raster image: enter interactive perspective crop & enhance flow
-    if (fileList.length === 1) {
-      const onlyFile = fileList[0];
-      const mimeType = resolveDocumentMimeType(onlyFile.name, onlyFile.type);
-      if (isImageMimeType(mimeType, onlyFile.name)) {
+    if (sources.length === 1) {
+      const only = sources[0];
+      if (isImageMimeType(only.mimeType, only.name)) {
         try {
-          const dataUrl = await readFileAsTypedDataUrl(onlyFile, mimeType);
-          setPendingCropFileName(onlyFile.name);
+          const dataUrl = await only.loadDataUrl();
+          setPendingCropFileName(only.name);
           if (!targetDocumentId && !title.trim()) {
-            setTitle(suggestTitleFromFileName(onlyFile.name));
+            setTitle(suggestTitleFromFileName(only.name));
           }
           loadImageForCropping(dataUrl);
         } catch (err: any) {
-          showToast(err?.message || 'Failed to load image.', 'error');
+          showToast(err?.message || err?.toString() || 'Failed to load image.', 'error');
         }
         return;
       }
     }
 
-    // PDF, Word (.docx/.doc), Spreadsheets, Text, or Batch Multi-file Upload
+    // PDF, Word (.docx/.doc/.odt/.rtf), Spreadsheets, Presentations, Text, or Batch Multi-file Upload
     setIsProcessingFiles(true);
     try {
       const newPages: StagedPage[] = [];
 
-      for (const file of fileList) {
-        const mimeType = resolveDocumentMimeType(file.name, file.type);
-        const dataUrl = await readFileAsTypedDataUrl(file, mimeType);
+      for (const source of sources) {
+        const dataUrl = await source.loadDataUrl();
 
         let thumbnailUrl = '';
         let width = 0;
         let height = 0;
 
-        if (mimeType === 'application/pdf') {
-          const buf = await file.arrayBuffer();
-          const pdfMeta = await extractPdfMetadataAndThumbnail(new Uint8Array(buf));
+        if (source.mimeType === 'application/pdf') {
+          const pdfMeta = await extractPdfMetadataAndThumbnail(dataUrl);
           thumbnailUrl = pdfMeta.thumbnailUrl;
           width = pdfMeta.width;
           height = pdfMeta.height;
-        } else if (isImageMimeType(mimeType, file.name)) {
+        } else if (isImageMimeType(source.mimeType, source.name)) {
           const imgMeta = await loadImageDimensionsAndThumb(dataUrl);
           thumbnailUrl = imgMeta.thumbnailUrl;
           width = imgMeta.width;
@@ -339,25 +343,157 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
           thumbnailUrl,
           width,
           height,
-          mimeType,
-          fileName: file.name,
-          fileSize: file.size || Math.round((dataUrl.length * 3) / 4),
+          mimeType: source.mimeType,
+          fileName: source.name,
+          fileSize: source.size || Math.round((dataUrl.length * 3) / 4),
         });
       }
 
       if (newPages.length > 0) {
         setStagedPages((prev) => [...prev, ...newPages]);
         if (!targetDocumentId && !title.trim()) {
-          setTitle(suggestTitleFromFileName(fileList[0].name));
+          setTitle(suggestTitleFromFileName(sources[0].name));
         }
         setStep('metadata');
       }
     } catch (err: any) {
-      showToast(err?.message || 'Failed to read selected file(s).', 'error');
+      showToast(err?.message || err?.toString() || 'Failed to read selected file(s).', 'error');
     } finally {
       setIsProcessingFiles(false);
     }
   };
+
+  const handleFilesSelected = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const fileList = Array.from(files);
+
+    // Clear input elements immediately so re-selecting the same file always triggers onChange
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (nativeCameraInputRef.current) nativeCameraInputRef.current.value = '';
+
+    for (const f of fileList) {
+      if (f.size > MAX_DOCUMENT_FILE_SIZE_BYTES) {
+        showToast(
+          `"${f.name}" is ${formatBytes(f.size)}. Maximum supported file size is ${MAX_SIZE_LIMIT_MB} MB.`,
+          'error'
+        );
+        return;
+      }
+    }
+
+    const sources: NormalizedUploadSource[] = fileList.map((file) => {
+      const mimeType = resolveDocumentMimeType(file.name, file.type);
+      return {
+        name: file.name,
+        size: file.size,
+        mimeType,
+        loadDataUrl: () => readFileAsTypedDataUrl(file, mimeType),
+      };
+    });
+
+    await processUploadSources(sources);
+  };
+
+  const handleNativePathsSelected = async (paths: string[]) => {
+    if (isProcessingFilesRef.current) return;
+    const validPaths = paths.filter((p) => typeof p === 'string' && p.trim().length > 0);
+    if (validPaths.length === 0) return;
+
+    const loadedSources: NormalizedUploadSource[] = [];
+    setIsProcessingFiles(true);
+    try {
+      for (const rawPath of validPaths) {
+        const res = await invoke<BinarySourceFileData>('read_binary_source_file', {
+          path: rawPath,
+        });
+        const mimeType = resolveDocumentMimeType(res.file_name, undefined);
+        const dataUrl = `data:${mimeType};base64,${res.data_b64}`;
+        loadedSources.push({
+          name: res.file_name,
+          size: res.file_size,
+          mimeType,
+          loadDataUrl: async () => dataUrl,
+        });
+      }
+
+      await processUploadSources(loadedSources);
+    } catch (err: any) {
+      showToast(err?.message || err?.toString() || 'Failed to load selected file(s).', 'error');
+    } finally {
+      setIsProcessingFiles(false);
+    }
+  };
+
+  handleNativePathsRef.current = handleNativePathsSelected;
+
+  const isTauriDesktop =
+    typeof window !== 'undefined' &&
+    Boolean((window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__) &&
+    !isAndroid;
+
+  const handleTriggerFilePicker = async () => {
+    if (isProcessingFiles) return;
+
+    if (isTauriDesktop) {
+      try {
+        // Use unrestricted native desktop dialog (no MIME filter) so PDF, Office, text, and images are always visible
+        const selected = await open({
+          multiple: true,
+          title: 'Select Documents or Photos',
+        });
+        if (!selected) return;
+        const paths = (Array.isArray(selected) ? selected : [selected]).map((item) =>
+          typeof item === 'string' ? item : (item as { path?: string })?.path || ''
+        );
+        await handleNativePathsSelected(paths);
+        return;
+      } catch {
+        // Fallback cleanly to standard HTML file input if native dialog is unavailable
+      }
+    }
+
+    fileInputRef.current?.click();
+  };
+
+  useEffect(() => {
+    if (!isOpen || step !== 'capture' || sourceMode !== 'upload' || !isTauriDesktop) {
+      setIsDragOver(false);
+      return;
+    }
+
+    let cancelled = false;
+    let unlistenFn: (() => void) | null = null;
+
+    getCurrentWebview()
+      .onDragDropEvent((event) => {
+        if (cancelled) return;
+        if (event.payload.type === 'enter' || event.payload.type === 'over') {
+          setIsDragOver(true);
+        } else if (event.payload.type === 'leave') {
+          setIsDragOver(false);
+        } else if (event.payload.type === 'drop') {
+          setIsDragOver(false);
+          if (!isProcessingFilesRef.current && event.payload.paths.length > 0) {
+            handleNativePathsRef.current(event.payload.paths);
+          }
+        }
+      })
+      .then((unlisten) => {
+        if (cancelled) {
+          unlisten();
+        } else {
+          unlistenFn = unlisten;
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      setIsDragOver(false);
+      if (unlistenFn) unlistenFn();
+    };
+  }, [isOpen, step, sourceMode, isTauriDesktop]);
 
   const handleRotate90 = () => {
     setRotation((prev) => (prev + 90) % 360);
@@ -759,6 +895,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
     setRawImageElem(null);
     setPendingCropFileName(undefined);
     setIsProcessingFiles(false);
+    setIsDragOver(false);
     setTitle('');
     setDescription('');
     setDocumentDate('');
@@ -869,7 +1006,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
                       </button>
                       <button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={handleTriggerFilePicker}
                         className="py-2.5 px-3.5 rounded-xl bg-theme-surface hover:bg-theme-bg border border-theme-border text-theme-text font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors text-xs"
                       >
                         <Upload className="w-4 h-4 text-purple-400" />
@@ -932,7 +1069,7 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={handleTriggerFilePicker}
                         className="p-3 rounded-full bg-black/60 hover:bg-black/80 text-white backdrop-blur-md border border-white/20 transition-all cursor-pointer"
                         title="Choose File"
                       >
@@ -947,15 +1084,24 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
             {sourceMode === 'upload' && (
               <div className="flex-1 min-h-0 flex flex-col justify-center gap-3">
                 <div
-                  onClick={() => !isProcessingFiles && fileInputRef.current?.click()}
-                  onDragOver={(e) => e.preventDefault()}
+                  onClick={handleTriggerFilePicker}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragOver(true);
+                  }}
+                  onDragLeave={() => setIsDragOver(false)}
                   onDrop={(e) => {
                     e.preventDefault();
-                    if (!isProcessingFiles) {
+                    setIsDragOver(false);
+                    if (!isProcessingFiles && e.dataTransfer.files?.length > 0) {
                       handleFilesSelected(e.dataTransfer.files);
                     }
                   }}
-                  className="flex-1 p-5 sm:p-10 rounded-2xl border-2 border-dashed border-theme-border hover:border-purple-500/60 bg-theme-surface/40 hover:bg-theme-surface transition-all flex flex-col items-center justify-center gap-3 cursor-pointer group text-center"
+                  className={`flex-1 p-5 sm:p-10 rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center gap-3 cursor-pointer group text-center ${
+                    isDragOver
+                      ? 'border-purple-500 bg-purple-500/10'
+                      : 'border-theme-border hover:border-purple-500/60 bg-theme-surface/40 hover:bg-theme-surface'
+                  }`}
                 >
                   {isProcessingFiles ? (
                     <>
@@ -1014,7 +1160,6 @@ export const DocumentScannerModal: React.FC<DocumentScannerModalProps> = ({
               ref={fileInputRef}
               type="file"
               multiple
-              accept="*/*"
               onChange={(e) => handleFilesSelected(e.target.files)}
               className="hidden"
             />
