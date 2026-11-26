@@ -3,6 +3,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
+use zeroize::Zeroize;
 
 use super::os_cleaner;
 use super::session::{self, ClipboardSession};
@@ -189,8 +190,8 @@ impl ClipboardManager {
                     if now >= session.expires_at {
                         let generation = session.generation;
                         let expected_len = session.expected_length;
-                        let hmac_key = session.hmac_key;
-                        let expected_fp = session.expected_fingerprint;
+                        let mut hmac_key = session.hmac_key;
+                        let mut expected_fp = session.expected_fingerprint;
                         drop(guard);
 
                         // Perform verification read & clear outside inner lock
@@ -204,6 +205,8 @@ impl ClipboardManager {
                             &hmac_key,
                             &expected_fp,
                         );
+                        hmac_key.zeroize();
+                        expected_fp.zeroize();
 
                         guard = match inner.0.lock() {
                             Ok(g) => g,
@@ -257,11 +260,14 @@ impl ClipboardManager {
         let read_result = Self::read_clipboard_bounded(reader_cmd_tx, Duration::from_millis(1500));
 
         match read_result {
-            Ok(current_text) => {
+            Ok(mut current_text) => {
                 let matches = current_text.len() == expected_len && {
-                    let fp = session::compute_fingerprint(hmac_key, &current_text);
-                    session::constant_time_eq(&fp, expected_fp)
+                    let mut fp = session::compute_fingerprint(hmac_key, &current_text);
+                    let eq = session::constant_time_eq(&fp, expected_fp);
+                    fp.zeroize();
+                    eq
                 };
+                current_text.zeroize();
 
                 if !matches {
                     // Content replaced by user or external application: preserve it!
@@ -379,6 +385,9 @@ impl ClipboardManager {
         guard.current_generation += 1;
         let gen = guard.current_generation;
         guard.pending_generation = None;
+        if let Some(session) = &mut guard.session {
+            session.invalidate();
+        }
         guard.session = Some(ClipboardSession::new(gen, text, timeout_secs));
         self.inner.1.notify_all();
         Ok(gen)
@@ -402,7 +411,7 @@ impl ClipboardManager {
         }
 
         // force == false: verification-guarded clear
-        let (generation, expected_len, hmac_key, expected_fp) = {
+        let (generation, expected_len, mut hmac_key, mut expected_fp) = {
             let guard = self.inner.0.lock().map_err(|_| "Failed to acquire inner lock")?;
             if guard.pending_generation.is_some() {
                 return Ok(ClipboardClearResult::AlreadyChanged);
@@ -428,6 +437,8 @@ impl ClipboardManager {
             &hmac_key,
             &expected_fp,
         );
+        hmac_key.zeroize();
+        expected_fp.zeroize();
 
         Ok(result)
     }
@@ -505,6 +516,7 @@ impl Drop for ClipboardManager {
 pub struct MockClipboardBackend {
     pub content: Mutex<String>,
     pub read_barrier: Mutex<Option<Arc<std::sync::Barrier>>>,
+    pub read_exit_barrier: Mutex<Option<Arc<std::sync::Barrier>>>,
     pub read_delay: Mutex<Option<Duration>>,
     pub fail_writes: Mutex<bool>,
     pub fail_reads: Mutex<bool>,
@@ -516,6 +528,7 @@ impl MockClipboardBackend {
         Self {
             content: Mutex::new(initial.to_string()),
             read_barrier: Mutex::new(None),
+            read_exit_barrier: Mutex::new(None),
             read_delay: Mutex::new(None),
             fail_writes: Mutex::new(false),
             fail_reads: Mutex::new(false),
@@ -538,14 +551,17 @@ impl ClipboardBackend for MockClipboardBackend {
         if *self.fail_reads.lock().unwrap() {
             return Err("Simulated read restriction / focusless error".to_string());
         }
+        let captured = self.content.lock().unwrap().clone();
         if let Some(barrier) = self.read_barrier.lock().unwrap().clone() {
             barrier.wait();
+        }
+        if let Some(exit_barrier) = self.read_exit_barrier.lock().unwrap().clone() {
+            exit_barrier.wait();
         }
         if let Some(delay) = *self.read_delay.lock().unwrap() {
             std::thread::sleep(delay);
         }
-        let guard = self.content.lock().unwrap();
-        Ok(guard.clone())
+        Ok(captured)
     }
 
     fn clear(&self) -> Result<(), String> {
@@ -613,7 +629,7 @@ mod tests {
 
     #[test]
     fn test_race_timer_verification_vs_concurrent_copy_a_cannot_clear_b() {
-        // TEST 1: Session A active -> timer enters verification phase -> concurrent copy B starts -> assert A cannot clear B
+        // TEST 1: Session A active -> timer captures read of SecretA -> concurrent copy B commits -> assert A cannot clear B
         let backend = Arc::new(MockClipboardBackend::new("SecretA"));
         let manager = Arc::new(ClipboardManager::with_backend(backend.clone()));
 
@@ -621,20 +637,24 @@ mod tests {
         let gen_a = manager.copy_and_track("SecretA", 1).unwrap();
         assert_eq!(gen_a, 1);
 
-        // Set barrier in read_text so timer will pause during verification read
-        let barrier = Arc::new(std::sync::Barrier::new(2));
-        *backend.read_barrier.lock().unwrap() = Some(barrier.clone());
+        // Two-step barrier deterministically pins the TOCTOU window after SecretA is read
+        let enter_barrier = Arc::new(std::sync::Barrier::new(2));
+        let exit_barrier = Arc::new(std::sync::Barrier::new(2));
+        *backend.read_barrier.lock().unwrap() = Some(enter_barrier.clone());
+        *backend.read_exit_barrier.lock().unwrap() = Some(exit_barrier.clone());
 
-        // Wait for timer to reach verification read
-        barrier.wait();
-
-        // Remove barrier so subsequent calls won't block
+        // Wait for timer to capture "SecretA" during verification read
+        enter_barrier.wait();
         *backend.read_barrier.lock().unwrap() = None;
 
-        // While timer read is completing, user starts concurrent copy of Secret B
+        // While timer holds captured "SecretA", user completes concurrent copy of Secret B
         let gen_b = manager.copy_and_track("SecretB", 30).unwrap();
         assert_eq!(gen_b, 2);
         assert_eq!(*backend.content.lock().unwrap(), "SecretB");
+
+        // Release timer read so verify_and_clear sees matching "SecretA" but superseded generation 2
+        exit_barrier.wait();
+        *backend.read_exit_barrier.lock().unwrap() = None;
 
         // Allow timer loop to finish its iteration
         std::thread::sleep(Duration::from_millis(50));
@@ -646,27 +666,33 @@ mod tests {
 
     #[test]
     fn test_race_clear_now_verification_vs_concurrent_copy_a_cannot_clear_b() {
-        // TEST 2: clear_now(false) begins verification for A -> concurrent copy B starts -> assert A cannot clear B
+        // TEST 2: clear_now(false) captures SecretA -> concurrent copy B commits -> assert A cannot clear B
         let backend = Arc::new(MockClipboardBackend::new("SecretA"));
         let manager = Arc::new(ClipboardManager::with_backend(backend.clone()));
 
         let _ = manager.copy_and_track("SecretA", 60).unwrap();
 
-        let barrier = Arc::new(std::sync::Barrier::new(2));
-        *backend.read_barrier.lock().unwrap() = Some(barrier.clone());
+        let enter_barrier = Arc::new(std::sync::Barrier::new(2));
+        let exit_barrier = Arc::new(std::sync::Barrier::new(2));
+        *backend.read_barrier.lock().unwrap() = Some(enter_barrier.clone());
+        *backend.read_exit_barrier.lock().unwrap() = Some(exit_barrier.clone());
 
         let manager_c = Arc::clone(&manager);
         let handle = std::thread::spawn(move || {
             manager_c.clear_now(false)
         });
 
-        // Synchronize on the verification read of clear_now(false)
-        barrier.wait();
+        // Synchronize right after clear_now(false) has captured "SecretA"
+        enter_barrier.wait();
         *backend.read_barrier.lock().unwrap() = None;
 
-        // Concurrent copy B starts while clear_now(false) is in flight
+        // Concurrent copy B commits while clear_now(false) is mid-verification with "SecretA"
         let gen_b = manager.copy_and_track("SecretB", 30).unwrap();
         assert_eq!(gen_b, 2);
+
+        // Release reader worker to return "SecretA" into verify_and_clear
+        exit_barrier.wait();
+        *backend.read_exit_barrier.lock().unwrap() = None;
 
         let clear_result = handle.join().unwrap();
         // clear_now(false) must return false (aborted) because generation was superseded

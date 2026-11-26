@@ -20,7 +20,7 @@ use crate::db::sqlite::{
     wipe_all_documents, wipe_all_entries,
 };
 
-use rand::RngCore;
+use rand::{rngs::OsRng, RngCore};
 
 use super::importer::{
     analyze_import_data, find_matching_entry, parse_backup_content, parse_csv_to_entries,
@@ -31,11 +31,14 @@ use super::models::{
     LoginFolder, PortableVaultBackup, SaveDocumentInput, SavePageInput,
 };
 
+const MAX_BIOMETRIC_ATTEMPTS: u32 = 3;
+
 pub struct VaultManager {
     db_path: PathBuf,
     active_key: Option<VaultKey>,
     auto_lock_minutes: u32,
     last_activity: u64,
+    biometric_failed_attempts: u32,
 }
 
 
@@ -47,6 +50,7 @@ impl VaultManager {
             active_key: None,
             auto_lock_minutes: 5,
             last_activity: Self::current_timestamp(),
+            biometric_failed_attempts: 0,
         }
     }
 
@@ -58,7 +62,9 @@ impl VaultManager {
     }
 
     pub fn touch_activity(&mut self) {
-        self.last_activity = Self::current_timestamp();
+        if self.active_key.is_some() {
+            self.last_activity = Self::current_timestamp();
+        }
     }
 
     pub fn set_auto_lock_minutes(&mut self, mins: u32) {
@@ -101,6 +107,9 @@ impl VaultManager {
     }
 
     pub fn create_vault(&mut self, master_password: &str) -> Result<(), String> {
+        if self.is_initialized() {
+            return Err("Vault is already initialized. Please unlock the vault or use Import to restore.".to_string());
+        }
         if master_password.trim().len() < 8 {
             return Err("Master password must be at least 8 characters long.".to_string());
         }
@@ -111,12 +120,18 @@ impl VaultManager {
         let vek = generate_vault_key();
         let wrapped_vek = wrap_vault_key(&vek, &kek)?;
 
-        save_metadata(&conn, "kdf_salt", &salt)?;
-        save_metadata(&conn, "kdf_algorithm", "argon2id")?;
-        save_metadata(&conn, "wrapped_vek_nonce", &wrapped_vek.nonce_b64)?;
-        save_metadata(&conn, "wrapped_vek_ciphertext", &wrapped_vek.ciphertext_b64)?;
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| format!("Failed to start vault init transaction: {}", e))?;
+        save_metadata(&tx, "kdf_salt", &salt)?;
+        save_metadata(&tx, "kdf_algorithm", "argon2id")?;
+        save_metadata(&tx, "wrapped_vek_nonce", &wrapped_vek.nonce_b64)?;
+        save_metadata(&tx, "wrapped_vek_ciphertext", &wrapped_vek.ciphertext_b64)?;
+        tx.commit()
+            .map_err(|e| format!("Failed to commit vault initialization: {}", e))?;
 
         self.active_key = Some(vek);
+        self.biometric_failed_attempts = 0;
         self.touch_activity();
         Ok(())
     }
@@ -135,6 +150,7 @@ impl VaultManager {
         match unwrap_vault_key(&kek, &nonce_b64, &ciphertext_b64) {
             Ok(vek) => {
                 self.active_key = Some(vek);
+                self.biometric_failed_attempts = 0;
                 self.touch_activity();
                 Ok(true)
             }
@@ -160,10 +176,11 @@ impl VaultManager {
 
         let mut decrypted_list = Vec::new();
         for rec in raw_records {
-            if let Ok(payload_bytes) = decrypt_bytes(&key.0, &rec.nonce_b64, &rec.encrypted_payload_b64) {
+            if let Ok(mut payload_bytes) = decrypt_bytes(&key.0, &rec.nonce_b64, &rec.encrypted_payload_b64) {
                 if let Ok(entry) = serde_json::from_slice::<DecryptedEntry>(&payload_bytes) {
                     decrypted_list.push(entry);
                 }
+                payload_bytes.zeroize();
             }
         }
 
@@ -527,6 +544,9 @@ impl VaultManager {
 
     pub fn setup_biometric_unlock(&mut self, master_password: &str) -> Result<String, String> {
         self.check_auto_lock();
+        if self.active_key.is_none() {
+            return Err("Vault is locked".to_string());
+        }
         let conn = init_db(&self.db_path)?;
 
         let salt = get_metadata(&conn, "kdf_salt")?
@@ -541,21 +561,35 @@ impl VaultManager {
             .map_err(|_| "Invalid master password".to_string())?;
 
         let mut token_bytes = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut token_bytes);
-        let bio_token_b64 = BASE64.encode(&token_bytes);
+        OsRng.fill_bytes(&mut token_bytes);
+        let bio_token_b64 = BASE64.encode(token_bytes);
 
         let bio_kek = DerivedKey(token_bytes);
         let wrapped_bio = wrap_vault_key(&vek, &bio_kek)?;
         token_bytes.zeroize();
 
-        save_metadata(&conn, "biometric_vek_nonce", &wrapped_bio.nonce_b64)?;
-        save_metadata(&conn, "biometric_vek_ciphertext", &wrapped_bio.ciphertext_b64)?;
-        save_metadata(&conn, "biometric_enabled", "true")?;
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| format!("Failed to start biometric setup transaction: {}", e))?;
+        save_metadata(&tx, "biometric_vek_nonce", &wrapped_bio.nonce_b64)?;
+        save_metadata(&tx, "biometric_vek_ciphertext", &wrapped_bio.ciphertext_b64)?;
+        save_metadata(&tx, "biometric_enabled", "true")?;
+        tx.commit()
+            .map_err(|e| format!("Failed to commit biometric setup: {}", e))?;
 
+        self.biometric_failed_attempts = 0;
+        self.touch_activity();
         Ok(bio_token_b64)
     }
 
     pub fn unlock_vault_biometric(&mut self, bio_token_b64: &str) -> Result<bool, String> {
+        if self.biometric_failed_attempts >= MAX_BIOMETRIC_ATTEMPTS {
+            return Err(
+                "Maximum biometric attempts exceeded (3/3). Please unlock with your master password."
+                    .to_string(),
+            );
+        }
+
         let conn = init_db(&self.db_path)?;
         let enabled = get_metadata(&conn, "biometric_enabled")?.unwrap_or_default();
         if enabled != "true" {
@@ -567,11 +601,17 @@ impl VaultManager {
         let ciphertext_b64 = get_metadata(&conn, "biometric_vek_ciphertext")?
             .ok_or_else(|| "Missing biometric key ciphertext".to_string())?;
 
-        let mut token_bytes = BASE64.decode(bio_token_b64)
-            .map_err(|_| "Invalid biometric token encoding".to_string())?;
+        let mut token_bytes = match BASE64.decode(bio_token_b64) {
+            Ok(b) => b,
+            Err(_) => {
+                self.biometric_failed_attempts += 1;
+                return Err("Invalid biometric token encoding".to_string());
+            }
+        };
 
         if token_bytes.len() != 32 {
             token_bytes.zeroize();
+            self.biometric_failed_attempts += 1;
             return Err("Invalid biometric key length".to_string());
         }
 
@@ -583,18 +623,33 @@ impl VaultManager {
         match unwrap_vault_key(&bio_kek, &nonce_b64, &ciphertext_b64) {
             Ok(vek) => {
                 self.active_key = Some(vek);
+                self.biometric_failed_attempts = 0;
                 self.touch_activity();
                 Ok(true)
             }
-            Err(_) => Ok(false),
+            Err(_) => {
+                self.biometric_failed_attempts += 1;
+                Ok(false)
+            }
         }
     }
 
     pub fn disable_biometric_unlock(&mut self) -> Result<(), String> {
+        self.check_auto_lock();
+        if self.active_key.is_none() {
+            return Err("Vault is locked".to_string());
+        }
         let conn = init_db(&self.db_path)?;
-        save_metadata(&conn, "biometric_enabled", "false")?;
-        save_metadata(&conn, "biometric_vek_nonce", "")?;
-        save_metadata(&conn, "biometric_vek_ciphertext", "")?;
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| format!("Failed to start biometric disable transaction: {}", e))?;
+        save_metadata(&tx, "biometric_enabled", "false")?;
+        save_metadata(&tx, "biometric_vek_nonce", "")?;
+        save_metadata(&tx, "biometric_vek_ciphertext", "")?;
+        tx.commit()
+            .map_err(|e| format!("Failed to disable biometric unlock: {}", e))?;
+        self.biometric_failed_attempts = 0;
+        self.touch_activity();
         Ok(())
     }
 
@@ -639,15 +694,20 @@ impl VaultManager {
         // Re-wrap existing VEK (no need to re-encrypt individual entries!)
         let rewrapped = wrap_vault_key(&current_key, &new_kek)?;
 
-        save_metadata(&conn, "kdf_salt", &new_salt)?;
-        save_metadata(&conn, "wrapped_vek_nonce", &rewrapped.nonce_b64)?;
-        save_metadata(&conn, "wrapped_vek_ciphertext", &rewrapped.ciphertext_b64)?;
+        // Atomically commit new KDF salt, wrapped VEK, and biometric revocation in a single transaction
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| format!("Failed to start password change transaction: {}", e))?;
+        save_metadata(&tx, "kdf_salt", &new_salt)?;
+        save_metadata(&tx, "wrapped_vek_nonce", &rewrapped.nonce_b64)?;
+        save_metadata(&tx, "wrapped_vek_ciphertext", &rewrapped.ciphertext_b64)?;
+        save_metadata(&tx, "biometric_enabled", "false")?;
+        save_metadata(&tx, "biometric_vek_nonce", "")?;
+        save_metadata(&tx, "biometric_vek_ciphertext", "")?;
+        tx.commit()
+            .map_err(|e| format!("Failed to commit master password update: {}", e))?;
 
-        // Automatically revoke any prior biometric enrollment on password change
-        let _ = save_metadata(&conn, "biometric_enabled", "false");
-        let _ = save_metadata(&conn, "biometric_vek_nonce", "");
-        let _ = save_metadata(&conn, "biometric_vek_ciphertext", "");
-
+        self.biometric_failed_attempts = 0;
         self.touch_activity();
         Ok(())
     }
@@ -754,6 +814,11 @@ impl VaultManager {
     }
 
     pub fn import_backup(&mut self, src_path_or_content: &str, master_password: &str) -> Result<(), String> {
+        self.check_auto_lock();
+        if self.is_initialized() && !self.is_unlocked() {
+            return Err("Vault must be unlocked before replacing an existing vault.".to_string());
+        }
+
         let json_str = if src_path_or_content.trim().starts_with('{') {
             src_path_or_content.to_string()
         } else {
@@ -773,16 +838,25 @@ impl VaultManager {
             .map_err(|_| "Incorrect master password for backup file.".to_string())?;
 
         let conn = init_db(&self.db_path)?;
-        wipe_all_entries(&conn)?;
-        wipe_all_documents(&conn)?;
+        let tx = conn
+            .unchecked_transaction()
+            .map_err(|e| format!("Failed to start backup restore transaction: {}", e))?;
 
-        save_metadata(&conn, "kdf_salt", &backup.kdf_salt_b64)?;
-        save_metadata(&conn, "wrapped_vek_nonce", &backup.wrapped_vek_nonce_b64)?;
-        save_metadata(&conn, "wrapped_vek_ciphertext", &backup.wrapped_vek_ciphertext_b64)?;
+        wipe_all_entries(&tx)?;
+        wipe_all_documents(&tx)?;
+
+        save_metadata(&tx, "kdf_salt", &backup.kdf_salt_b64)?;
+        save_metadata(&tx, "kdf_algorithm", "argon2id")?;
+        save_metadata(&tx, "wrapped_vek_nonce", &backup.wrapped_vek_nonce_b64)?;
+        save_metadata(&tx, "wrapped_vek_ciphertext", &backup.wrapped_vek_ciphertext_b64)?;
+        // Revoke any old biometric wrapper bound to a previous VEK
+        save_metadata(&tx, "biometric_enabled", "false")?;
+        save_metadata(&tx, "biometric_vek_nonce", "")?;
+        save_metadata(&tx, "biometric_vek_ciphertext", "")?;
 
         for item in backup.entries {
             save_encrypted_entry(
-                &conn,
+                &tx,
                 &item.id,
                 &item.category,
                 item.favorite,
@@ -797,7 +871,7 @@ impl VaultManager {
         for doc in backup.documents {
             let tags_json = serde_json::to_string(&doc.tags).unwrap_or_else(|_| "[]".to_string());
             save_document_record(
-                &conn,
+                &tx,
                 &doc.id,
                 &doc.title,
                 &doc.doc_type,
@@ -815,7 +889,7 @@ impl VaultManager {
 
             for page in doc.pages {
                 save_document_page_record(
-                    &conn,
+                    &tx,
                     &page.id,
                     &page.document_id,
                     page.page_number,
@@ -833,7 +907,11 @@ impl VaultManager {
             }
         }
 
+        tx.commit()
+            .map_err(|e| format!("Failed to commit restored vault backup: {}", e))?;
+
         self.active_key = Some(vek);
+        self.biometric_failed_attempts = 0;
         self.touch_activity();
         Ok(())
     }
@@ -846,11 +924,10 @@ impl VaultManager {
         master_password: Option<&str>,
     ) -> Result<ImportPreview, String> {
         self.check_auto_lock();
-        let existing = if self.is_unlocked() {
-            self.get_entries()?
-        } else {
-            Vec::new()
-        };
+        if !self.is_unlocked() {
+            return Err("Vault must be unlocked to analyze an import.".to_string());
+        }
+        let existing = self.get_entries()?;
 
         let preview = analyze_import_data(content, master_password, &existing)?;
         self.touch_activity();
@@ -868,17 +945,24 @@ impl VaultManager {
             && content.contains("\"magic\"")
             && (content.contains("TOTUMVAULT_VAULT_V1") || content.contains("VEYLOCK_VAULT_V1"));
 
-        // Dual-layer safety: snapshot backup on disk before any modification
+        // Dual-layer safety: checkpoint WAL into main DB file before snapshotting on disk
         let backup_path = self.db_path.with_extension("sqlite.import_backup");
         if self.db_path.exists() {
+            if let Ok(conn) = init_db(&self.db_path) {
+                let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
+            }
             let _ = fs::copy(&self.db_path, &backup_path);
         }
 
         let result = self.execute_commit_import_inner(&options, is_encrypted_backup);
 
         if result.is_err() {
-            // Roll back database file to pre-import snapshot
+            // Roll back database file cleanly and discard any stale WAL/SHM sidecar files
             if backup_path.exists() {
+                let wal_path = PathBuf::from(format!("{}-wal", self.db_path.display()));
+                let shm_path = PathBuf::from(format!("{}-shm", self.db_path.display()));
+                let _ = fs::remove_file(&wal_path);
+                let _ = fs::remove_file(&shm_path);
                 let _ = fs::copy(&backup_path, &self.db_path);
                 let _ = fs::remove_file(&backup_path);
             }
@@ -1168,8 +1252,10 @@ impl VaultManager {
     }
 
     pub fn get_document_page_data(&mut self, page_id: &str) -> Result<String, String> {
-        let (mime_type, bytes) = self.get_document_page_raw(page_id)?;
-        Ok(format!("data:{};base64,{}", mime_type, BASE64.encode(bytes)))
+        let (mime_type, mut bytes) = self.get_document_page_raw(page_id)?;
+        let encoded = BASE64.encode(&bytes);
+        bytes.zeroize();
+        Ok(format!("data:{};base64,{}", mime_type, encoded))
     }
 
     pub fn save_document(&mut self, input: SaveDocumentInput) -> Result<String, String> {
@@ -1931,6 +2017,76 @@ mod tests {
         assert!(mgr.move_entry_to_folder(&note_id, Some(f_a.id.clone())).is_err());
 
         let _ = fs::remove_dir_all(test_dir);
+    }
+
+    #[test]
+    fn test_security_guards_create_overwrite_biometric_lockout_and_locked_import() {
+        let test_dir = get_test_dir("security_guards");
+        let mut mgr = VaultManager::new(test_dir.clone());
+        mgr.create_vault("CorrectHorseBattery1!").unwrap();
+
+        let mut e = DecryptedEntry::default();
+        e.title = "Critical Secret".to_string();
+        e.password = "TopSecret#99".to_string();
+        e.category = "logins".to_string();
+        mgr.save_entry(e).unwrap();
+
+        // 1. Calling create_vault on an already-initialized vault MUST fail and preserve existing data
+        assert!(mgr.create_vault("AttackerPass123!").is_err());
+        mgr.lock_vault();
+        assert!(mgr.create_vault("AttackerPass123!").is_err());
+
+        // Existing master password still unlocks and entry is intact
+        assert!(mgr.unlock_vault("CorrectHorseBattery1!").unwrap());
+        assert_eq!(mgr.get_entries().unwrap().len(), 1);
+
+        // 2. Backend 3-strike biometric brute-force lockout enforcement
+        let valid_bio = mgr.setup_biometric_unlock("CorrectHorseBattery1!").unwrap();
+        mgr.lock_vault();
+
+        // Locked vault must reject disable_biometric_unlock and import_backup overwrite
+        assert!(mgr.disable_biometric_unlock().is_err());
+
+        let wrong_bio = BASE64.encode([0x42u8; 32]);
+        assert!(!mgr.unlock_vault_biometric(&wrong_bio).unwrap()); // 1/3
+        assert!(!mgr.unlock_vault_biometric(&wrong_bio).unwrap()); // 2/3
+        assert!(!mgr.unlock_vault_biometric(&wrong_bio).unwrap()); // 3/3
+
+        // 4th attempt MUST fail with lockout even when presenting the valid biometric token
+        assert!(mgr.unlock_vault_biometric(&valid_bio).is_err());
+        assert!(!mgr.is_unlocked());
+
+        // Master password unlock resets biometric lockout
+        assert!(mgr.unlock_vault("CorrectHorseBattery1!").unwrap());
+        mgr.lock_vault();
+        assert!(mgr.unlock_vault_biometric(&valid_bio).unwrap());
+
+        // 3. Locked vault cannot be overwritten via import_backup by an attacker backup
+        let attacker_dir = get_test_dir("attacker_backup");
+        let mut attacker_mgr = VaultManager::new(attacker_dir.clone());
+        attacker_mgr.create_vault("AttackerPass123!").unwrap();
+        let attacker_backup = attacker_mgr.export_backup_string().unwrap();
+
+        mgr.lock_vault();
+        assert!(mgr.import_backup(&attacker_backup, "AttackerPass123!").is_err());
+        assert!(mgr.unlock_vault("CorrectHorseBattery1!").unwrap());
+        assert_eq!(mgr.get_entries().unwrap()[0].title, "Critical Secret");
+
+        // 4. Failed commit_import rolls back cleanly across WAL mode without DB corruption
+        assert!(mgr
+            .commit_import(ImportCommitOptions {
+                src_path: attacker_backup,
+                master_password: Some("WrongBackupPass!".to_string()),
+                mode: "replace".to_string(),
+                duplicate_strategy: "replace_existing".to_string(),
+            })
+            .is_err());
+        let entries_after_rollback = mgr.get_entries().unwrap();
+        assert_eq!(entries_after_rollback.len(), 1);
+        assert_eq!(entries_after_rollback[0].title, "Critical Secret");
+
+        let _ = fs::remove_dir_all(test_dir);
+        let _ = fs::remove_dir_all(attacker_dir);
     }
 }
 

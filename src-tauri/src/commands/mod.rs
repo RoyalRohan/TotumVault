@@ -8,6 +8,7 @@ use tauri::Manager;
 use tauri::Emitter;
 use tauri::State;
 use uuid::Uuid;
+use zeroize::Zeroize;
 
 use crate::network::policy::{NetworkPolicyService, NetworkStatus};
 use crate::calendar::{
@@ -29,6 +30,34 @@ use crate::vault::models::{
 };
 
 use crate::vault::password_gen::generate_password_csprng;
+
+fn ensure_unlocked_manager(manager: &mut crate::vault::manager::VaultManager) -> Result<(), String> {
+    manager.check_auto_lock();
+    if !manager.is_unlocked() {
+        return Err("Vault is locked".to_string());
+    }
+    Ok(())
+}
+
+fn ensure_unlocked_or_uninitialized_manager(
+    manager: &mut crate::vault::manager::VaultManager,
+) -> Result<(), String> {
+    manager.check_auto_lock();
+    if manager.is_initialized() && !manager.is_unlocked() {
+        return Err("Vault is locked".to_string());
+    }
+    Ok(())
+}
+
+fn ensure_unlocked(state: &State<'_, SharedVaultManager>) -> Result<(), String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    ensure_unlocked_manager(&mut manager)
+}
+
+fn ensure_unlocked_or_uninitialized(state: &State<'_, SharedVaultManager>) -> Result<(), String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    ensure_unlocked_or_uninitialized_manager(&mut manager)
+}
 
 #[tauri::command]
 pub fn get_vault_status(state: State<'_, SharedVaultManager>) -> Result<VaultStatus, String> {
@@ -52,26 +81,34 @@ pub fn get_vault_status(state: State<'_, SharedVaultManager>) -> Result<VaultSta
 #[tauri::command]
 pub fn create_vault(
     state: State<'_, SharedVaultManager>,
-    master_password: String,
+    mut master_password: String,
 ) -> Result<VaultStatus, String> {
-    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
-    manager.create_vault(&master_password)?;
+    let res = (|| {
+        let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+        manager.create_vault(&master_password)?;
 
-    Ok(VaultStatus {
-        exists: true,
-        unlocked: true,
-        auto_lock_minutes: manager.auto_lock_minutes(),
-        entry_count: 0,
-    })
+        Ok(VaultStatus {
+            exists: true,
+            unlocked: true,
+            auto_lock_minutes: manager.auto_lock_minutes(),
+            entry_count: 0,
+        })
+    })();
+    master_password.zeroize();
+    res
 }
 
 #[tauri::command]
 pub fn unlock_vault(
     state: State<'_, SharedVaultManager>,
-    master_password: String,
+    mut master_password: String,
 ) -> Result<bool, String> {
-    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
-    manager.unlock_vault(&master_password)
+    let res = (|| {
+        let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+        manager.unlock_vault(&master_password)
+    })();
+    master_password.zeroize();
+    res
 }
 
 #[tauri::command]
@@ -89,6 +126,7 @@ pub fn lock_vault(
 #[tauri::command]
 pub fn set_auto_lock_timer(state: State<'_, SharedVaultManager>, minutes: u32) -> Result<(), String> {
     let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    ensure_unlocked_manager(&mut manager)?;
     manager.set_auto_lock_minutes(minutes);
     Ok(())
 }
@@ -128,23 +166,29 @@ pub fn generate_password(config: PwGenConfig) -> Result<String, String> {
 
 #[tauri::command]
 pub fn generate_totp_code(
-    secret: String,
+    mut secret: String,
     digits: Option<u32>,
     period: Option<u64>,
 ) -> Result<TotpResult, String> {
-    if secret.trim().is_empty() {
-        return Err("Secret is empty".to_string());
-    }
-    let (code, time_remaining) = calc_totp(&secret, digits, period)?;
-    Ok(TotpResult { code, time_remaining })
+    let res = if secret.trim().is_empty() {
+        Err("Secret is empty".to_string())
+    } else {
+        calc_totp(&secret, digits, period)
+            .map(|(code, time_remaining)| TotpResult { code, time_remaining })
+    };
+    secret.zeroize();
+    res
 }
 
 #[tauri::command]
-pub fn validate_totp(secret: String) -> Result<bool, String> {
-    if secret.trim().is_empty() {
-        return Ok(false);
-    }
-    validate_totp_secret(&secret)
+pub fn validate_totp(mut secret: String) -> Result<bool, String> {
+    let res = if secret.trim().is_empty() {
+        Ok(false)
+    } else {
+        validate_totp_secret(&secret)
+    };
+    secret.zeroize();
+    res
 }
 
 #[tauri::command]
@@ -289,12 +333,14 @@ fn read_binary_from_source(app: &tauri::AppHandle, src: &str) -> Result<BinarySo
                 .open(source, opts)
                 .map_err(|e| format!("Failed to open source URI: {}", e))?;
 
-            let bytes = read_capped_binary_stream(&mut file, MAX_BINARY_SOURCE_BYTES, &fallback_name)?;
+            let mut bytes = read_capped_binary_stream(&mut file, MAX_BINARY_SOURCE_BYTES, &fallback_name)?;
             let file_size = bytes.len();
+            let data_b64 = BASE64.encode(&bytes);
+            bytes.zeroize();
             return Ok(BinarySourceFileData {
                 file_name: fallback_name,
                 file_size,
-                data_b64: BASE64.encode(&bytes),
+                data_b64,
             });
         }
         #[cfg(not(target_os = "android"))]
@@ -325,26 +371,35 @@ fn read_binary_from_source(app: &tauri::AppHandle, src: &str) -> Result<BinarySo
 
     let mut file = fs::File::open(p)
         .map_err(|e| format!("Failed to open file \"{}\": {}", file_name, e))?;
-    let bytes = read_capped_binary_stream(&mut file, MAX_BINARY_SOURCE_BYTES, &file_name)?;
+    let mut bytes = read_capped_binary_stream(&mut file, MAX_BINARY_SOURCE_BYTES, &file_name)?;
     let file_size = bytes.len();
+    let data_b64 = BASE64.encode(&bytes);
+    bytes.zeroize();
 
     Ok(BinarySourceFileData {
         file_name,
         file_size,
-        data_b64: BASE64.encode(&bytes),
+        data_b64,
     })
 }
 
 #[tauri::command]
-pub fn read_source_file(app: tauri::AppHandle, path: String) -> Result<String, String> {
+pub fn read_source_file(
+    app: tauri::AppHandle,
+    state: State<'_, SharedVaultManager>,
+    path: String,
+) -> Result<String, String> {
+    ensure_unlocked_or_uninitialized(&state)?;
     read_from_source(&app, &path)
 }
 
 #[tauri::command]
 pub fn read_binary_source_file(
     app: tauri::AppHandle,
+    state: State<'_, SharedVaultManager>,
     path: String,
 ) -> Result<BinarySourceFileData, String> {
+    ensure_unlocked(&state)?;
     read_binary_from_source(&app, &path)
 }
 
@@ -433,11 +488,20 @@ pub fn import_vault_backup(
     app: tauri::AppHandle,
     state: State<'_, SharedVaultManager>,
     src_path: String,
-    master_password: String,
+    mut master_password: String,
 ) -> Result<(), String> {
-    let content = read_from_source(&app, &src_path)?;
-    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
-    manager.import_backup(&content, &master_password)
+    let res = (|| {
+        ensure_unlocked_or_uninitialized(&state)?;
+        let mut content = read_from_source(&app, &src_path)?;
+        let import_res = {
+            let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+            manager.import_backup(&content, &master_password)
+        };
+        content.zeroize();
+        import_res
+    })();
+    master_password.zeroize();
+    res
 }
 
 #[tauri::command]
@@ -445,11 +509,22 @@ pub fn analyze_import(
     app: tauri::AppHandle,
     state: State<'_, SharedVaultManager>,
     src_path: String,
-    master_password: Option<String>,
+    mut master_password: Option<String>,
 ) -> Result<ImportPreview, String> {
-    let content = read_from_source(&app, &src_path)?;
-    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
-    manager.analyze_import(&content, master_password.as_deref())
+    let res = (|| {
+        ensure_unlocked(&state)?;
+        let mut content = read_from_source(&app, &src_path)?;
+        let analyze_res = {
+            let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+            manager.analyze_import(&content, master_password.as_deref())
+        };
+        content.zeroize();
+        analyze_res
+    })();
+    if let Some(ref mut pw) = master_password {
+        pw.zeroize();
+    }
+    res
 }
 
 #[tauri::command]
@@ -458,9 +533,35 @@ pub fn commit_import(
     state: State<'_, SharedVaultManager>,
     mut options: ImportCommitOptions,
 ) -> Result<ImportResultSummary, String> {
-    let content = read_from_source(&app, &options.src_path)?;
+    if let Err(e) = ensure_unlocked(&state) {
+        options.src_path.zeroize();
+        if let Some(ref mut pw) = options.master_password {
+            pw.zeroize();
+        }
+        return Err(e);
+    }
+    let content = match read_from_source(&app, &options.src_path) {
+        Ok(c) => c,
+        Err(e) => {
+            options.src_path.zeroize();
+            if let Some(ref mut pw) = options.master_password {
+                pw.zeroize();
+            }
+            return Err(e);
+        }
+    };
+    options.src_path.zeroize();
     options.src_path = content;
-    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    let mut manager = match state.lock() {
+        Ok(m) => m,
+        Err(_) => {
+            options.src_path.zeroize();
+            if let Some(ref mut pw) = options.master_password {
+                pw.zeroize();
+            }
+            return Err("Failed to acquire vault lock".to_string());
+        }
+    };
     manager.commit_import(options)
 }
 
@@ -497,11 +598,13 @@ pub fn export_document_page(
     page_id: String,
     dest_path: String,
 ) -> Result<(), String> {
-    let (_mime, raw_bytes) = {
+    let (_mime, mut raw_bytes) = {
         let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
         manager.get_document_page_raw(&page_id)?
     };
-    write_bytes_to_destination(&app, &dest_path, &raw_bytes)
+    let res = write_bytes_to_destination(&app, &dest_path, &raw_bytes);
+    raw_bytes.zeroize();
+    res
 }
 
 #[tauri::command]
@@ -569,32 +672,40 @@ pub fn get_document_reminder_settings(
 
 #[tauri::command]
 pub fn set_document_reminder_settings(
+    state: State<'_, SharedVaultManager>,
     service: State<'_, Arc<DocumentReminderService>>,
     enabled: bool,
 ) -> Result<(), String> {
+    ensure_unlocked(&state)?;
     service.set_globally_enabled(enabled)
 }
 
 #[tauri::command]
 pub fn sync_document_reminders(
+    state: State<'_, SharedVaultManager>,
     service: State<'_, Arc<DocumentReminderService>>,
 ) -> Result<usize, String> {
+    ensure_unlocked(&state)?;
     service.check_and_deliver_reminders()
 }
 
 #[tauri::command]
 pub fn test_document_reminder(
+    state: State<'_, SharedVaultManager>,
     service: State<'_, Arc<DocumentReminderService>>,
     document_id: String,
 ) -> Result<String, String> {
+    ensure_unlocked(&state)?;
     service.test_document_reminder(&document_id)
 }
 
 #[tauri::command]
 pub fn schedule_test_document_reminder(
+    state: State<'_, SharedVaultManager>,
     service: State<'_, Arc<DocumentReminderService>>,
     delay_secs: u64,
 ) -> Result<String, String> {
+    ensure_unlocked(&state)?;
     service.schedule_test_timer(delay_secs)?;
     Ok(format!("Test reminder scheduled for {} seconds in the future.", delay_secs))
 }
@@ -603,20 +714,19 @@ pub fn schedule_test_document_reminder(
 #[tauri::command]
 pub fn change_master_password(
     state: State<'_, SharedVaultManager>,
-    old_password: String,
-    new_password: String,
+    mut old_password: String,
+    mut new_password: String,
 ) -> Result<(), String> {
-    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
-    manager.change_master_password(&old_password, &new_password)
+    let res = (|| {
+        let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+        manager.change_master_password(&old_password, &new_password)
+    })();
+    old_password.zeroize();
+    new_password.zeroize();
+    res
 }
 
-#[tauri::command]
-pub fn export_plaintext_csv_string(
-    state: State<'_, SharedVaultManager>,
-) -> Result<String, String> {
-    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
-    let entries = manager.get_entries()?;
-
+fn format_entries_as_csv(entries: &[DecryptedEntry]) -> String {
     let mut csv_out = String::from("title,username,email,password,url,category,notes,totp_secret\r\n");
     for e in entries {
         let title = escape_csv(&e.title);
@@ -633,7 +743,16 @@ pub fn export_plaintext_csv_string(
             title, user, email, pass, url, cat, notes, totp
         ));
     }
-    Ok(csv_out)
+    csv_out
+}
+
+#[tauri::command]
+pub fn export_plaintext_csv_string(
+    state: State<'_, SharedVaultManager>,
+) -> Result<String, String> {
+    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+    let entries = manager.get_entries()?;
+    Ok(format_entries_as_csv(&entries))
 }
 
 #[tauri::command]
@@ -644,23 +763,7 @@ pub fn export_plaintext_csv(
 ) -> Result<ExportResult, String> {
     let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
     let entries = manager.get_entries()?;
-
-    let mut csv_out = String::from("title,username,email,password,url,category,notes,totp_secret\r\n");
-    for e in entries {
-        let title = escape_csv(&e.title);
-        let user = escape_csv(&e.username);
-        let email = escape_csv(&e.email);
-        let pass = escape_csv(&e.password);
-        let url = escape_csv(&e.url);
-        let cat = escape_csv(&e.category);
-        let notes = escape_csv(&e.notes);
-        let totp = escape_csv(e.totp_secret.as_deref().unwrap_or(""));
-
-        csv_out.push_str(&format!(
-            "{},{},{},{},{},{},{},{}\r\n",
-            title, user, email, pass, url, cat, notes, totp
-        ));
-    }
+    let csv_out = format_entries_as_csv(&entries);
 
     let target_path = resolve_save_path(&app, dest_path.as_deref(), "csv")?;
     write_to_destination(&app, &target_path, &csv_out)?;
@@ -671,13 +774,26 @@ pub fn export_plaintext_csv(
     })
 }
 
+fn is_csv_formula_trigger(val: &str) -> bool {
+    if let Some(raw_first) = val.chars().next() {
+        if matches!(raw_first, '\t' | '\r' | '\n') {
+            return true;
+        }
+    }
+    if let Some(trimmed_first) = val.trim_start().chars().next() {
+        if matches!(trimmed_first, '=' | '+' | '-' | '@' | '|') {
+            return true;
+        }
+    }
+    false
+}
+
 fn escape_csv(val: &str) -> String {
     let mut sanitized = val.to_string();
-    // Neutralize formula injection in spreadsheet software (Excel, LibreOffice)
-    if let Some(first) = sanitized.chars().next() {
-        if matches!(first, '=' | '+' | '-' | '@' | '\t' | '\r') {
-            sanitized = format!("'{}", sanitized);
-        }
+    // Neutralize formula injection in spreadsheet software (Excel, LibreOffice),
+    // including leading-whitespace or pipe-delimited command triggers.
+    if is_csv_formula_trigger(&sanitized) {
+        sanitized = format!("'{}", sanitized);
     }
 
     if sanitized.contains(',')
@@ -695,10 +811,8 @@ fn escape_csv(val: &str) -> String {
 fn clean_csv_field(val: &str) -> String {
     let trimmed = val.trim();
     if let Some(stripped) = trimmed.strip_prefix('\'') {
-        if let Some(first) = stripped.chars().next() {
-            if matches!(first, '=' | '+' | '-' | '@' | '\t' | '\r') {
-                return stripped.to_string();
-            }
+        if is_csv_formula_trigger(stripped) {
+            return stripped.to_string();
         }
     }
     trimmed.to_string()
@@ -773,14 +887,14 @@ pub fn import_plaintext_csv(
     state: State<'_, SharedVaultManager>,
     src_path: String,
 ) -> Result<usize, String> {
-    let content = read_from_source(&app, &src_path)?;
+    ensure_unlocked(&state)?;
+    let mut content = read_from_source(&app, &src_path)?;
 
     let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
-    if !manager.is_unlocked() {
-        return Err("Vault is locked".to_string());
-    }
+    ensure_unlocked_manager(&mut manager)?;
 
     let records = parse_rfc4180_csv(&content);
+    content.zeroize();
     if records.is_empty() {
         return Ok(0);
     }
@@ -964,19 +1078,27 @@ pub fn reorder_login_entries(
 #[tauri::command]
 pub fn setup_biometric_unlock(
     state: State<'_, SharedVaultManager>,
-    master_password: String,
+    mut master_password: String,
 ) -> Result<String, String> {
-    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
-    manager.setup_biometric_unlock(&master_password)
+    let res = (|| {
+        let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+        manager.setup_biometric_unlock(&master_password)
+    })();
+    master_password.zeroize();
+    res
 }
 
 #[tauri::command]
 pub fn unlock_vault_biometric(
     state: State<'_, SharedVaultManager>,
-    biometric_token: String,
+    mut biometric_token: String,
 ) -> Result<bool, String> {
-    let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
-    manager.unlock_vault_biometric(&biometric_token)
+    let res = (|| {
+        let mut manager = state.lock().map_err(|_| "Failed to acquire vault lock")?;
+        manager.unlock_vault_biometric(&biometric_token)
+    })();
+    biometric_token.zeroize();
+    res
 }
 
 #[tauri::command]
@@ -1071,19 +1193,23 @@ pub fn clear_clipboard_if_matches(
 #[tauri::command]
 pub fn copy_to_clipboard_secure(
     clipboard_mgr: State<'_, SharedClipboardManager>,
-    text: String,
+    mut text: String,
     timeout_secs: u64,
 ) -> Result<u64, String> {
-    clipboard_mgr.copy_and_track(&text, timeout_secs)
+    let res = clipboard_mgr.copy_and_track(&text, timeout_secs);
+    text.zeroize();
+    res
 }
 
 #[tauri::command]
 pub fn track_clipboard_session(
     clipboard_mgr: State<'_, SharedClipboardManager>,
-    text: String,
+    mut text: String,
     timeout_secs: u64,
 ) -> Result<u64, String> {
-    clipboard_mgr.track_session(&text, timeout_secs)
+    let res = clipboard_mgr.track_session(&text, timeout_secs);
+    text.zeroize();
+    res
 }
 
 #[tauri::command]
@@ -1118,9 +1244,11 @@ pub fn get_network_policy_status(
 #[tauri::command]
 pub fn set_air_gap_mode(
     app: tauri::AppHandle,
+    state: State<'_, SharedVaultManager>,
     policy: State<'_, Arc<NetworkPolicyService>>,
     enabled: bool,
 ) -> Result<NetworkStatus, String> {
+    ensure_unlocked_or_uninitialized(&state)?;
     let status = policy.set_air_gap_enabled(enabled)?;
     let _ = app.emit("totumvault://air-gap-changed", &status);
     Ok(status)
@@ -1190,13 +1318,44 @@ mod tests {
         assert_eq!(escape_csv("=SUM(A1:B1)"), "\"'=SUM(A1:B1)\"");
         assert_eq!(escape_csv("+12345"), "\"'+12345\"");
         assert_eq!(escape_csv("-cmd"), "\"'-cmd\"");
+        assert_eq!(escape_csv(" =SUM(A1:B1)"), "\"' =SUM(A1:B1)\"");
+        assert_eq!(escape_csv("|calc"), "\"'|calc\"");
+        assert_eq!(escape_csv("\n=1+1"), "\"'\n=1+1\"");
         assert_eq!(escape_csv("hello, world"), "\"hello, world\"");
     }
 
     #[test]
     fn test_clean_csv_field() {
         assert_eq!(clean_csv_field("'=SUM(A1:B1)"), "=SUM(A1:B1)");
+        assert_eq!(clean_csv_field("' =SUM(A1:B1)"), " =SUM(A1:B1)");
+        assert_eq!(clean_csv_field("'|calc"), "|calc");
+        assert_eq!(clean_csv_field("'quoted_literal"), "'quoted_literal");
         assert_eq!(clean_csv_field("normal_text"), "normal_text");
+    }
+
+    #[test]
+    fn test_locked_vault_guard_helpers() {
+        let db_path = std::env::temp_dir().join(format!("totum_guard_{}.sqlite", Uuid::new_v4()));
+        let mut manager = crate::vault::manager::VaultManager::new(db_path.clone());
+
+        // Uninitialized vault: allowed for setup/restore, blocked for unlocked-only commands
+        assert!(ensure_unlocked_or_uninitialized_manager(&mut manager).is_ok());
+        assert!(ensure_unlocked_manager(&mut manager).is_err());
+
+        // Create vault -> unlocked
+        manager.create_vault("StrongMaster#2026!").unwrap();
+        assert!(ensure_unlocked_or_uninitialized_manager(&mut manager).is_ok());
+        assert!(ensure_unlocked_manager(&mut manager).is_ok());
+
+        // Lock vault -> both guards block
+        manager.lock_vault();
+        assert!(ensure_unlocked_or_uninitialized_manager(&mut manager).is_err());
+        assert!(ensure_unlocked_manager(&mut manager).is_err());
+
+        drop(manager);
+        let _ = fs::remove_file(&db_path);
+        let _ = fs::remove_file(format!("{}-wal", db_path.display()));
+        let _ = fs::remove_file(format!("{}-shm", db_path.display()));
     }
 
     #[test]

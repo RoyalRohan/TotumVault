@@ -42,6 +42,8 @@ export const EntryDetail: React.FC = () => {
     saveEntry,
     folders,
     moveEntryToFolder,
+    airGapMode,
+    showToast,
   } = useVault();
 
   const [showSecureNote, setShowSecureNote] = useState(false);
@@ -99,16 +101,32 @@ export const EntryDetail: React.FC = () => {
   const handleOpenUrl = async (targetUrl?: string) => {
     const rawUrl = targetUrl || entry.url;
     if (!rawUrl) return;
-    let validUrl = rawUrl.trim();
-    if (!validUrl.startsWith('http://') && !validUrl.startsWith('https://')) {
-      validUrl = 'https://' + validUrl;
+    if (airGapMode) {
+      showToast('External links are blocked while Air-Gap Mode is enabled.', 'info');
+      return;
     }
+    let candidate = rawUrl.trim();
+    if (!candidate) return;
+    if (!/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(candidate)) {
+      candidate = 'https://' + candidate;
+    }
+
+    let parsed: URL;
     try {
-      const parsed = new URL(validUrl);
-      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
-      await openUrl(validUrl);
+      parsed = new URL(candidate);
     } catch {
-      window.open(validUrl, '_blank', 'noopener,noreferrer');
+      showToast('Invalid website URL format.', 'error');
+      return;
+    }
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      showToast('Only HTTP and HTTPS links can be opened externally.', 'error');
+      return;
+    }
+
+    try {
+      await openUrl(parsed.href);
+    } catch {
+      window.open(parsed.href, '_blank', 'noopener,noreferrer');
     }
   };
 

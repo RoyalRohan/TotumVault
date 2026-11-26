@@ -26,6 +26,7 @@ pub fn init_db(db_path: &Path) -> Result<Connection, String> {
         PRAGMA journal_mode = WAL;
         PRAGMA foreign_keys = ON;
         PRAGMA synchronous = NORMAL;
+        PRAGMA secure_delete = ON;
 
         CREATE TABLE IF NOT EXISTS vault_metadata (
             key TEXT PRIMARY KEY,

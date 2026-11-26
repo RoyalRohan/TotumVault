@@ -4,7 +4,6 @@ use aes_gcm::{
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use rand::RngCore;
-use zeroize::Zeroize;
 
 pub const NONCE_LEN: usize = 12; // 96-bit nonce for AES-256-GCM
 
@@ -57,15 +56,11 @@ pub fn decrypt_bytes(
 
     let nonce = Nonce::from_slice(&nonce_bytes);
 
-    let mut plaintext = cipher
+    let plaintext = cipher
         .decrypt(nonce, ciphertext.as_ref())
         .map_err(|_| "Decryption failed (Invalid key, password, or tampered ciphertext)".to_string())?;
 
-    // Zeroize intermediate memory if needed
-    let result = plaintext.clone();
-    plaintext.zeroize();
-
-    Ok(result)
+    Ok(plaintext)
 }
 
 #[cfg(test)]

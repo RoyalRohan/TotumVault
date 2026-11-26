@@ -272,7 +272,8 @@ pub const PASSPHRASE_WORDS: &[&str; 2048] = &[
 pub fn generate_password_csprng(config: &PwGenConfig) -> Result<String, String> {
     if config.passphrase_mode {
         let count = config.word_count.clamp(3, 12) as usize;
-        let sep = if config.separator.is_empty() { "-" } else { &config.separator };
+        let clean_sep: String = config.separator.chars().take(8).collect();
+        let sep = if clean_sep.is_empty() { "-" } else { clean_sep.as_str() };
         let mut words = Vec::with_capacity(count);
         for _ in 0..count {
             let idx = OsRng.gen_range(0..PASSPHRASE_WORDS.len());

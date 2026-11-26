@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use uuid::Uuid;
+use zeroize::Zeroize;
 
 use crate::crypto::aes_gcm::decrypt_bytes;
 use crate::crypto::argon2_kdf::derive_kek;
@@ -241,10 +242,11 @@ pub fn parse_backup_content(
 
     let mut decrypted_entries = Vec::new();
     for item in backup.entries {
-        if let Ok(bytes) = decrypt_bytes(&vek.0, &item.nonce_b64, &item.encrypted_payload_b64) {
+        if let Ok(mut bytes) = decrypt_bytes(&vek.0, &item.nonce_b64, &item.encrypted_payload_b64) {
             if let Ok(entry) = serde_json::from_slice::<DecryptedEntry>(&bytes) {
                 decrypted_entries.push(entry);
             }
+            bytes.zeroize();
         }
     }
 
@@ -311,13 +313,25 @@ pub fn analyze_import_data(
     })
 }
 
+fn is_csv_formula_trigger(val: &str) -> bool {
+    if let Some(raw_first) = val.chars().next() {
+        if matches!(raw_first, '\t' | '\r' | '\n') {
+            return true;
+        }
+    }
+    if let Some(trimmed_first) = val.trim_start().chars().next() {
+        if matches!(trimmed_first, '=' | '+' | '-' | '@' | '|') {
+            return true;
+        }
+    }
+    false
+}
+
 fn clean_csv_field(val: &str) -> String {
     let trimmed = val.trim();
     if let Some(stripped) = trimmed.strip_prefix('\'') {
-        if let Some(first) = stripped.chars().next() {
-            if matches!(first, '=' | '+' | '-' | '@' | '\t' | '\r') {
-                return stripped.to_string();
-            }
+        if is_csv_formula_trigger(stripped) {
+            return stripped.to_string();
         }
     }
     trimmed.to_string()

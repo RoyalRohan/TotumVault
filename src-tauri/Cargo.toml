@@ -1,6 +1,6 @@
 [package]
 name = "totumvault"
-version = "2.0.1"
+version = "2.0.2"
 description = "TotumVault — Privacy-first, local-only password manager for Windows, macOS, Linux, and Android."
 authors = ["TotumVault Open Source Contributors"]
 license = "MIT"

@@ -1019,8 +1019,15 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           isAvailable = false;
         }
         if (isAndroidBiometricEnrolled()) {
-          setIsBiometricEnabled(true);
-          isAvailable = true;
+          const backendBioEnabled = await invoke<boolean>('is_biometric_enabled').catch(() => false);
+          if (backendBioEnabled) {
+            setIsBiometricEnabled(true);
+            isAvailable = true;
+          } else {
+            // Purge stale Android Keystore blob if backend revoked biometric unlock
+            androidClearEnrolledKey();
+            setIsBiometricEnabled(false);
+          }
         }
       } else {
         try {
@@ -1170,16 +1177,29 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [showToast]);
 
+  const clearLocalBiometricArtifacts = useCallback(() => {
+    if (isAndroidBiometricsAvailable()) {
+      androidClearEnrolledKey();
+    }
+    try {
+      sessionStorage.removeItem('totumvault_bio_token');
+      localStorage.removeItem('totumvault_bio_token');
+    } catch {}
+    setIsBiometricEnabled(false);
+    setBiometricFailedAttempts(0);
+  }, []);
+
   const importBackup = useCallback(async (path: string, password: string) => {
     try {
       await invoke('import_vault_backup', { srcPath: path, masterPassword: password });
+      clearLocalBiometricArtifacts();
       showToast('Backup restored successfully!', 'success');
       await refreshStatus();
     } catch (err: any) {
       showToast(err.toString(), 'error');
       throw err;
     }
-  }, [showToast, refreshStatus]);
+  }, [showToast, refreshStatus, clearLocalBiometricArtifacts]);
 
   const changeMasterPassword = useCallback(async (oldP: string, newP: string) => {
     if (!newP || newP.trim().length < 8) {
@@ -1189,12 +1209,13 @@ export const VaultProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     try {
       await invoke('change_master_password', { oldPassword: oldP, newPassword: newP });
+      clearLocalBiometricArtifacts();
       showToast('Master password updated!', 'success');
     } catch (err: any) {
       showToast(err.toString(), 'error');
       throw err;
     }
-  }, [showToast]);
+  }, [showToast, clearLocalBiometricArtifacts]);
 
   const exportCsv = useCallback(async (path?: string): Promise<ExportResult> => {
     try {

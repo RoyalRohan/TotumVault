@@ -7,6 +7,75 @@ pub trait DocumentReminderScheduler: Send + Sync {
     fn schedule_test_timer(&self, exec_path: &Path, delay_secs: u64, extra_args: Option<&str>) -> Result<(), String>;
 }
 
+/// Safely quotes an executable path or argument for systemd `ExecStart=` / XDG `.desktop` `Exec=`,
+/// stripping newlines/control characters and escaping backslashes, double quotes, and `$`.
+pub(crate) fn format_systemd_exec_arg(raw: &str) -> String {
+    let sanitized: String = raw
+        .chars()
+        .filter(|&c| c != '\n' && c != '\r' && c != '\0')
+        .collect();
+    let escaped = sanitized
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('$', "$$");
+    format!("\"{}\"", escaped)
+}
+
+/// Escapes special XML characters before embedding strings inside macOS LaunchAgent `.plist` files.
+pub(crate) fn escape_plist_xml(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for c in raw.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&apos;"),
+            '\0' => {}
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Spawns a detached pure-Rust timer thread that invokes `exec_path --check-document-reminders`
+/// directly via OS `execve` / `CreateProcessW` without invoking `sh -c` or `powershell -Command`.
+#[allow(dead_code)]
+fn spawn_delayed_reminder_check(
+    exec_path: &Path,
+    delay_secs: u64,
+    extra_args: Option<&str>,
+) -> Result<(), String> {
+    let exe = exec_path.to_path_buf();
+    let parsed_extra: Vec<String> = extra_args
+        .unwrap_or("")
+        .split_whitespace()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    let bounded_delay = delay_secs.min(86_400);
+
+    std::thread::Builder::new()
+        .name("totum-reminder-test-timer".to_string())
+        .spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(bounded_delay));
+            let mut cmd = std::process::Command::new(&exe);
+            cmd.arg("--check-document-reminders");
+            for arg in &parsed_extra {
+                cmd.arg(arg);
+            }
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+                cmd.creation_flags(CREATE_NO_WINDOW);
+            }
+            let _ = cmd.output();
+        })
+        .map(|_| ())
+        .map_err(|e| format!("Failed to spawn test timer thread: {}", e))
+}
+
 // ======================== Linux Implementation ========================
 
 #[derive(Default)]
@@ -21,6 +90,7 @@ impl DocumentReminderScheduler for LinuxReminderScheduler {
             .arg("normal")
             .arg("-i")
             .arg("dialog-warning")
+            .arg("--")
             .arg(title)
             .arg(body)
             .output();
@@ -41,11 +111,11 @@ impl DocumentReminderScheduler for LinuxReminderScheduler {
         let user_systemd_dir = std::path::PathBuf::from(&home).join(".config/systemd/user");
         let _ = std::fs::create_dir_all(&user_systemd_dir);
 
-        let exec_str = exec_path.to_string_lossy();
+        let quoted_exec = format_systemd_exec_arg(&exec_path.to_string_lossy());
 
         let service_content = format!(
             "[Unit]\nDescription=TotumVault Document Renewal Reminders Check\n\n[Service]\nType=oneshot\nPassEnvironment=DBUS_SESSION_BUS_ADDRESS WAYLAND_DISPLAY DISPLAY XDG_RUNTIME_DIR\nExecStart={} --check-document-reminders\n",
-            exec_str
+            quoted_exec
         );
         let timer_content = "[Unit]\nDescription=Daily TotumVault Document Renewal Reminders Check\n\n[Timer]\nOnCalendar=*-*-* 09:00:00\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n";
 
@@ -68,7 +138,7 @@ impl DocumentReminderScheduler for LinuxReminderScheduler {
         let _ = std::fs::create_dir_all(&autostart_dir);
         let desktop_content = format!(
             "[Desktop Entry]\nType=Application\nName=TotumVault Document Reminders\nExec={} --check-document-reminders\nHidden=false\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n",
-            exec_str
+            quoted_exec
         );
         let _ = std::fs::write(autostart_dir.join("totumvault-reminders.desktop"), desktop_content);
 
@@ -104,11 +174,17 @@ impl DocumentReminderScheduler for LinuxReminderScheduler {
         let user_systemd_dir = std::path::PathBuf::from(&home).join(".config/systemd/user");
         let _ = std::fs::create_dir_all(&user_systemd_dir);
 
-        let exec_str = exec_path.to_string_lossy();
-        let cmd = if let Some(args) = extra_args {
-            format!("{} --check-document-reminders {}", exec_str, args)
+        let quoted_exec = format_systemd_exec_arg(&exec_path.to_string_lossy());
+        let quoted_extra: Vec<String> = extra_args
+            .unwrap_or("")
+            .split_whitespace()
+            .filter(|s| !s.is_empty())
+            .map(format_systemd_exec_arg)
+            .collect();
+        let cmd = if quoted_extra.is_empty() {
+            format!("{} --check-document-reminders", quoted_exec)
         } else {
-            format!("{} --check-document-reminders", exec_str)
+            format!("{} --check-document-reminders {}", quoted_exec, quoted_extra.join(" "))
         };
 
         let service_content = format!(
@@ -117,7 +193,7 @@ impl DocumentReminderScheduler for LinuxReminderScheduler {
         );
         let test_timer_content = format!(
             "[Unit]\nDescription=TotumVault Document Renewal Reminders Test Timer\n\n[Timer]\nOnActiveSec={}s\nAccuracySec=1s\nUnit=totumvault-reminders.service\n\n[Install]\nWantedBy=timers.target\n",
-            delay_secs
+            delay_secs.min(86_400)
         );
 
         let service_file = user_systemd_dir.join("totumvault-reminders.service");
@@ -149,22 +225,19 @@ pub struct WindowsReminderScheduler;
 
 impl DocumentReminderScheduler for WindowsReminderScheduler {
     fn send_notification(&self, title: &str, body: &str) -> Result<(), String> {
-        let escaped_title = title.replace('"', "`\"").replace('\'', "''");
-        let escaped_body = body.replace('"', "`\"").replace('\'', "''");
-
-        let script = format!(
-            "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null; \
-             $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); \
-             $textNodes = $template.GetElementsByTagName('text'); \
-             $textNodes.Item(0).AppendChild($template.CreateTextNode('{}')) | Out-Null; \
-             $textNodes.Item(1).AppendChild($template.CreateTextNode('{}')) | Out-Null; \
-             $toast = [Windows.UI.Notifications.ToastNotification]::new($template); \
-             [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('TotumVault').Show($toast);",
-            escaped_title, escaped_body
-        );
+        const SCRIPT: &str = "\
+            [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null; \
+            $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); \
+            $textNodes = $template.GetElementsByTagName('text'); \
+            $textNodes.Item(0).AppendChild($template.CreateTextNode($env:TOTUM_NOTIF_TITLE)) | Out-Null; \
+            $textNodes.Item(1).AppendChild($template.CreateTextNode($env:TOTUM_NOTIF_BODY)) | Out-Null; \
+            $toast = [Windows.UI.Notifications.ToastNotification]::new($template); \
+            [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('TotumVault').Show($toast);";
 
         let output = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .env("TOTUM_NOTIF_TITLE", title)
+            .env("TOTUM_NOTIF_BODY", body)
+            .args(["-NoProfile", "-NonInteractive", "-Command", SCRIPT])
             .output();
 
         match output {
@@ -179,7 +252,7 @@ impl DocumentReminderScheduler for WindowsReminderScheduler {
     }
 
     fn setup_platform_schedule(&self, exec_path: &Path) -> Result<(), String> {
-        let exec_str = exec_path.to_string_lossy();
+        let exec_str = exec_path.to_string_lossy().replace('"', "");
         let task_cmd = format!("\"{}\" --check-document-reminders", exec_str);
 
         let output = std::process::Command::new("schtasks")
@@ -219,13 +292,7 @@ impl DocumentReminderScheduler for WindowsReminderScheduler {
     }
 
     fn schedule_test_timer(&self, exec_path: &Path, delay_secs: u64, extra_args: Option<&str>) -> Result<(), String> {
-        let args_str = extra_args.unwrap_or("");
-        let cmd = format!("Start-Sleep -Seconds {}; & '{}' --check-document-reminders {}", delay_secs, exec_path.to_string_lossy(), args_str);
-        let _ = std::process::Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", &cmd])
-            .spawn()
-            .map_err(|e| format!("Failed to spawn test timer process: {}", e))?;
-        Ok(())
+        spawn_delayed_reminder_check(exec_path, delay_secs, extra_args)
     }
 }
 
@@ -236,16 +303,12 @@ pub struct MacOSReminderScheduler;
 
 impl DocumentReminderScheduler for MacOSReminderScheduler {
     fn send_notification(&self, title: &str, body: &str) -> Result<(), String> {
-        let escaped_title = title.replace('\\', "\\\\").replace('"', "\\\"");
-        let escaped_body = body.replace('\\', "\\\\").replace('"', "\\\"");
-
-        let script = format!(
-            "display notification \"{}\" with title \"{}\"",
-            escaped_body, escaped_title
-        );
+        const SCRIPT: &str = "display notification (system attribute \"TOTUM_NOTIF_BODY\") with title (system attribute \"TOTUM_NOTIF_TITLE\")";
 
         let output = std::process::Command::new("osascript")
-            .args(["-e", &script])
+            .env("TOTUM_NOTIF_TITLE", title)
+            .env("TOTUM_NOTIF_BODY", body)
+            .args(["-e", SCRIPT])
             .output();
 
         match output {
@@ -264,7 +327,7 @@ impl DocumentReminderScheduler for MacOSReminderScheduler {
         let _ = std::fs::create_dir_all(&agents_dir);
 
         let plist_path = agents_dir.join("com.royalrohan.veylock.documentreminders.plist");
-        let exec_str = exec_path.to_string_lossy();
+        let escaped_exec = escape_plist_xml(&exec_path.to_string_lossy());
 
         let plist_content = format!(
             r#"<?xml version="1.0" encoding="UTF-8"?>
@@ -289,7 +352,7 @@ impl DocumentReminderScheduler for MacOSReminderScheduler {
     <false/>
 </dict>
 </plist>"#,
-            exec_str
+            escaped_exec
         );
 
         let _ = std::fs::write(&plist_path, plist_content);
@@ -314,13 +377,7 @@ impl DocumentReminderScheduler for MacOSReminderScheduler {
     }
 
     fn schedule_test_timer(&self, exec_path: &Path, delay_secs: u64, extra_args: Option<&str>) -> Result<(), String> {
-        let args_str = extra_args.unwrap_or("");
-        let cmd = format!("sleep {}; '{}' --check-document-reminders {}", delay_secs, exec_path.to_string_lossy(), args_str);
-        let _ = std::process::Command::new("sh")
-            .args(["-c", &cmd])
-            .spawn()
-            .map_err(|e| format!("Failed to spawn test timer process: {}", e))?;
-        Ok(())
+        spawn_delayed_reminder_check(exec_path, delay_secs, extra_args)
     }
 }
 
@@ -399,5 +456,31 @@ pub fn create_default_scheduler() -> Box<dyn DocumentReminderScheduler> {
     #[cfg(not(any(target_os = "android", target_os = "linux", target_os = "windows", target_os = "macos")))]
     {
         Box::new(MockReminderScheduler::default())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_systemd_exec_arg_escaping_blocks_injection_and_handles_spaces() {
+        let path_with_spaces = "/home/user/My Apps/TotumVault$1\"test\nExecStart=/bin/evil";
+        let quoted = format_systemd_exec_arg(path_with_spaces);
+        assert!(!quoted.contains('\n'));
+        assert_eq!(
+            quoted,
+            "\"/home/user/My Apps/TotumVault$$1\\\"testExecStart=/bin/evil\""
+        );
+    }
+
+    #[test]
+    fn test_plist_xml_escaping_blocks_tag_breakout() {
+        let malicious_path = "/Users/A&B/<script>\"quote'apos/TotumVault";
+        let escaped = escape_plist_xml(malicious_path);
+        assert_eq!(
+            escaped,
+            "/Users/A&amp;B/&lt;script&gt;&quot;quote&apos;apos/TotumVault"
+        );
     }
 }

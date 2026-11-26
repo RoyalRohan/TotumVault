@@ -4,6 +4,34 @@ All notable changes to TotumVault are documented here.
 
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and [Semantic Versioning](https://semver.org/).
 
+## [2.0.2] — 2026-11-26
+
+TotumVault v2.0.2 is a comprehensive security and reliability hardening release addressing 10 vulnerabilities and edge cases identified during a full-stack audit across the Rust cryptographic engine, SQLite storage layer, Tauri IPC boundary, OS reminder scheduler, Android native bridge, and offline document preview engine.
+
+### Security
+- **Vault Initialization Overwrite Guard (`VaultManager::create_vault`)**: Blocked `create_vault` when an existing vault is already initialized and wrapped metadata initialization inside an atomic SQLite transaction, preventing duplicate or locked-state IPC calls from overwriting `wrapped_vek_ciphertext` and rendering stored data undecryptable.
+- **OS Reminder Scheduler Injection Hardening (`reminders::scheduler`)**:
+  - Eliminated `sh -c` and `powershell -Command` string interpolation for delayed test timers via pure Rust background process spawning (`CREATE_NO_WINDOW` on Windows).
+  - Passed Windows PowerShell and macOS `osascript` notification titles/bodies via environment variables (`TOTUM_NOTIF_TITLE`, `TOTUM_NOTIF_BODY`) rather than inline script interpolation.
+  - Added `--` option termination for Linux `notify-send`, systemd/autostart argument quoting (`format_systemd_exec_arg`), and XML entity escaping (`escape_plist_xml`) for macOS LaunchAgent plists.
+- **Locked-Vault IPC Access Controls & Backend Biometric Lockout**:
+  - Enforced backend `ensure_unlocked` / `ensure_unlocked_or_uninitialized` checks prior to local file reads and state mutations across `read_source_file`, `read_binary_source_file`, `import_vault_backup`, `analyze_import`, `commit_import`, `import_plaintext_csv`, `set_auto_lock_timer`, `setup_biometric_unlock`, `disable_biometric_unlock`, `set_air_gap_mode`, and document reminder commands.
+  - Enforced persistent 3-strike biometric lockout (`MAX_BIOMETRIC_ATTEMPTS = 3`) in Rust inside `unlock_vault_biometric` rather than relying solely on frontend React state.
+- **Android Backup Exfiltration & `@JavascriptInterface` Hardening (`scripts/patch-android-manifest.js`)**:
+  - Enforced `android:allowBackup="false"` and `android:fullBackupContent="false"` in `AndroidManifest.xml` to block cloud Auto-Backup and `adb backup` extraction of `vault.sqlite` and biometric keystore files.
+  - Escaped `callbackId` via `JSONObject.quote(callbackId)` before `webView.evaluateJavascript(...)` in `AndroidBiometricsBridge` and `AndroidNotificationBridge`, and zeroized raw `ByteArray` secrets immediately after Keystore cipher operations.
+- **Bounded ZIP / DEFLATE Extraction in Offline Document Preview (`documentPreviewEngine.ts`)**:
+  - Enforced archive entry count (`2,000` max), per-entry (`16 MB`), and cumulative (`48 MB`) streaming inflate limits across `.docx`, `.xlsx`, `.ods`, `.odt`, and `.pptx` previews—aborting decompression mid-stream to prevent ZIP/media bombs from crashing the WebView.
+- **Memory Zeroization, SQLite `secure_delete`, Air-Gap Link Enforcement & CSV Formula Neutralization**:
+  - Enabled `PRAGMA secure_delete = ON;` on SQLite connections so deleted rows and freelist pages are overwritten with zeroes on disk.
+  - Zeroized sensitive IPC `String` inputs, decrypted export/import byte buffers, and OS clipboard verification reads (`current_text`) immediately after use.
+  - Blocked external browser link launches in `EntryDetail` and `LockScreen` while Air-Gap Mode is active and separated strict `http:`/`https:` URL parsing from fallback link opening.
+  - Extended CSV formula neutralization (`escape_csv` / `clean_csv_field`) to cover leading-whitespace and pipe (`|`) command triggers.
+
+### Fixed
+- **Atomic SQLite Transactions & WAL-Safe Import Rollback (`VaultManager`)**: Wrapped `change_master_password`, `import_backup`, `setup_biometric_unlock`, and `disable_biometric_unlock` in atomic SQLite transactions, and added `PRAGMA wal_checkpoint(TRUNCATE)` plus `-wal`/`-shm` sidecar cleanup during `commit_import` snapshotting and rollback.
+- **Biometric Enrollment Sync After Password Rotation or Restore (`VaultContext`)**: Automatically cleared Android Keystore biometric enrollment and local tokens upon master password rotation or `.tvault` backup restore, and verified backend `is_biometric_enabled` status on startup.
+
 ## [2.0.1] — 2026-11-20
 
 TotumVault v2.0.1 introduces encrypted multi-format document storage and offline in-app viewing across desktop and Android, enabling users to securely upload, organize, preview, and export PDFs, Word documents, spreadsheets, presentations, text files, and arbitrary attachments alongside camera scans.

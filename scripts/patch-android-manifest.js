@@ -62,6 +62,33 @@ if (modified) {
   console.log('[patch-android-manifest] All permissions already present in AndroidManifest.xml');
 }
 
+// Harden <application> against cloud Auto-Backup and ADB backup exfiltration of vault.sqlite / keystore blobs
+if (content.includes('<application')) {
+  let backupModified = false;
+  if (/android:allowBackup\s*=\s*"true"/.test(content)) {
+    content = content.replace(/android:allowBackup\s*=\s*"true"/g, 'android:allowBackup="false"');
+    backupModified = true;
+  } else if (!content.includes('android:allowBackup=')) {
+    content = content.replace(/<application\b/, '<application android:allowBackup="false"');
+    backupModified = true;
+  }
+
+  if (/android:fullBackupContent\s*=\s*"[^"]*"/.test(content)) {
+    if (!/android:fullBackupContent\s*=\s*"false"/.test(content)) {
+      content = content.replace(/android:fullBackupContent\s*=\s*"[^"]*"/g, 'android:fullBackupContent="false"');
+      backupModified = true;
+    }
+  } else {
+    content = content.replace(/<application\b/, '<application android:fullBackupContent="false"');
+    backupModified = true;
+  }
+
+  if (backupModified) {
+    fs.writeFileSync(manifestPath, content, 'utf8');
+    console.log('[patch-android-manifest] Enforced android:allowBackup="false" and android:fullBackupContent="false" in AndroidManifest.xml');
+  }
+}
+
 // Inject DocumentReminderReceiver into AndroidManifest.xml if not present
 if (!content.includes('DocumentReminderReceiver')) {
   const receiverSnippet = `        <receiver
@@ -123,7 +150,7 @@ if (fs.existsSync(receiverSrc)) {
 
 // Extract app version and calculate Android versionCode
 const tauriConfPath = path.resolve(__dirname, '../src-tauri/tauri.conf.json');
-let appVersion = '2.0.1';
+let appVersion = '2.0.2';
 if (fs.existsSync(tauriConfPath)) {
   try {
     const tauriConf = JSON.parse(fs.readFileSync(tauriConfPath, 'utf8'));
@@ -260,16 +287,18 @@ class AndroidBiometricsBridge(private val activity: MainActivity, private val we
     private fun callbackSuccess(callbackId: String, data: String) {
         activity.runOnUiThread {
             webView.requestFocus()
+            val safeId = JSONObject.quote(callbackId)
             val quoted = JSONObject.quote(data)
-            webView.evaluateJavascript("if (typeof window !== 'undefined') { window.__totumBioPromptActive = false; window.dispatchEvent(new CustomEvent('totum-bio-prompt-end')); window.dispatchEvent(new Event('focus')); if (typeof window.__totumOnWindowFocus === 'function') { window.__totumOnWindowFocus(true); } if (window.__bioCallbacks && window.__bioCallbacks['$callbackId']) { window.__bioCallbacks['$callbackId'].resolve($quoted); delete window.__bioCallbacks['$callbackId']; } }", null)
+            webView.evaluateJavascript("if (typeof window !== 'undefined') { window.__totumBioPromptActive = false; window.dispatchEvent(new CustomEvent('totum-bio-prompt-end')); window.dispatchEvent(new Event('focus')); if (typeof window.__totumOnWindowFocus === 'function') { window.__totumOnWindowFocus(true); } if (window.__bioCallbacks && window.__bioCallbacks[$safeId]) { window.__bioCallbacks[$safeId].resolve($quoted); delete window.__bioCallbacks[$safeId]; } }", null)
         }
     }
 
     private fun callbackError(callbackId: String, err: String) {
         activity.runOnUiThread {
             webView.requestFocus()
+            val safeId = JSONObject.quote(callbackId)
             val quoted = JSONObject.quote(err)
-            webView.evaluateJavascript("if (typeof window !== 'undefined') { window.__totumBioPromptActive = false; window.dispatchEvent(new CustomEvent('totum-bio-prompt-end')); window.dispatchEvent(new Event('focus')); if (typeof window.__totumOnWindowFocus === 'function') { window.__totumOnWindowFocus(true); } if (window.__bioCallbacks && window.__bioCallbacks['$callbackId']) { window.__bioCallbacks['$callbackId'].reject($quoted); delete window.__bioCallbacks['$callbackId']; } }", null)
+            webView.evaluateJavascript("if (typeof window !== 'undefined') { window.__totumBioPromptActive = false; window.dispatchEvent(new CustomEvent('totum-bio-prompt-end')); window.dispatchEvent(new Event('focus')); if (typeof window.__totumOnWindowFocus === 'function') { window.__totumOnWindowFocus(true); } if (window.__bioCallbacks && window.__bioCallbacks[$safeId]) { window.__bioCallbacks[$safeId].reject($quoted); delete window.__bioCallbacks[$safeId]; } }", null)
         }
     }
 
@@ -353,7 +382,11 @@ class AndroidBiometricsBridge(private val activity: MainActivity, private val we
                                 return
                             }
                             val rawBytes = secretB64.toByteArray(Charsets.UTF_8)
-                            val ciphertext = c.doFinal(rawBytes)
+                            val ciphertext = try {
+                                c.doFinal(rawBytes)
+                            } finally {
+                                rawBytes.fill(0)
+                            }
                             val iv = c.iv
 
                             val file = getBioFile()
@@ -433,7 +466,12 @@ class AndroidBiometricsBridge(private val activity: MainActivity, private val we
                                 return
                             }
                             val decrypted = c.doFinal(ciphertext)
-                            callbackSuccess(callbackId, String(decrypted, Charsets.UTF_8))
+                            val secretStr = try {
+                                String(decrypted, Charsets.UTF_8)
+                            } finally {
+                                decrypted.fill(0)
+                            }
+                            callbackSuccess(callbackId, secretStr)
                         } catch (e: Exception) {
                             callbackError(callbackId, e.message ?: "DECRYPT_FAILED")
                         }
@@ -513,9 +551,10 @@ class AndroidNotificationBridge(private val activity: MainActivity, private val 
     private fun callbackSuccess(callbackId: String, data: Any) {
         activity.runOnUiThread {
             webView.requestFocus()
+            val safeId = JSONObject.quote(callbackId)
             val jsArg = if (data is String) JSONObject.quote(data) else data.toString()
             webView.evaluateJavascript(
-                "if (typeof window !== 'undefined' && window.__notificationCallbacks && window.__notificationCallbacks['$callbackId']) { window.__notificationCallbacks['$callbackId'].resolve($jsArg); delete window.__notificationCallbacks['$callbackId']; }",
+                "if (typeof window !== 'undefined' && window.__notificationCallbacks && window.__notificationCallbacks[$safeId]) { window.__notificationCallbacks[$safeId].resolve($jsArg); delete window.__notificationCallbacks[$safeId]; }",
                 null
             )
         }
@@ -524,9 +563,10 @@ class AndroidNotificationBridge(private val activity: MainActivity, private val 
     private fun callbackError(callbackId: String, err: String) {
         activity.runOnUiThread {
             webView.requestFocus()
+            val safeId = JSONObject.quote(callbackId)
             val quoted = JSONObject.quote(err)
             webView.evaluateJavascript(
-                "if (typeof window !== 'undefined' && window.__notificationCallbacks && window.__notificationCallbacks['$callbackId']) { window.__notificationCallbacks['$callbackId'].reject($quoted); delete window.__notificationCallbacks['$callbackId']; }",
+                "if (typeof window !== 'undefined' && window.__notificationCallbacks && window.__notificationCallbacks[$safeId]) { window.__notificationCallbacks[$safeId].reject($quoted); delete window.__notificationCallbacks[$safeId]; }",
                 null
             )
         }

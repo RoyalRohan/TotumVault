@@ -16,6 +16,8 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
     isBiometricLockedOut,
     biometricFailedAttempts,
     unlockWithBiometric,
+    airGapMode,
+    showToast,
   } = useVault();
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -61,6 +63,10 @@ export const LockScreen: React.FC<LockScreenProps> = ({ onOpenSetup }) => {
 
   const handleOpenOfficialSite = async (e: React.MouseEvent) => {
     e.preventDefault();
+    if (airGapMode) {
+      showToast('External links are blocked while Air-Gap Mode is enabled.', 'info');
+      return;
+    }
     const url = 'https://totumvault.app';
     try {
       await openUrl(url);

@@ -28,6 +28,155 @@ export interface SlidePreview {
   lines: string[];
 }
 
+export const MAX_ZIP_ENTRIES = 2000;
+export const MAX_ZIP_ENTRY_UNCOMPRESSED_BYTES = 16 * 1024 * 1024; // 16 MB per internal entry
+export const MAX_TOTAL_ZIP_UNCOMPRESSED_BYTES = 48 * 1024 * 1024; // 48 MB cumulative across archive preview
+const MAX_SHARED_STRINGS = 50_000;
+const MAX_SHEETS = 30;
+const MAX_SLIDES = 200;
+
+const ZIP_PREVIEW_LIMIT_ERROR =
+  'Document archive exceeds safe offline preview memory limits. Use Save/Download to open externally.';
+
+interface ZipReadTracker {
+  totalBytes: number;
+}
+
+interface InternalJsZipStream {
+  on(event: 'data', cb: (chunk: Uint8Array) => void): InternalJsZipStream;
+  on(event: 'error', cb: (err: unknown) => void): InternalJsZipStream;
+  on(event: 'end', cb: () => void): InternalJsZipStream;
+  pause(): void;
+  resume(): void;
+}
+
+type InternalJsZipEntry = import('jszip').JSZipObject & {
+  _data?: {
+    uncompressedSize?: number;
+  };
+  internalStream?: (type: 'uint8array') => InternalJsZipStream;
+};
+
+async function loadBoundedZip(bytes: Uint8Array) {
+  const { default: JSZip } = await import('jszip');
+  const zip = await JSZip.loadAsync(toExactArrayBuffer(bytes));
+  const entryNames = Object.keys(zip.files);
+  if (entryNames.length > MAX_ZIP_ENTRIES) {
+    throw new Error(ZIP_PREVIEW_LIMIT_ERROR);
+  }
+
+  let declaredTotal = 0;
+  for (const name of entryNames) {
+    const entry = zip.files[name] as InternalJsZipEntry | undefined;
+    if (!entry || entry.dir) continue;
+    const declaredSize = entry._data?.uncompressedSize;
+    if (typeof declaredSize === 'number' && declaredSize >= 0) {
+      if (declaredSize > MAX_ZIP_ENTRY_UNCOMPRESSED_BYTES) {
+        throw new Error(ZIP_PREVIEW_LIMIT_ERROR);
+      }
+      declaredTotal += declaredSize;
+      if (declaredTotal > MAX_TOTAL_ZIP_UNCOMPRESSED_BYTES) {
+        throw new Error(ZIP_PREVIEW_LIMIT_ERROR);
+      }
+    }
+  }
+
+  return zip;
+}
+
+async function readBoundedZipBytes(
+  file: import('jszip').JSZipObject,
+  tracker: ZipReadTracker
+): Promise<Uint8Array> {
+  const internalFile = file as InternalJsZipEntry;
+  const declaredSize = internalFile._data?.uncompressedSize;
+  if (typeof declaredSize === 'number' && declaredSize >= 0) {
+    if (
+      declaredSize > MAX_ZIP_ENTRY_UNCOMPRESSED_BYTES ||
+      tracker.totalBytes + declaredSize > MAX_TOTAL_ZIP_UNCOMPRESSED_BYTES
+    ) {
+      throw new Error(ZIP_PREVIEW_LIMIT_ERROR);
+    }
+  }
+
+  if (typeof internalFile.internalStream === 'function') {
+    return await new Promise<Uint8Array>((resolve, reject) => {
+      const chunks: Uint8Array[] = [];
+      let entryBytes = 0;
+      let aborted = false;
+      const stream = internalFile.internalStream!('uint8array');
+
+      stream
+        .on('data', (chunk: Uint8Array) => {
+          if (aborted) return;
+          entryBytes += chunk.byteLength;
+          tracker.totalBytes += chunk.byteLength;
+          if (
+            entryBytes > MAX_ZIP_ENTRY_UNCOMPRESSED_BYTES ||
+            tracker.totalBytes > MAX_TOTAL_ZIP_UNCOMPRESSED_BYTES
+          ) {
+            aborted = true;
+            try {
+              stream.pause();
+            } catch {
+              // ignore stream pause errors
+            }
+            chunks.length = 0;
+            reject(new Error(ZIP_PREVIEW_LIMIT_ERROR));
+            return;
+          }
+          chunks.push(chunk);
+        })
+        .on('error', (err: unknown) => {
+          if (aborted) return;
+          aborted = true;
+          chunks.length = 0;
+          reject(err instanceof Error ? err : new Error(String(err)));
+        })
+        .on('end', () => {
+          if (aborted) return;
+          const out = new Uint8Array(entryBytes);
+          let offset = 0;
+          for (const c of chunks) {
+            out.set(c, offset);
+            offset += c.byteLength;
+          }
+          chunks.length = 0;
+          resolve(out);
+        })
+        .resume();
+    });
+  }
+
+  const out = await file.async('uint8array');
+  tracker.totalBytes += out.byteLength;
+  if (
+    out.byteLength > MAX_ZIP_ENTRY_UNCOMPRESSED_BYTES ||
+    tracker.totalBytes > MAX_TOTAL_ZIP_UNCOMPRESSED_BYTES
+  ) {
+    throw new Error(ZIP_PREVIEW_LIMIT_ERROR);
+  }
+  return out;
+}
+
+async function readBoundedZipText(
+  file: import('jszip').JSZipObject,
+  tracker: ZipReadTracker
+): Promise<string> {
+  const raw = await readBoundedZipBytes(file, tracker);
+  return decodeBytesToText(raw);
+}
+
+async function verifyBoundedArchiveStreams(bytes: Uint8Array): Promise<void> {
+  const zip = await loadBoundedZip(bytes);
+  const tracker: ZipReadTracker = { totalBytes: 0 };
+  for (const name of Object.keys(zip.files)) {
+    const entry = zip.files[name];
+    if (!entry || entry.dir) continue;
+    await readBoundedZipBytes(entry, tracker);
+  }
+}
+
 function ensurePromiseWithResolversPolyfill() {
   const P = Promise as unknown as {
     withResolvers?: <T>() => {
@@ -142,6 +291,8 @@ export async function extractPdfMetadataAndThumbnail(
 }
 
 export async function convertDocxToSafeHtml(bytes: Uint8Array): Promise<DocxPreviewResult> {
+  await verifyBoundedArchiveStreams(bytes);
+
   const mod = (await import('mammoth/mammoth.browser.min.js')) as unknown as {
     default?: typeof MammothApi;
   } & typeof MammothApi;
@@ -173,16 +324,16 @@ export async function extractSpreadsheetFromZipOffice(
   bytes: Uint8Array,
   kind: 'xlsx' | 'ods'
 ): Promise<SpreadsheetSheetPreview[]> {
-  const { default: JSZip } = await import('jszip');
-  const zip = await JSZip.loadAsync(toExactArrayBuffer(bytes));
+  const zip = await loadBoundedZip(bytes);
+  const tracker: ZipReadTracker = { totalBytes: 0 };
   const parser = new DOMParser();
 
   if (kind === 'ods') {
     const contentFile = zip.file('content.xml');
     if (!contentFile) return [];
-    const xmlStr = await contentFile.async('string');
+    const xmlStr = await readBoundedZipText(contentFile, tracker);
     const doc = parser.parseFromString(xmlStr, 'application/xml');
-    const tables = getElementsByLocalName(doc, 'table');
+    const tables = getElementsByLocalName(doc, 'table').slice(0, MAX_SHEETS);
     const sheets: SpreadsheetSheetPreview[] = [];
 
     for (let tIdx = 0; tIdx < tables.length; tIdx++) {
@@ -224,9 +375,9 @@ export async function extractSpreadsheetFromZipOffice(
   const sharedStrings: string[] = [];
   const sharedFile = zip.file('xl/sharedStrings.xml');
   if (sharedFile) {
-    const ssXml = await sharedFile.async('string');
+    const ssXml = await readBoundedZipText(sharedFile, tracker);
     const ssDoc = parser.parseFromString(ssXml, 'application/xml');
-    const siList = getElementsByLocalName(ssDoc, 'si');
+    const siList = getElementsByLocalName(ssDoc, 'si').slice(0, MAX_SHARED_STRINGS);
     for (const si of siList) {
       sharedStrings.push((si.textContent || '').trim());
     }
@@ -235,9 +386,9 @@ export async function extractSpreadsheetFromZipOffice(
   const sheetNames: string[] = [];
   const wbFile = zip.file('xl/workbook.xml');
   if (wbFile) {
-    const wbXml = await wbFile.async('string');
+    const wbXml = await readBoundedZipText(wbFile, tracker);
     const wbDoc = parser.parseFromString(wbXml, 'application/xml');
-    const sheetElems = getElementsByLocalName(wbDoc, 'sheet');
+    const sheetElems = getElementsByLocalName(wbDoc, 'sheet').slice(0, MAX_SHEETS);
     for (const sh of sheetElems) {
       const nm = sh.getAttribute('name');
       if (nm) sheetNames.push(nm);
@@ -250,7 +401,8 @@ export async function extractSpreadsheetFromZipOffice(
       const na = parseInt(a.match(/sheet(\d+)\.xml/i)?.[1] || '0', 10);
       const nb = parseInt(b.match(/sheet(\d+)\.xml/i)?.[1] || '0', 10);
       return na - nb;
-    });
+    })
+    .slice(0, MAX_SHEETS);
 
   const colRefToIndex = (ref: string): number => {
     const letters = ref.replace(/[^A-Z]/gi, '').toUpperCase();
@@ -265,7 +417,7 @@ export async function extractSpreadsheetFromZipOffice(
   for (let i = 0; i < sheetFiles.length; i++) {
     const sf = zip.file(sheetFiles[i]);
     if (!sf) continue;
-    const xmlStr = await sf.async('string');
+    const xmlStr = await readBoundedZipText(sf, tracker);
     const sDoc = parser.parseFromString(xmlStr, 'application/xml');
     const rowNodes = getElementsByLocalName(sDoc, 'row');
     const rows: string[][] = [];
@@ -311,12 +463,12 @@ export async function extractSpreadsheetFromZipOffice(
 }
 
 export async function extractOdtPlainText(bytes: Uint8Array): Promise<string> {
-  const { default: JSZip } = await import('jszip');
-  const zip = await JSZip.loadAsync(toExactArrayBuffer(bytes));
+  const zip = await loadBoundedZip(bytes);
+  const tracker: ZipReadTracker = { totalBytes: 0 };
   const contentFile = zip.file('content.xml');
   if (!contentFile) return decodeBytesToText(bytes);
 
-  const xmlStr = await contentFile.async('string');
+  const xmlStr = await readBoundedZipText(contentFile, tracker);
   const doc = new DOMParser().parseFromString(xmlStr, 'application/xml');
   const paragraphs = Array.from(doc.getElementsByTagName('*')).filter(
     (el) => el.localName === 'p' || el.localName === 'h'
@@ -328,8 +480,8 @@ export async function extractOdtPlainText(bytes: Uint8Array): Promise<string> {
 }
 
 export async function extractPptxSlides(bytes: Uint8Array): Promise<SlidePreview[]> {
-  const { default: JSZip } = await import('jszip');
-  const zip = await JSZip.loadAsync(toExactArrayBuffer(bytes));
+  const zip = await loadBoundedZip(bytes);
+  const tracker: ZipReadTracker = { totalBytes: 0 };
   const parser = new DOMParser();
 
   const slideFiles = Object.keys(zip.files)
@@ -338,13 +490,14 @@ export async function extractPptxSlides(bytes: Uint8Array): Promise<SlidePreview
       const na = parseInt(a.match(/slide(\d+)\.xml/i)?.[1] || '0', 10);
       const nb = parseInt(b.match(/slide(\d+)\.xml/i)?.[1] || '0', 10);
       return na - nb;
-    });
+    })
+    .slice(0, MAX_SLIDES);
 
   const slides: SlidePreview[] = [];
   for (let i = 0; i < slideFiles.length; i++) {
     const sf = zip.file(slideFiles[i]);
     if (!sf) continue;
-    const xmlStr = await sf.async('string');
+    const xmlStr = await readBoundedZipText(sf, tracker);
     const doc = parser.parseFromString(xmlStr, 'application/xml');
     const pNodes = getElementsByLocalName(doc, 'p');
     const lines = pNodes
